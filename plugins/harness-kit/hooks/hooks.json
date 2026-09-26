@@ -1,5 +1,5 @@
 {
-  "description": "harness-kit: announce that the plugin loaded",
+  "description": "harness-kit: announce that the plugin loaded, and block Claude from stopping while the project's checks fail",
   "hooks": {
     "SessionStart": [
       {
@@ -8,6 +8,18 @@
             "type": "command",
             "command": "node",
             "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/session-start.mjs"]
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/stop-gate.mjs"],
+            "timeout": 300
           }
         ]
       }
