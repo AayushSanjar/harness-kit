@@ -35,6 +35,11 @@ Most tests need the real `claude` program running on a Mac or in CI, which this 
 - **Evidence so far:** a marketplace-folder run does not open plugin files. [VERIFIED | code.claude.com/docs/en/plugins/cli-reference | accessed 2026-09-26] Whether a run pointed at the manifest file checks them is NOT FOUND.
 - **Why it matters:** it decides between the single-root layout and the subfolder layout (04 C1; 05 section 2). [ASSUMPTION]
 - **Would settle it:** put a deliberate error into `hooks/hooks.json`, then run `claude plugin validate` on the root, on the manifest file, and on the plugin folder. See which runs fail. [ASSUMPTION]
+- **2026-09-26 — ANSWERED** (Increment 1, break (i); Claude Code 2.1.283 on macOS) [TESTED | local run of tests/validate.sh | 2026-09-26]:
+  - A JSON syntax error in `plugins/harness-kit/hooks/hooks.json` was caught by `claude plugin validate plugins/harness-kit --strict` (exit 1: `json: Invalid JSON syntax: JSON Parse error: Unexpected token ','`).
+  - The marketplace run, `claude plugin validate . --strict` on the repository root, passed (exit 0) and did not catch it.
+  - A run pointed at the manifest file, `claude plugin validate plugins/harness-kit/.claude-plugin/plugin.json --strict`, also validated `hooks/hooks.json` and failed with the same error (exit 1).
+  - Caveat: tested in the subfolder layout (04 C1), not the single-root layout this question describes. That the manifest-file run behaves the same when `marketplace.json` sits beside it at the root is untested.
 
 **Q4. Does `--plugin-dir` work in a GitHub Actions `claude -p` step? Does it work when passed through the Action's `claude_args`?**
 - **Evidence so far:**

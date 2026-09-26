@@ -38,6 +38,41 @@ else
     "exit $status; got: $out" 1
 fi
 
+# (d) and (e) read both manifests. The marketplace entry is found by its
+# source, not its name, so a renamed plugin cannot hide the mismatch.
+manifest_field() {
+  node -e '
+    const fs = require("fs");
+    const [root, what] = process.argv.slice(1);
+    const plugin = JSON.parse(fs.readFileSync(root + "/plugins/harness-kit/.claude-plugin/plugin.json", "utf8"));
+    const market = JSON.parse(fs.readFileSync(root + "/.claude-plugin/marketplace.json", "utf8"));
+    const entry = (market.plugins || []).find((p) => p.source === "./plugins/harness-kit");
+    if (!entry) { console.log("no marketplace entry with source ./plugins/harness-kit"); process.exit(1); }
+    if (what === "name") {
+      if (plugin.name === entry.name) process.exit(0);
+      console.log(`plugin.json name "${plugin.name}" != marketplace entry name "${entry.name}"`);
+      process.exit(1);
+    }
+    if (what === "version") {
+      const problems = [];
+      if (typeof plugin.version !== "string" || plugin.version === "") problems.push("plugin.json has no version");
+      if ("version" in entry) problems.push(`marketplace entry sets version "${entry.version}" (plugin.json wins silently)`);
+      if (problems.length === 0) process.exit(0);
+      console.log(problems.join("; "));
+      process.exit(1);
+    }
+  ' "$ROOT" "$1" 2>&1
+}
+
+# (d) The plugin name matches the marketplace entry name. `claude plugin
+# validate` does not check this.
+out="$(manifest_field name)"
+check "plugin.json name matches marketplace.json entry name" "$out" $?
+
+# (e) version is set in plugin.json only (research/05 section 2).
+out="$(manifest_field version)"
+check "version set in plugin.json and not in the marketplace entry" "$out" $?
+
 if [ "$failures" -ne 0 ]; then
   echo "$failures check(s) failed"
   exit 1

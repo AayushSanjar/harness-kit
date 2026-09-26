@@ -60,6 +60,10 @@
     1. **Validate the plugin separately.** Pass the plugin manifest file path as well. Whether that also opens `hooks/hooks.json` is not stated (NOT FOUND).
     2. **Put the plugin in a subfolder** such as `plugins/harness-kit/`, with the entry source `./plugins/harness-kit`. Then `claude plugin validate ./plugins/harness-kit --strict` checks the plugin files and `claude plugin validate . --strict` checks the marketplace. [ASSUMPTION, built on the verified validator rules]
   - Counter-case: the subfolder layout makes paths longer, and anything the plugin needs at run time, such as templates, must live inside that subfolder, because files outside the plugin folder are not copied into the cache. [VERIFIED | code.claude.com/docs/en/plugins/loading | accessed 2026-09-26]
+- **2026-09-26 — tested in Increment 1** (Claude Code 2.1.283 on macOS) [TESTED | local run of `claude plugin validate --strict` | 2026-09-26]:
+  - Under `--strict`, `plugin.json` needs `author`: without it, both the plugin run and the marketplace run fail with `author: No author information provided`.
+  - Under `--strict`, `marketplace.json` needs `description`: without it, the marketplace run fails with `No marketplace description provided`.
+  - A marketplace run does read `plugin.json` for relative-path entries: the missing `author` was reported in the marketplace run as `plugins[0] plugin.json → author`. It still does not open the plugin's hook files (07, Q3).
 
 ## 3. Pinning and updating versions
 
