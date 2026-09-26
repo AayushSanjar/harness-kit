@@ -1,0 +1,16 @@
+{
+  "description": "harness-kit: announce that the plugin loaded",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/session-start.mjs"]
+          }
+        ]
+      }
+    ]
+  }
+}

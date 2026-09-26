@@ -1,0 +1,13 @@
+{
+  "name": "harness-kit",
+  "description": "Marketplace for harness-kit, a reusable Claude Code harness.",
+  "owner": {
+    "name": "AayushSanjar"
+  },
+  "plugins": [
+    {
+      "name": "harness-kit",
+      "source": "./plugins/harness-kit"
+    }
+  ]
+}
