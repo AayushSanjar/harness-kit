@@ -28,7 +28,7 @@ out="$(claude plugin validate "$PLUGIN" --strict 2>&1)"
 check "claude plugin validate --strict (plugin: plugins/harness-kit)" "$out" $?
 
 # (b) The SessionStart script prints exactly the expected line and exits 0.
-expected="harness-kit 0.2.0 loaded"
+expected="harness-kit 0.3.0 loaded"
 out="$(node "$PLUGIN/scripts/session-start.mjs" 2>&1)"
 status=$?
 if [ "$status" -eq 0 ] && [ "$out" = "$expected" ]; then
@@ -77,6 +77,15 @@ check "version set in plugin.json and not in the marketplace entry" "$out" $?
 # line per case; this check fails if any of them failed.
 bash "$ROOT/tests/stop-gate.test.sh"
 check "tests/stop-gate.test.sh (all cases)" "" $?
+
+# (g) The secrets guard's behaviour cases, printed one per line by the test.
+bash "$ROOT/tests/guard-secrets.test.sh"
+check "tests/guard-secrets.test.sh (all cases)" "" $?
+
+# (h) This repository is public: no tracked file may hold a secret-shaped
+# string, including the guard and its test.
+out="$(cd "$ROOT" && node "$PLUGIN/scripts/guard-secrets.mjs" --scan 2>&1)"
+check "guard-secrets.mjs --scan on this repository: no findings" "$out" $?
 
 if [ "$failures" -ne 0 ]; then
   echo "$failures check(s) failed"
