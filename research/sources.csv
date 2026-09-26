@@ -1,0 +1,233 @@
+title,url,publisher,date,primary_or_secondary,used_in_file
+everything-claude-code (ECC) repository,https://github.com/affaan-m/everything-claude-code,affaan-m,observed 2026-09-26,primary,03-reference-harnesses.md; 07-open-questions.md
+AGENTS.md (open instruction-file format),https://agents.md,agents.md / Agentic AI Foundation,undated doc page; accessed 2026-09-26,primary,04-replication.md
+Beyond permission prompts: making Claude Code more secure and autonomous,https://anthropic.com/engineering/claude-code-sandboxing,Anthropic,2025-10-20,primary,01-principles.md; 02-claude-features.md
+Demystifying evals for AI agents,https://anthropic.com/engineering/demystifying-evals-for-ai-agents,Anthropic,2026-01-09,primary,00-glossary.md; 01-principles.md; 04-replication.md
+Natural emergent misalignment from reward hacking,https://anthropic.com/research/emergent-misalignment-reward-hacking,Anthropic,2025-11-21,primary,00-glossary.md; 01-principles.md
+Automate security reviews with Claude Code,https://claude.com/blog/automate-security-reviews-with-claude-code,Anthropic,2025-08-06,primary,03-reference-harnesses.md
+Best practices for computer and browser use with Claude,https://claude.com/blog/best-practices-for-computer-and-browser-use-with-claude,Anthropic,2026-05-13,primary,06-behaviour-checks.md
+"Improving skill-creator: test, measure and refine agent skills",https://claude.com/blog/improving-skill-creator-test-measure-and-refine-agent-skills,Anthropic,2026-03-03,primary,04-replication.md
+Plugin feature support across platforms,https://claude.com/docs/plugins/platform-support,Anthropic,undated doc page; accessed 2026-09-26,primary,00-glossary.md; 02-claude-features.md; 04-replication.md
+Claude plugin directory (install counts),https://claude.com/plugins,Anthropic,observed 2026-09-26,primary,03-reference-harnesses.md
+Orchestrate teams of Claude Code sessions,https://code.claude.com/docs/en/agent-teams,Anthropic,undated doc page; accessed 2026-09-26,primary,00-glossary.md; 02-claude-features.md; 07-open-questions.md
+Best practices for Claude Code,https://code.claude.com/docs/en/best-practices,Anthropic,undated doc page; accessed 2026-09-26,primary,00-glossary.md; 01-principles.md; 02-claude-features.md; 04-replication.md; 07-open-questions.md
+Claude Code changelog (versions 2.1.275 to 2.1.283 read),https://code.claude.com/docs/en/changelog,Anthropic,entries 2026-09-17 to 2026-09-25,primary,02-claude-features.md
+Use Claude Code with Chrome (Claude in Chrome),https://code.claude.com/docs/en/chrome,Anthropic,undated doc page; accessed 2026-09-26,primary,00-glossary.md; 06-behaviour-checks.md
+CLI reference,https://code.claude.com/docs/en/cli-reference,Anthropic,undated doc page; accessed 2026-09-26,primary,00-glossary.md; 01-principles.md; 02-claude-features.md; 04-replication.md; 05-using-the-plugin.md; 07-open-questions.md
+Claude Code GitHub Actions,https://code.claude.com/docs/en/github-actions,Anthropic,undated doc page; accessed 2026-09-26,primary,02-claude-features.md
+Keep Claude working toward a goal (/goal),https://code.claude.com/docs/en/goal,Anthropic,undated doc page; accessed 2026-09-26,primary,00-glossary.md; 01-principles.md; 02-claude-features.md
+Run Claude Code programmatically (headless mode),https://code.claude.com/docs/en/headless,Anthropic,undated doc page; accessed 2026-09-26,primary,00-glossary.md; 02-claude-features.md; 05-using-the-plugin.md
+Hooks reference,https://code.claude.com/docs/en/hooks,Anthropic,undated doc page; accessed 2026-09-26,primary,00-glossary.md; 01-principles.md; 02-claude-features.md; 04-replication.md; 07-open-questions.md
+Automate actions with hooks,https://code.claude.com/docs/en/hooks-guide,Anthropic,undated doc page; accessed 2026-09-26,primary,00-glossary.md; 01-principles.md; 02-claude-features.md; 04-replication.md; 07-open-questions.md
+How Claude remembers your project,https://code.claude.com/docs/en/memory,Anthropic,undated doc page; accessed 2026-09-26,primary,00-glossary.md; 01-principles.md; 02-claude-features.md; 04-replication.md
+Output styles,https://code.claude.com/docs/en/output-styles,Anthropic,undated doc page; accessed 2026-09-26,primary,00-glossary.md
+Configure permissions,https://code.claude.com/docs/en/permissions,Anthropic,undated doc page; accessed 2026-09-26,primary,00-glossary.md; 01-principles.md; 02-claude-features.md; 06-behaviour-checks.md
+Test plugins with evals,https://code.claude.com/docs/en/plugin-evals,Anthropic,undated doc page; accessed 2026-09-26,primary,00-glossary.md; 01-principles.md; 02-claude-features.md; 04-replication.md; 05-using-the-plugin.md; 07-open-questions.md
+Create a plugin marketplace,https://code.claude.com/docs/en/plugin-marketplaces,Anthropic,undated doc page; accessed 2026-09-26,primary,05-using-the-plugin.md
+Plugin manifest reference,https://code.claude.com/docs/en/plugins-reference,Anthropic,undated doc page; accessed 2026-09-26,primary,00-glossary.md; 02-claude-features.md; 04-replication.md
+Plugin commands reference,https://code.claude.com/docs/en/plugins/cli-reference,Anthropic,undated doc page; accessed 2026-09-26,primary,00-glossary.md; 02-claude-features.md; 04-replication.md; 05-using-the-plugin.md; 07-open-questions.md
+Add components to a plugin,https://code.claude.com/docs/en/plugins/components,Anthropic,undated doc page; accessed 2026-09-26,primary,02-claude-features.md; 04-replication.md
+Create plugins,https://code.claude.com/docs/en/plugins/create,Anthropic,undated doc page; accessed 2026-09-26,primary,04-replication.md; 05-using-the-plugin.md
+Plugin dependencies,https://code.claude.com/docs/en/plugins/dependencies,Anthropic,undated doc page; accessed 2026-09-26,primary,04-replication.md
+Host and maintain a marketplace,https://code.claude.com/docs/en/plugins/host-marketplace,Anthropic,undated doc page; accessed 2026-09-26,primary,05-using-the-plugin.md
+Install and manage plugins,https://code.claude.com/docs/en/plugins/install,Anthropic,undated doc page; accessed 2026-09-26,primary,02-claude-features.md; 05-using-the-plugin.md; 07-open-questions.md
+Plugin loading reference,https://code.claude.com/docs/en/plugins/loading,Anthropic,undated doc page; accessed 2026-09-26,primary,00-glossary.md; 01-principles.md; 04-replication.md; 05-using-the-plugin.md; 07-open-questions.md
+Marketplace reference,https://code.claude.com/docs/en/plugins/marketplace-reference,Anthropic,undated doc page; accessed 2026-09-26,primary,00-glossary.md; 05-using-the-plugin.md
+Measure plugin usage,https://code.claude.com/docs/en/plugins/measure,Anthropic,undated doc page; accessed 2026-09-26,primary,04-replication.md
+Manage Claude Code plugins for your organization,https://code.claude.com/docs/en/plugins/org,Anthropic,undated doc page; accessed 2026-09-26,primary,00-glossary.md; 01-principles.md; 02-claude-features.md; 04-replication.md; 05-using-the-plugin.md; 07-open-questions.md
+Publish a plugin,https://code.claude.com/docs/en/plugins/publish,Anthropic,undated doc page; accessed 2026-09-26,primary,05-using-the-plugin.md
+Plugin security and trust,https://code.claude.com/docs/en/plugins/security,Anthropic,undated doc page; accessed 2026-09-26,primary,02-claude-features.md; 04-replication.md
+Troubleshoot plugins,https://code.claude.com/docs/en/plugins/troubleshooting,Anthropic,undated doc page; accessed 2026-09-26,primary,01-principles.md; 05-using-the-plugin.md
+Configure the sandboxed Bash tool,https://code.claude.com/docs/en/sandboxing,Anthropic,undated doc page; accessed 2026-09-26,primary,00-glossary.md; 01-principles.md; 02-claude-features.md; 06-behaviour-checks.md; 07-open-questions.md
+Scheduled tasks and /loop,https://code.claude.com/docs/en/scheduled-tasks,Anthropic,undated doc page; accessed 2026-09-26,primary,04-replication.md
+security-guidance plugin,https://code.claude.com/docs/en/security-guidance,Anthropic,undated doc page; accessed 2026-09-26,primary,03-reference-harnesses.md
+Extend Claude with skills,https://code.claude.com/docs/en/skills,Anthropic,undated doc page; accessed 2026-09-26,primary,00-glossary.md; 02-claude-features.md; 04-replication.md
+Create custom subagents,https://code.claude.com/docs/en/sub-agents,Anthropic,undated doc page; accessed 2026-09-26,primary,00-glossary.md; 02-claude-features.md; 04-replication.md
+What's new in Claude Code (weekly digests),https://code.claude.com/docs/en/whats-new,Anthropic,weeks of 2026-03-23 to 2026-09-11,primary,00-glossary.md; 02-claude-features.md; 04-replication.md
+Run parallel sessions with worktrees,https://code.claude.com/docs/en/worktrees,Anthropic,undated doc page; accessed 2026-09-26,primary,00-glossary.md; 02-claude-features.md
+anthropics/claude-code repository (licence file and plugins folder),https://github.com/anthropics/claude-code,Anthropic,observed 2026-09-26,primary,03-reference-harnesses.md
+claude-code-action repository (source files read),https://github.com/anthropics/claude-code-action,Anthropic,observed 2026-09-26,primary,02-claude-features.md; 03-reference-harnesses.md; 05-using-the-plugin.md; 07-open-questions.md
+claude-code-security-review repository,https://github.com/anthropics/claude-code-security-review,Anthropic,observed 2026-09-26,primary,03-reference-harnesses.md
+Claude Code v2.1.232 release notes,https://github.com/anthropics/claude-code/releases/tag/v2.1.232,Anthropic,2026-08-13,primary,01-principles.md; 05-using-the-plugin.md
+anthropics/claude-code plugins folder,https://github.com/anthropics/claude-code/tree/main/plugins,Anthropic,observed 2026-09-26,primary,03-reference-harnesses.md
+plugin-dev plugin,https://github.com/anthropics/claude-code/tree/main/plugins/plugin-dev,Anthropic,observed 2026-09-26,primary,04-replication.md
+claude-plugins-official repository (official marketplace),https://github.com/anthropics/claude-plugins-official,Anthropic,observed 2026-09-26,primary,03-reference-harnesses.md
+claude-quickstarts: autonomous-coding,https://github.com/anthropics/claude-quickstarts/tree/main/autonomous-coding,Anthropic,observed 2026-09-26,primary,03-reference-harnesses.md
+claude-code-action action.yml (inputs),https://raw.githubusercontent.com/anthropics/claude-code-action/main/action.yml,Anthropic,observed 2026-09-26,primary,00-glossary.md; 02-claude-features.md; 05-using-the-plugin.md
+code-review plugin README,https://raw.githubusercontent.com/anthropics/claude-code/main/plugins/code-review/README.md,Anthropic,observed 2026-09-26,primary,03-reference-harnesses.md
+hookify plugin README (claude-code copy),https://raw.githubusercontent.com/anthropics/claude-code/main/plugins/hookify/README.md,Anthropic,observed 2026-09-26,primary,04-replication.md
+plugin-dev plugin README,https://raw.githubusercontent.com/anthropics/claude-code/main/plugins/plugin-dev/README.md,Anthropic,observed 2026-09-26,primary,03-reference-harnesses.md
+Official marketplace validate-plugins workflow,https://raw.githubusercontent.com/anthropics/claude-plugins-official/main/.github/workflows/validate-plugins.yml,Anthropic,observed 2026-09-26,primary,05-using-the-plugin.md
+hookify plugin README (official marketplace copy),https://raw.githubusercontent.com/anthropics/claude-plugins-official/main/plugins/hookify/README.md,Anthropic,observed 2026-09-26,primary,03-reference-harnesses.md
+ralph-loop plugin README,https://raw.githubusercontent.com/anthropics/claude-plugins-official/main/plugins/ralph-loop/README.md,Anthropic,observed 2026-09-26,primary,00-glossary.md; 03-reference-harnesses.md
+autonomous-coding README and security.py,https://raw.githubusercontent.com/anthropics/claude-quickstarts/main/autonomous-coding/README.md,Anthropic,observed 2026-09-26,primary,03-reference-harnesses.md
+Quantifying infrastructure noise in agentic coding evals,https://anthropic.com/engineering/infrastructure-noise,Anthropic (Gian Segato),2026-02-05,primary,01-principles.md; 04-replication.md
+How we built Claude Code auto mode: a safer way to skip permissions,https://anthropic.com/engineering/claude-code-auto-mode,Anthropic (John Hughes),2026-03-25,primary,00-glossary.md; 02-claude-features.md
+Effective harnesses for long-running agents,https://anthropic.com/engineering/effective-harnesses-for-long-running-agents,Anthropic (Justin Young),2025-11-26,primary,00-glossary.md; 01-principles.md; 03-reference-harnesses.md; 06-behaviour-checks.md
+Building a C compiler with a team of parallel Claudes,https://anthropic.com/engineering/building-c-compiler,Anthropic (Nicholas Carlini),2026-02-05,primary,01-principles.md
+Harness design for long-running application development,https://anthropic.com/engineering/harness-design-long-running-apps,Anthropic (Prithvi Rajasekaran),2026-03-24,primary,00-glossary.md; 01-principles.md; 03-reference-harnesses.md; 06-behaviour-checks.md; 07-open-questions.md
+Applitools Eyes product page,https://applitools.com/platform/eyes,Applitools,undated doc page; accessed 2026-09-26,primary,06-behaviour-checks.md
+ApprovalTests.Java (Getting Started),https://github.com/approvals/ApprovalTests.Java,ApprovalTests project,observed 2026-09-26,primary,00-glossary.md; 06-behaviour-checks.md
+ApprovalTests.Java AGENTS.md,https://github.com/approvals/ApprovalTests.Java/blob/master/AGENTS.md,ApprovalTests project,observed 2026-09-26,primary,06-behaviour-checks.md
+ArchUnit User Guide,https://archunit.org/userguide/html/000_Index.html,ArchUnit,undated doc page; accessed 2026-09-26,primary,00-glossary.md; 04-replication.md
+Atlassian Acceptable Use Policy,https://atlassian.com/legal/acceptable-use-policy,Atlassian,effective 2025-10-07,primary,00-glossary.md; 06-behaviour-checks.md
+RFC-148: Local Forge storage prototype for KVS and SQL,https://community.developer.atlassian.com/t/rfc-148-local-forge-storage-prototype-for-kvs-and-sql/102858,Atlassian,2026-09-24,primary,06-behaviour-checks.md
+Forge changelog (dashboard module GA and deprecation entries),https://developer.atlassian.com/platform/forge/changelog,Atlassian,2026-09-22 and 2026-09-23 entries,primary,00-glossary.md; 01-principles.md; 06-behaviour-checks.md; 07-open-questions.md
+Forge CLI reference,https://developer.atlassian.com/platform/forge/cli-reference,Atlassian,undated doc page; accessed 2026-09-26,primary,00-glossary.md; 06-behaviour-checks.md
+forge deploy,https://developer.atlassian.com/platform/forge/cli-reference/deploy,Atlassian,undated doc page; accessed 2026-09-26,primary,06-behaviour-checks.md
+forge install,https://developer.atlassian.com/platform/forge/cli-reference/install,Atlassian,undated doc page; accessed 2026-09-26,primary,06-behaviour-checks.md
+forge lint,https://developer.atlassian.com/platform/forge/cli-reference/lint,Atlassian,undated doc page; accessed 2026-09-26,primary,06-behaviour-checks.md
+Custom UI,https://developer.atlassian.com/platform/forge/custom-ui,Atlassian,last updated 2026-05-21,primary,00-glossary.md
+Environments and versions,https://developer.atlassian.com/platform/forge/environments-and-versions,Atlassian,last updated 2024-10-30,primary,00-glossary.md; 06-behaviour-checks.md
+Forge MCP server,https://developer.atlassian.com/platform/forge/forge-mcp,Atlassian,last updated 2026-08-28,primary,00-glossary.md; 06-behaviour-checks.md
+Getting started with Forge,https://developer.atlassian.com/platform/forge/getting-started,Atlassian,last updated 2026-08-26,primary,00-glossary.md; 06-behaviour-checks.md
+dashboards:widget module reference,https://developer.atlassian.com/platform/forge/manifest-reference/modules/dashboard-widget,Atlassian,last updated 2026-09-08,primary,00-glossary.md; 06-behaviour-checks.md
+jira:dashboardGadget module reference,https://developer.atlassian.com/platform/forge/manifest-reference/modules/jira-dashboard-gadget,Atlassian,last updated 2025-08-12,primary,00-glossary.md; 06-behaviour-checks.md
+Set up continuous delivery for Forge apps,https://developer.atlassian.com/platform/forge/set-up-cicd,Atlassian,last updated 2025-12-11,primary,06-behaviour-checks.md
+Tunneling (forge tunnel),https://developer.atlassian.com/platform/forge/tunneling,Atlassian,last updated 2026-08-26,primary,06-behaviour-checks.md
+UI Kit,https://developer.atlassian.com/platform/forge/ui-kit,Atlassian,2024-10-30,primary,00-glossary.md
+Getting started (developer sites),https://developer.atlassian.com/platform/marketplace/getting-started,Atlassian,last updated 2026-04-21,primary,00-glossary.md; 06-behaviour-checks.md
+forge-skills repository (Forge Skills plugin),https://github.com/atlassian/forge-skills,Atlassian,observed 2026-09-26,primary,00-glossary.md; 06-behaviour-checks.md
+jenkins-for-jira repository,https://github.com/atlassian/jenkins-for-jira,Atlassian,observed 2026-09-26,primary,06-behaviour-checks.md
+Atlassian developer site sign-up link,https://go.atlassian.com/cloud-dev,Atlassian,observed 2026-09-26,primary,06-behaviour-checks.md
+Jira dashboards: upcoming changes and new Forge dashboard widget module general availability,https://community.developer.atlassian.com/t/jira-dashboards-upcoming-changes-and-new-forge-dashboard-widget-module-general-availability/102826,Atlassian (Atlassian Developer Community announcement),2026-09-23,primary,06-behaviour-checks.md; 07-open-questions.md
+End-to-end testing for Confluence Forge apps,https://atlassian.com/blog/development/end-to-end-testing-for-confluence-forge-apps,Atlassian (Caterina Curti),2023-08-01; modified 2024-11-18,primary,06-behaviour-checks.md
+Forge E2E testing and 2FA with Playwright,https://community.developer.atlassian.com/t/forge-e2e-testing-and-2fa-with-playwright/94824,Atlassian Developer Community,2025-08-27,secondary,06-behaviour-checks.md; 07-open-questions.md
+Forge: E2E testing,https://community.developer.atlassian.com/t/forge-e2e-testing/61467,Atlassian Developer Community,2022-09 to 2024-05,secondary,06-behaviour-checks.md
+Testing Forge Custom UI components Using Jest,https://community.developer.atlassian.com/t/testing-forge-custom-ui-components-using-jest/50320,Atlassian Developer Community,2021-07-27 to 2023-01-10,secondary,06-behaviour-checks.md
+UI Kit 2 unit testing JSX components,https://community.developer.atlassian.com/t/ui-kit2-unit-testing-jsx-components/75091,Atlassian Developer Community (Atlassian staff replies),2023-11-29 to 2025-04-17,primary,00-glossary.md; 06-behaviour-checks.md; 07-open-questions.md
+BridgeAPIError: unable to establish a connection with the Custom UI bridge,https://community.developer.atlassian.com/t/bridgeapierror-unable-to-establish-a-connection-with-the-custom-ui-bridge/82212,Atlassian Developer Community (Atlassian staff reply),2024-07-30,primary,00-glossary.md; 06-behaviour-checks.md
+How do I write tests for resolvers?,https://community.developer.atlassian.com/t/how-do-i-write-tests-for-resolvers/91821,Atlassian Developer Community (Atlassian staff reply),2025-05-08,primary,00-glossary.md; 06-behaviour-checks.md
+Forge tunnel command works without Docker,https://community.developer.atlassian.com/t/forge-tunnel-command-works-without-docker/85481,Atlassian Developer Community (Atlassian staff),2024-10-22,primary,06-behaviour-checks.md
+Emailed OTP: automation guide for end-to-end testing using two-step verification,https://support.atlassian.com/atlassian-cloud/kb/emailed-otp-marketplace-partners-automation-guide-for-e2eend-to-end-testing-using-two-step-verification2sv-mfa-2fa,Atlassian Support,updated 2025-09-25,primary,00-glossary.md; 06-behaviour-checks.md; 07-open-questions.md
+Percy documentation,https://browserstack.com/docs/percy,BrowserStack,undated doc page; accessed 2026-09-26,primary,00-glossary.md
+Percy: visual testing basics,https://browserstack.com/docs/percy/overview/visual-testing-basics,BrowserStack,undated doc page; accessed 2026-09-26,primary,06-behaviour-checks.md
+agent-os repository,https://github.com/buildermethods/agent-os,Builder Methods,observed 2026-09-26,primary,03-reference-harnesses.md
+"How Stripe's Minions ship 1,300 PRs",https://blog.bytebytego.com/p/how-stripes-minions-ship-1300-prs,ByteByteGo,2026-03-16,secondary,03-reference-harnesses.md; 07-open-questions.md
+I improved 15 LLMs at coding in one afternoon. Only the harness changed.,https://stencil.so/blog/the-harness-problem,Can Bölük,2026-02-12,primary,04-replication.md
+claudekit repository,https://github.com/carlrannaberg/claudekit,Carl Rannaberg,observed 2026-09-26,primary,03-reference-harnesses.md
+MLLM-as-a-Judge: Assessing Multimodal LLM-as-a-Judge with Vision-Language Benchmark,https://arxiv.org/abs/2402.04788,Chen et al. (ICML 2024),2024-02-07,primary,06-behaviour-checks.md
+claude-code-showcase repository,https://github.com/ChrisWiles/claude-code-showcase,Chris Wiles,observed 2026-09-26,primary,03-reference-harnesses.md
+Chromatic documentation,https://chromatic.com/docs,Chromatic,undated doc page; accessed 2026-09-26,primary,00-glossary.md
+Chromatic pricing,https://chromatic.com/pricing,Chromatic,undated doc page; accessed 2026-09-26,primary,06-behaviour-checks.md
+chrome-devtools-mcp repository,https://github.com/ChromeDevTools/chrome-devtools-mcp,Chrome DevTools team (Google),observed 2026-09-26,primary,00-glossary.md; 06-behaviour-checks.md
+Pull request #600: loop drill (seeded-fault guardrail test),https://github.com/cobusgreyling/loop-engineering/pull/600,cobusgreyling/loop-engineering (community),merged 2026-09-13,primary,04-replication.md
+Issue #61: plugin validate on an empty configuration,https://github.com/codenamev/ai-software-architect/issues/61,codenamev (third party),2026-09-17,secondary,05-using-the-plugin.md
+Copier: updating a project,https://copier.readthedocs.io/en/stable/updating,Copier,undated doc page; accessed 2026-09-26,primary,04-replication.md
+datalogix/workflows claude.yml (uses plugin inputs),https://raw.githubusercontent.com/datalogix/workflows/main/.github/workflows/claude.yml,Datalogix (third party),observed 2026-09-26,secondary,05-using-the-plugin.md
+claude-code-templates repository,https://github.com/davila7/claude-code-templates,davila7,observed 2026-09-26,primary,03-reference-harnesses.md
+claude-code-infrastructure-showcase repository,https://github.com/diet103/claude-code-infrastructure-showcase,diet103,observed 2026-09-26,primary,03-reference-harnesses.md
+claude-code-hooks-mastery repository,https://github.com/disler/claude-code-hooks-mastery,disler,observed 2026-09-26,primary,03-reference-harnesses.md
+Issue #58: official marketplace schema URL returns 404,https://github.com/eranroseman/agent-plugins/issues/58,eranroseman (third party),2026-09-18,secondary,05-using-the-plugin.md
+Node.js API reference (RuleTester),https://eslint.org/docs/latest/integrate/nodejs-api,ESLint,undated doc page; accessed 2026-09-26,primary,04-replication.md
+compound-engineering-plugin repository,https://github.com/EveryInc/compound-engineering-plugin,Every,observed 2026-09-26,primary,03-reference-harnesses.md; 04-replication.md
+Compound engineering: how Every codes with agents,https://every.to/chain-of-thought/compound-engineering-how-every-codes-with-agents,"Every (Dan Shipper, Kieran Klaassen)",2025-12-11,primary,03-reference-harnesses.md; 04-replication.md
+BackstopJS repository and releases,https://github.com/garris/BackstopJS,garris (BackstopJS),observed 2026-09-26,primary,06-behaviour-checks.md
+Ralph Wiggum as a software engineer,https://ghuntley.com/ralph,Geoffrey Huntley,2025-07-14,primary,03-reference-harnesses.md
+About code owners,https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners,GitHub,undated doc page; accessed 2026-09-26,primary,00-glossary.md; 06-behaviour-checks.md
+spec-kit repository,https://github.com/github/spec-kit,GitHub,observed 2026-09-26,primary,03-reference-harnesses.md
+Pull request #761: local path plugin marketplaces,https://github.com/anthropics/claude-code-action/pull/761,GitHub (anthropics/claude-code-action),merged 2026-01-05,primary,02-claude-features.md; 05-using-the-plugin.md
+Issue #12840: [FEATURE] Headless/programmatic plugin installation (closed as not planned),https://github.com/anthropics/claude-code/issues/12840,GitHub issue (anthropics/claude-code),2025-12-02,primary,05-using-the-plugin.md
+Issue #13096: headless mode and project marketplace settings,https://github.com/anthropics/claude-code/issues/13096,GitHub issue (anthropics/claude-code),2025-12-04,primary,05-using-the-plugin.md
+Issue #13097: [Docs] Clarify that extraKnownMarketplaces requires interactive trust dialog (closed as not planned),https://github.com/anthropics/claude-code/issues/13097,GitHub issue (anthropics/claude-code),2025-12-04,primary,05-using-the-plugin.md
+Issue #16299: Path-scoped rules load into context globally regardless of paths,https://github.com/anthropics/claude-code/issues/16299,GitHub issue (anthropics/claude-code),2026-01-05,primary,02-claude-features.md; 07-open-questions.md
+Issue #18392: hooks in agent frontmatter not executed for subagents,https://github.com/anthropics/claude-code/issues/18392,GitHub issue (anthropics/claude-code),observed 2026-09-26,primary,02-claude-features.md
+Issue #21560: plugin subagents cannot reach plugin MCP tools,https://github.com/anthropics/claude-code/issues/21560,GitHub issue (anthropics/claude-code),2026-01-28,primary,04-replication.md
+Issue #21858: user-level rules ignore paths frontmatter,https://github.com/anthropics/claude-code/issues/21858,GitHub issue (anthropics/claude-code),observed 2026-09-26,primary,02-claude-features.md
+"Issue #23478: path-based rules not loaded on Write, only on Read",https://github.com/anthropics/claude-code/issues/23478,GitHub issue (anthropics/claude-code),2026-02-05,primary,02-claude-features.md
+Issue #23569: Path-conditional rules (paths: frontmatter) ignored when loaded via git worktree resolution (closed as not planned),https://github.com/anthropics/claude-code/issues/23569,GitHub issue (anthropics/claude-code),2026-02-06,primary,02-claude-features.md
+Issue #25000: sub-agents bypass permission deny rules,https://github.com/anthropics/claude-code/issues/25000,GitHub issue (anthropics/claude-code),2026-02-11,primary,02-claude-features.md
+Issue #29489: Unicode look-alike characters bypass permission rules,https://github.com/anthropics/claude-code/issues/29489,GitHub issue (anthropics/claude-code),observed 2026-09-26,primary,02-claude-features.md
+Issue #29767: plugin Stop hooks never run,https://github.com/anthropics/claude-code/issues/29767,GitHub issue (anthropics/claude-code),2026-03-01,primary,02-claude-features.md
+Issue #32606: extraKnownMarketplaces + enabledPlugins in project settings never prompts to install,https://github.com/anthropics/claude-code/issues/32606,GitHub issue (anthropics/claude-code),2026-03-09,primary,05-using-the-plugin.md
+Issue #34648: skills never trigger in -p mode with heavy configuration,https://github.com/anthropics/claude-code/issues/34648,GitHub issue (anthropics/claude-code),observed 2026-09-26,primary,02-claude-features.md
+Issue #51806: plugin not found after adding marketplace,https://github.com/anthropics/claude-code/issues/51806,GitHub issue (anthropics/claude-code),2026-04-22,primary,05-using-the-plugin.md
+Issue #58637: zombie running subagents cause Stop hook infinite loop,https://github.com/anthropics/claude-code/issues/58637,GitHub issue (anthropics/claude-code),2026-05 (inferred),primary,02-claude-features.md
+Issue #61148: @../ attachment syntax bypasses Read deny rules,https://github.com/anthropics/claude-code/issues/61148,GitHub issue (anthropics/claude-code),observed 2026-09-26,primary,02-claude-features.md
+Issue #66176: Bash permission rules bypassed by equivalent command forms,https://github.com/anthropics/claude-code/issues/66176,GitHub issue (anthropics/claude-code),observed 2026-09-26,primary,02-claude-features.md
+Issue #66557: Stop hook: $CLAUDE_PLUGIN_ROOT not injected when running plugin hooks,https://github.com/anthropics/claude-code/issues/66557,GitHub issue (anthropics/claude-code),opened date not shown; observed 2026-09-26,primary,02-claude-features.md
+Issue #78234: plugin-scoped subagent definitions silently ignored in agent teams,https://github.com/anthropics/claude-code/issues/78234,GitHub issue (anthropics/claude-code),2026-07 (inferred),primary,02-claude-features.md; 04-replication.md; 05-using-the-plugin.md
+Issue #80697: PreToolUse hook that fails to launch is treated as a deliberate deny,https://github.com/anthropics/claude-code/issues/80697,GitHub issue (anthropics/claude-code),2026-08 (inferred),primary,01-principles.md; 02-claude-features.md; 04-replication.md; 07-open-questions.md
+Issue #80802: plugin skill via Skill tool injects no SKILL.md body,https://github.com/anthropics/claude-code/issues/80802,GitHub issue (anthropics/claude-code),observed 2026-09-26,primary,02-claude-features.md; 05-using-the-plugin.md; 07-open-questions.md
+Issue #83952: no way to verify which hook file executes,https://github.com/anthropics/claude-code/issues/83952,GitHub issue (anthropics/claude-code),observed 2026-09-26,primary,02-claude-features.md
+Issue #84402: Workspace trust is granted by ancestor walk but consumed by exact match for extraKnownMarketplaces (open),https://github.com/anthropics/claude-code/issues/84402,GitHub issue (anthropics/claude-code),opened date not shown; observed 2026-09-26,primary,05-using-the-plugin.md
+Issue #87030: Project-scoped /plugin install should also write extraKnownMarketplaces to project settings (open),https://github.com/anthropics/claude-code/issues/87030,GitHub issue (anthropics/claude-code),opened date not shown; observed 2026-09-26,primary,05-using-the-plugin.md
+"Issue #92271: bypassPermissions Bash-first instruction skips path rules, nested CLAUDE.md and file-tool hooks",https://github.com/anthropics/claude-code/issues/92271,GitHub issue (anthropics/claude-code),observed 2026-09-26,primary,02-claude-features.md
+Issue #94803: plugin MCP servers ignored under allowManagedMcpServersOnly,https://github.com/anthropics/claude-code/issues/94803,GitHub issue (anthropics/claude-code),2026-09-16,primary,04-replication.md
+Issue #95367: No disk-sourced skills load in 2.1.271 (open),https://github.com/anthropics/claude-code/issues/95367,GitHub issue (anthropics/claude-code),2026-09-18,primary,02-claude-features.md
+Issue #95650: subagent frontmatter PreToolUse hook never fires on 2.1.258,https://github.com/anthropics/claude-code/issues/95650,GitHub issue (anthropics/claude-code),2026-09-20,primary,02-claude-features.md; 04-replication.md; 07-open-questions.md
+Issue #96121: claude plugin eval sandbox never loads a plugin's own agents,https://github.com/anthropics/claude-code/issues/96121,GitHub issue (anthropics/claude-code),2026-09-22,primary,02-claude-features.md; 04-replication.md; 05-using-the-plugin.md; 07-open-questions.md
+Issue #96361: Path-scoped rules and nested CLAUDE.md never load when Write creates a new file (open),https://github.com/anthropics/claude-code/issues/96361,GitHub issue (anthropics/claude-code),2026-09-23,primary,02-claude-features.md
+Issue #96984: project-enabled plugins load but are reported as not installed,https://github.com/anthropics/claude-code/issues/96984,GitHub issue (anthropics/claude-code),2026-09-25,primary,05-using-the-plugin.md; 07-open-questions.md
+Issue #97043: plugin command without prefix gives Unknown command,https://github.com/anthropics/claude-code/issues/97043,GitHub issue (anthropics/claude-code),2026-09-25,primary,05-using-the-plugin.md
+Issue #1229: Support version pinning for plugin_marketplaces,https://github.com/anthropics/claude-code-action/issues/1229,GitHub issue (anthropics/claude-code-action),observed 2026-09-26,primary,02-claude-features.md; 05-using-the-plugin.md
+Issue #1290: plugin install fails after installer regression,https://github.com/anthropics/claude-code-action/issues/1290,GitHub issue (anthropics/claude-code-action),2026-05-06,primary,02-claude-features.md; 05-using-the-plugin.md
+Meet the workflows: documentation,https://github.github.com/gh-aw/blog/2026-01-13-meet-the-workflows-documentation,GitHub Next,2026-01-13,primary,04-replication.md
+Pull request #7391: label-driven screenshot update,https://github.com/primer/react/pull/7391,GitHub Primer,merged 2026-01-07,primary,06-behaviour-checks.md
+Evaluating AGENTS.md: Are Repository-Level Context Files Helpful for Coding Agents?,https://arxiv.org/html/2602.11988v2,Gloaguen et al.,2026-02-12; revised 2026-06-23,primary,01-principles.md
+StarScout study of suspected fake GitHub stars,https://arxiv.org/abs/2412.13459,He et al. (ICSE 2026),2024-12-18; v2 2025-09-06,primary,03-reference-harnesses.md; 07-open-questions.md
+Anthropic Claude Code security-guidance plugin (news),https://helpnetsecurity.com/2026/05/27/anthropic-claude-code-security-guidance-plugin,Help Net Security,2026-05-27,secondary,03-reference-harnesses.md
+Plugin4Shell AI coding agents vulnerability (news),https://helpnetsecurity.com/2026/09/18/plugin4shell-ai-coding-agents-vulnerability,Help Net Security,2026-09-18,secondary,05-using-the-plugin.md
+awesome-claude-code list,https://github.com/hesreallyhim/awesome-claude-code,hesreallyhim,observed 2026-09-26,primary,03-reference-harnesses.md
+humanlayer repository (README marks it deprecated),https://github.com/humanlayer/humanlayer,HumanLayer,observed 2026-09-26,primary,03-reference-harnesses.md
+Superpowers (author's announcement),https://blog.fsck.com/2025/10/09/superpowers,Jesse Vincent,2025-10-09,primary,03-reference-harnesses.md
+superpowers repository,https://github.com/obra/superpowers,Jesse Vincent (obra),observed 2026-09-26,primary,03-reference-harnesses.md; 05-using-the-plugin.md
+Jest CLI options,https://jestjs.io/docs/cli,Jest (OpenJS Foundation),undated doc page; accessed 2026-09-26,primary,06-behaviour-checks.md
+Snapshot testing,https://jestjs.io/docs/snapshot-testing,Jest (OpenJS Foundation),undated doc page; accessed 2026-09-26,primary,00-glossary.md; 06-behaviour-checks.md
+We audited the viral everything-claude-code repo and found a malware clone in the wild,https://dev.to/joergmichno/we-audited-the-viral-213k-star-everything-claude-code-repo-and-found-a-malware-clone-in-the-wild-14hb,Jörg Michno (dev.to),2026-06-12,secondary,00-glossary.md; 03-reference-harnesses.md
+claude-code-safety-net (cc-safety-net) repository,https://github.com/kenryu42/claude-code-safety-net,kenryu42,observed 2026-09-26,primary,03-reference-harnesses.md
+Issue #274: seeded-fault registry proposal,https://github.com/laithalsaadoon/microvms-agentd/issues/274,laithalsaadoon (community),2026-09-25,primary,04-replication.md
+Improving Deep Agents with harness engineering,https://langchain.com/blog/improving-deep-agents-with-harness-engineering,LangChain (Vivek Trivedy),2026-02-17,primary,04-replication.md
+WebDevJudge: evaluating model judges of web development,https://arxiv.org/abs/2510.18560,Li et al. (ICLR 2026),2025-10-21,primary,06-behaviour-checks.md
+lost-pixel repository (archived),https://github.com/lost-pixel/lost-pixel,Lost Pixel,archived 2026-04-22,primary,06-behaviour-checks.md
+Issue #19: plugin validate on CI without credentials,https://github.com/MalcolmMcNeely/skills-marketplace/issues/19,MalcolmMcNeely (third party),2026-09-09,secondary,05-using-the-plugin.md
+The state of AI harness engineering 2026,https://marmelab.com/blog/2026/09/24/the-state-of-ai-harness-engineering-2026.html,marmelab (François Zaninotto),2026-09-24,primary,01-principles.md
+Harness engineering (memo),https://martinfowler.com/articles/exploring-gen-ai/harness-engineering-memo.html,martinfowler.com (Birgitta Böckeler),2026-02-17,primary,04-replication.md
+Understanding spec-driven development: three tools,https://martinfowler.com/articles/exploring-gen-ai/sdd-3-tools.html,martinfowler.com (Birgitta Böckeler),2025-10-15,secondary,03-reference-harnesses.md
+TDD inside the agent loop: theater or actual value?,https://martinfowler.com/articles/exploring-gen-ai/tdd-in-the-agent-loop.html,martinfowler.com (Birgitta Böckeler),2026-08-10,primary,01-principles.md; 03-reference-harnesses.md
+Harness engineering for coding agent users,https://martinfowler.com/articles/harness-engineering.html,martinfowler.com (Birgitta Böckeler),2026-04-02,primary,00-glossary.md; 04-replication.md
+Maintainability sensors for coding agents,https://martinfowler.com/articles/sensors-for-coding-agents.html,martinfowler.com (Birgitta Böckeler),2026-05-27,primary,01-principles.md
+The economic benefit of refactoring,https://martinfowler.com/articles/exploring-gen-ai/refactoring-economic-benefit.html,martinfowler.com (Giles Edwards-Alexander),2026-07-30,primary,04-replication.md
+playwright-mcp repository,https://github.com/microsoft/playwright-mcp,Microsoft,observed 2026-09-26,primary,00-glossary.md; 06-behaviour-checks.md
+Issue #13873: ARM and Intel Docker images produce different screenshots,https://github.com/microsoft/playwright/issues/13873,Microsoft (Playwright maintainer reply),2022-05,primary,06-behaviour-checks.md
+PageAssertions API (toHaveScreenshot options),https://playwright.dev/docs/api/class-pageassertions,Microsoft (Playwright),undated doc page; accessed 2026-09-26,primary,06-behaviour-checks.md
+TestConfig API (updateSnapshots),https://playwright.dev/docs/api/class-testconfig,Microsoft (Playwright),undated doc page; accessed 2026-09-26,primary,06-behaviour-checks.md
+ARIA snapshots,https://playwright.dev/docs/aria-snapshots,Microsoft (Playwright),undated doc page; accessed 2026-09-26,primary,00-glossary.md; 06-behaviour-checks.md
+Authentication (storage state),https://playwright.dev/docs/auth,Microsoft (Playwright),undated doc page; accessed 2026-09-26,primary,00-glossary.md; 06-behaviour-checks.md
+Best practices,https://playwright.dev/docs/best-practices,Microsoft (Playwright),undated doc page; accessed 2026-09-26,primary,00-glossary.md; 06-behaviour-checks.md
+Docker,https://playwright.dev/docs/docker,Microsoft (Playwright),undated doc page; accessed 2026-09-26,primary,06-behaviour-checks.md
+Getting started with the Playwright CLI for agents,https://playwright.dev/docs/getting-started-cli,Microsoft (Playwright),undated doc page; accessed 2026-09-26,primary,06-behaviour-checks.md
+"Test agents (planner, generator, healer)",https://playwright.dev/docs/test-agents,Microsoft (Playwright),undated doc page; accessed 2026-09-26,primary,06-behaviour-checks.md
+Test retries (flaky tests),https://playwright.dev/docs/test-retries,Microsoft (Playwright),undated doc page; accessed 2026-09-26,primary,00-glossary.md; 06-behaviour-checks.md
+Visual comparisons (toHaveScreenshot),https://playwright.dev/docs/test-snapshots,Microsoft (Playwright),undated doc page; accessed 2026-09-26,primary,00-glossary.md; 06-behaviour-checks.md
+Issue #553: per-repository marketplace ref pins do not isolate,https://github.com/misnaej/forge/issues/553,misnaej/forge (third party),2026-09-10,secondary,05-using-the-plugin.md; 07-open-questions.md
+My AI Adoption Journey,https://mitchellh.com/writing/my-ai-adoption-journey,Mitchell Hashimoto,2026-02-05,primary,00-glossary.md; 01-principles.md; 04-replication.md
+TDD Guard for Claude Code,https://nizar.se/tdd-guard-for-claude-code,Nizar Selander,2025-07-21,primary,03-reference-harnesses.md
+probity repository,https://github.com/nizos/probity,nizos,observed 2026-09-26,primary,03-reference-harnesses.md
+tdd-guard repository,https://github.com/nizos/tdd-guard,nizos,observed 2026-09-26,primary,03-reference-harnesses.md
+npm weekly download count for tdd-guard,https://api.npmjs.org/downloads/point/last-week/tdd-guard,npm,week 2026-08-23 to 2026-08-29,primary,03-reference-harnesses.md
+Harness engineering: leveraging Codex in an agent-first world,https://openai.com/index/harness-engineering,OpenAI (Ryan Lopopolo),2026-02-11,primary,00-glossary.md; 01-principles.md; 03-reference-harnesses.md; 04-replication.md
+LLM evaluators recognize and favor their own generations,https://proceedings.neurips.cc/paper_files/paper/2024/hash/7f1f0218e45f5414c79c0679633e47bc-Abstract-Conference.html,"Panickssery, Bowman, Feng (NeurIPS 2024)",2024,primary,06-behaviour-checks.md
+Continuous-Claude-v3 repository,https://github.com/parcadei/Continuous-Claude-v3,parcadei,observed 2026-09-26,primary,03-reference-harnesses.md
+PIT mutation testing for the JVM,https://pitest.org,PIT (pitest.org),undated doc page; accessed 2026-09-26,primary,00-glossary.md; 04-replication.md
+Vision language models are blind,https://arxiv.org/abs/2407.06581,Rahmanzadehgervi et al.,2024-07-09,primary,06-behaviour-checks.md
+jira-dashboard-gadget repository,https://github.com/remarkablemark/jira-dashboard-gadget,remarkablemark,observed 2026-09-26,primary,06-behaviour-checks.md
+forge-sim repository,https://github.com/ryanackley/forge-sim,ryanackley (community),observed 2026-09-26,primary,06-behaviour-checks.md; 07-open-questions.md
+SchemaStore schemas for plugin.json and marketplace.json,https://schemastore.org/claude-code-plugin-manifest.json,SchemaStore,generated 2026-04-23,secondary,05-using-the-plugin.md
+Testing rules,https://docs.semgrep.dev/writing-rules/testing-rules,Semgrep,undated doc page; accessed 2026-09-26,primary,04-replication.md
+Finding vulnerabilities in modern web apps using Claude Code and OpenAI Codex,https://semgrep.dev/blog/2025/finding-vulnerabilities-in-modern-web-apps-using-claude-code-and-openai-codex,"Semgrep (Gaucher, Ermilov, Gibler)",2025-09-02,primary,03-reference-harnesses.md
+Superpowers (commentary),https://simonwillison.net/2025/Oct/10/superpowers,Simon Willison,2025-10-10,secondary,03-reference-harnesses.md
+ralph repository,https://github.com/snarktank/ralph,snarktank,observed 2026-09-26,primary,03-reference-harnesses.md
+"Background coding agents, part 2: context engineering",https://engineering.atspotify.com/2025/11/context-engineering-background-coding-agents-part-2,"Spotify (Max Charas, Marc Bruggmann)",2025-11-24,primary,03-reference-harnesses.md
+"Background coding agents, part 3: feedback loops",https://engineering.atspotify.com/2025/12/feedback-loops-background-coding-agents-part-3,"Spotify (Max Charas, Marc Bruggmann)",2025-12-09,primary,03-reference-harnesses.md; 04-replication.md
+beads repository,https://github.com/steveyegge/beads,Steve Yegge,observed 2026-09-26,primary,03-reference-harnesses.md
+"Minions: Stripe's one-shot, end-to-end coding agents (part 1; excerpt only)",https://stripe.dev/blog/minions-stripes-one-shot-end-to-end-coding-agents,Stripe (Alistair Gray),2026-02-09,primary,03-reference-harnesses.md
+SuperClaude_Framework repository,https://github.com/SuperClaude-Org/SuperClaude_Framework,SuperClaude-Org,observed 2026-09-26,primary,03-reference-harnesses.md
+Hashline vs replace: an edit-format benchmark,https://nwyin.com/blogs/hashline-vs-replace-edit-bench.html,Tom Nguyen,2026-03-23; updated 2026-09-17,primary,04-replication.md
+claude-code-config repository,https://github.com/trailofbits/claude-code-config,Trail of Bits,observed 2026-09-26,primary,03-reference-harnesses.md
+skills repository,https://github.com/trailofbits/skills,Trail of Bits,observed 2026-09-26,primary,03-reference-harnesses.md; 05-using-the-plugin.md
+How we made Trail of Bits AI-native (so far),https://blog.trailofbits.com/2026/03/31/how-we-made-trail-of-bits-ai-native-so-far,Trail of Bits (Dan Guido),2026-03-31,primary,03-reference-harnesses.md
+ungh.cc public relay of the GitHub API (last-push dates),https://ungh.cc,ungh.cc (third party),observed 2026-09-26,secondary,03-reference-harnesses.md
+AGENTS.md outperforms skills in our agent evals,https://vercel.com/blog/agents-md-outperforms-skills-in-our-agent-evals,Vercel (Jude Gao),2026-01-27,primary,01-principles.md; 02-claude-features.md; 07-open-questions.md
+awesome-harness-engineering list,https://github.com/walkinglabs/awesome-harness-engineering,walkinglabs,observed 2026-09-26,primary,03-reference-harnesses.md
+agents repository,https://github.com/wshobson/agents,wshobson,observed 2026-09-26,primary,03-reference-harnesses.md
