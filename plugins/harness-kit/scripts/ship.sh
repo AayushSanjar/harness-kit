@@ -30,7 +30,7 @@
 #          workflow that starts later than that is not waited for.
 #   6. Check that the base can fast-forward (origin/<base> and <base> are both in the
 #      branch), switch to the base, `git merge --ff-only <branch>`, push the base, and
-#      delete the branch's report (.reports/, report-path.sh --name).
+#      delete the branch's report and commit draft (.reports/, report-path.sh --name).
 # It never forces a push, never rewrites history, and never deletes the branch.
 #
 # RESUMABLE. Re-running after a stop continues where it stopped. Steps 1-5 are worked out
@@ -74,7 +74,7 @@ json_field() {
 
 # Step 6. Uses $branch and $head.
 finish() {
-  local report
+  local report draft
   printf '%s\t%s\n' "$branch" "$head" >"$STATE" || stop "cannot write $STATE"
   if [ "$(git symbolic-ref --short -q HEAD)" != "$base" ]; then
     git checkout -q "$base" || stop "could not switch to $base. Fix what git says, then re-run ship.sh (on $base or $branch)."
@@ -84,8 +84,9 @@ finish() {
   git push -q "$REMOTE" "$base" ||
     stop "pushing $base failed (above). You are on $base, which is merged locally and not pushed. Fix the cause, then re-run ship.sh on $base to push it."
   report="$(bash "$HERE/report-path.sh" --name "$branch")" && rm -f -- "$report"
+  draft="$(bash "$HERE/report-path.sh" --name "$branch" --commit)" && rm -f -- "$draft"
   rm -f -- "$STATE"
-  say "SHIPPED: $branch ($(git rev-parse --short "$head")) is merged into $base and pushed; its report was deleted. You are on $base."
+  say "SHIPPED: $branch ($(git rev-parse --short "$head")) is merged into $base and pushed; its report and commit draft were deleted. You are on $base."
   exit 0
 }
 
@@ -208,7 +209,7 @@ for id in $ids; do
 done
 
 # ---------------------------------------------------------------------------------------
-# 6. Merge into the base, push it, delete the report.
+# 6. Merge into the base, push it, delete the report and the commit draft.
 # ---------------------------------------------------------------------------------------
 git fetch -q "$REMOTE" "$base" || stop "could not fetch $base from $REMOTE (above). Re-run ship.sh."
 for ref in "refs/remotes/$REMOTE/$base" "refs/heads/$base"; do

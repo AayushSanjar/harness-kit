@@ -31,7 +31,7 @@ check "claude plugin validate --strict (plugin: plugins/harness-kit)" "$out" $?
 # empty folder outside any git repository, so there is no report line and no .reports/
 # folder is made here, and without HARNESS_KIT_EVAL, so there is no warning (tests/ship.test.sh
 # covers both).
-expected="harness-kit 0.8.0 loaded"
+expected="harness-kit 0.9.0 loaded"
 empty="$(mktemp -d)"
 out="$(cd "$empty" && env -u HARNESS_KIT_EVAL -u CLAUDE_PROJECT_DIR GIT_CEILING_DIRECTORIES="$(dirname "$empty")" \
   node "$PLUGIN/scripts/session-start.mjs" </dev/null 2>&1)"
@@ -107,11 +107,20 @@ check "tests/review.test.sh (all cases)" "" $?
 bash "$ROOT/tests/eval-reviewer.test.sh"
 check "tests/eval-reviewer.test.sh (all cases)" "" $?
 
-# (l) The person's own steps: report-path.sh, session-start.mjs's report line, stale
-# reports and HARNESS_KIT_EVAL warning, check-reports.mjs, land.sh and ship.sh (with a fake
+# (l) The person's own steps: report-path.sh, session-start.mjs's report and commit draft
+# lines, stale reports and drafts, the HARNESS_KIT_EVAL warning, check-reports.mjs, land.sh and ship.sh (with a fake
 # gh and a local bare repository as the remote, nothing touches GitHub), one per line.
 bash "$ROOT/tests/ship.test.sh"
 check "tests/ship.test.sh (all cases)" "" $?
+
+# (n) check-commits.mjs's cases: protected files need a reason in a commit body, numbers
+# in a body need the diff or a "Told:" line, and --warn, one per line.
+bash "$ROOT/tests/check-commits.test.sh"
+check "tests/check-commits.test.sh (all cases)" "" $?
+
+# (o) upgrade.sh's cases (with a fake claude, nothing touches GitHub), one per line.
+bash "$ROOT/tests/upgrade.test.sh"
+check "tests/upgrade.test.sh (all cases)" "" $?
 
 # (m) No report is tracked in this repository.
 out="$(cd "$ROOT" && node "$PLUGIN/scripts/check-reports.mjs" 2>&1)"

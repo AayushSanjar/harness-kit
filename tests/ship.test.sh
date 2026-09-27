@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Tests for the person's own steps: report-path.sh, the report and warning lines of
-# session-start.mjs, check-reports.mjs, land.sh and ship.sh.
+# Tests for the person's own steps: report-path.sh, the report, commit draft and warning
+# lines of session-start.mjs, check-reports.mjs, land.sh and ship.sh.
 #
 # Every case runs in a temporary git repository. Its "origin" is a local bare repository,
 # and ship.sh finds a FAKE `gh` first on PATH, which records its arguments and prints
@@ -185,6 +185,10 @@ run_in "$dir" bash "$REPORT_PATH"
 got2="$OUT" link2="$(readlink "$dir/.reports/latest.md")"
 run_in "$dir" bash "$REPORT_PATH" --name team/a/b
 got3="$OUT" link3="$(readlink "$dir/.reports/latest.md")"
+run_in "$dir/sub" bash "$REPORT_PATH" --commit
+got5="$OUT" link5="$(readlink "$dir/.reports/latest.commit.txt")"
+run_in "$dir" bash "$REPORT_PATH" --name team/a/b --commit
+got6="$OUT" link6="$(readlink "$dir/.reports/latest.commit.txt")"
 git -C "$dir" checkout -q --detach
 run_in "$dir" bash "$REPORT_PATH"
 got4="$OUT"
@@ -193,11 +197,13 @@ if [ "$got1" = "$dir/.reports/feat-x-y.md" ] && [ "$link1" = feat-x-y.md ] &&
   [ "$got2" = "$dir/.reports/main.md" ] && [ "$link2" = main.md ] &&
   [ "$got3" = "$dir/.reports/team-a-b.md" ] && [ "$link3" = main.md ] &&
   [ "$got4" = "$dir/.reports/detached-$sha12.md" ] &&
+  [ "$got5" = "$dir/.reports/main.commit.txt" ] && [ "$link5" = main.commit.txt ] &&
+  [ "$got6" = "$dir/.reports/team-a-b.commit.txt" ] && [ "$link6" = main.commit.txt ] &&
   [ -z "$(find "$dir/.reports" -type f)" ]; then
-  result "report-path: <branch with / as -> .md in .reports/, and latest.md points at it" yes ""
+  result "report-path: <branch with / as -> .md (--commit: .commit.txt) in .reports/, and latest.md (latest.commit.txt) points at it" yes ""
 else
-  result "report-path: <branch with / as -> .md in .reports/, and latest.md points at it" no \
-    "got: $got1 -> $link1 | $got2 -> $link2 | $got3 (latest $link3) | $got4
+  result "report-path: <branch with / as -> .md (--commit: .commit.txt) in .reports/, and latest.md (latest.commit.txt) points at it" no \
+    "got: $got1 -> $link1 | $got2 -> $link2 | $got3 (latest $link3) | $got4 | $got5 -> $link5 | $got6 (latest $link6)
 files: $(find "$dir/.reports" -type f)"
 fi
 
@@ -210,25 +216,47 @@ git -C "$dir" branch old
 git -C "$dir" branch team/live
 mkdir -p "$dir/.reports"
 for f in feature old team-live gone pinned; do printf '# %s\n' "$f" >"$dir/.reports/$f.md"; done
+for f in feature old gone pinned; do printf 'draft %s\n' "$f" >"$dir/.reports/$f.commit.txt"; done
 ln -s pinned.md "$dir/.reports/latest.md"
+ln -s pinned.commit.txt "$dir/.reports/latest.commit.txt"
 git -C "$dir" branch -q -D old
 run_session "$dir"
 left="$(cd "$dir/.reports" && ls | tr '\n' ' ')"
 line2="$(sed -n 2p <<<"$OUT")"
-if [ "$STATUS" -eq 0 ] && [ "$left" = "feature.md latest.md pinned.md team-live.md " ] &&
+line3="$(sed -n 3p <<<"$OUT")"
+if [ "$STATUS" -eq 0 ] &&
+  [ "$left" = "feature.commit.txt feature.md latest.commit.txt latest.md pinned.commit.txt pinned.md team-live.md " ] &&
   [ "$(readlink "$dir/.reports/latest.md")" = feature.md ] &&
   [ "$(sed -n 1p <<<"$OUT")" = "harness-kit $VERSION loaded" ] &&
   grep -qF "write your final report to $dir/.reports/feature.md" <<<"$line2" &&
   grep -qF '"## Summary"' <<<"$line2" && grep -q 'at most 15 lines' <<<"$line2" &&
   grep -q 'Never commit it' <<<"$line2" &&
-  [ "$(wc -l <<<"$OUT" | tr -d ' ')" = 2 ] &&
+  [ "$(wc -l <<<"$OUT" | tr -d ' ')" = 3 ] &&
   grep -q 'removed the stale report .reports/gone.md' <<<"$ERR" &&
-  grep -q 'removed the stale report .reports/old.md' <<<"$ERR"; then
-  result "session-start: stale reports removed; the current, live and latest.md's reports kept" yes ""
+  grep -q 'removed the stale report .reports/old.md' <<<"$ERR" &&
+  grep -q 'removed the stale commit draft .reports/gone.commit.txt' <<<"$ERR" &&
+  grep -q 'removed the stale commit draft .reports/old.commit.txt' <<<"$ERR"; then
+  result "session-start: stale reports and commit drafts removed; the current, live and latest's kept" yes ""
 else
-  result "session-start: stale reports removed; the current, live and latest.md's reports kept" no \
+  result "session-start: stale reports and commit drafts removed; the current, live and latest's kept" no \
     "$(describe)
 left: $left"
+fi
+
+# 2c. The commit draft line: the path of the current branch's draft (latest.commit.txt
+# points at it), and each rule for the body that check-commits.mjs and the reviewer check.
+if [ "$(readlink "$dir/.reports/latest.commit.txt")" = feature.commit.txt ] &&
+  grep -qF "write the commit message for all of the branch's uncommitted changes to $dir/.reports/feature.commit.txt" <<<"$line3" &&
+  grep -qF 'whenever you change files' <<<"$line3" && grep -qF 'one-line subject' <<<"$line3" &&
+  grep -qF 'names every changed file that .harness/protected-paths lists, by its full path, with the reason it changed' <<<"$line3" &&
+  grep -qF 'on a line starting "Told:" with its source' <<<"$line3" &&
+  grep -qF 'a line starting "Breaks:" for every new or changed check or test, naming what makes it fail' <<<"$line3" &&
+  grep -qF 'a line starting "Decision:" for every choice that closes off an alternative' <<<"$line3"; then
+  result "session-start: the commit draft line names .reports/<branch>.commit.txt and the Told:, Breaks:, Decision: and protected-file rules" yes ""
+else
+  result "session-start: the commit draft line names .reports/<branch>.commit.txt and the Told:, Breaks:, Decision: and protected-file rules" no \
+    "latest.commit.txt -> $(readlink "$dir/.reports/latest.commit.txt")
+line 3: $line3"
 fi
 
 # 2b. The Summary template: the report line names all five headings, in this order.
@@ -506,20 +534,21 @@ else
 fi
 
 # 17. Green CI: review committed, branch pushed, main fast-forwarded and pushed, the report
-# deleted (an untracked report does not count as a change), on main at the end.
+# and the commit draft deleted (untracked files do not count as a change), on main at the end.
 dir="$(new_repo ship-green)"
 mkdir -p "$dir/.reports" && printf '# report\n' >"$dir/.reports/feature.md"
+printf 'draft\n' >"$dir/.reports/feature.commit.txt"
 run_ship "$dir" "$PASS_JSON" success
 green_head="$(rev "$dir" feature)"
 if [ "$STATUS" -eq 0 ] && grep -q 'SHIPPED: feature' <<<"$ERR" &&
   [ "$(git -C "$dir" log -1 --format=%s feature)" = "Record review of feature: PASS" ] &&
   [ "$(remote_rev "$dir" feature)" = "$green_head" ] && [ "$(rev "$dir" main)" = "$green_head" ] &&
   [ "$(remote_rev "$dir" main)" = "$green_head" ] && [ "$(git -C "$dir" symbolic-ref --short HEAD)" = main ] &&
-  [ ! -e "$dir/.reports/feature.md" ] && [ ! -e "$dir/.git/harness-kit-ship" ] &&
+  [ ! -e "$dir/.reports/feature.md" ] && [ ! -e "$dir/.reports/feature.commit.txt" ] && [ ! -e "$dir/.git/harness-kit-ship" ] &&
   grep -q -- "run watch 4242 --exit-status" "$dir.log/gh-calls"; then
-  result "ship.sh: green CI: fast-forwards main, pushes it, deletes the report" yes ""
+  result "ship.sh: green CI: fast-forwards main, pushes it, deletes the report and the commit draft" yes ""
 else
-  result "ship.sh: green CI: fast-forwards main, pushes it, deletes the report" no "$(describe)"
+  result "ship.sh: green CI: fast-forwards main, pushes it, deletes the report and the commit draft" no "$(describe)"
 fi
 
 # 18. Resume after leaving the branch: the remote refuses main once (a pre-receive hook),
