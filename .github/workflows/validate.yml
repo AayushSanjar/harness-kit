@@ -9,7 +9,12 @@ permissions:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest (which moves), to 24.04: the image ubuntu-latest points at
+    # today, so the runner every green run so far has used. Moving to 26.04 is a separate
+    # change. The standard runners table for public repositories at
+    # docs.github.com/en/actions/reference/runners/github-hosted-runners (read 2026-09-27):
+    #   "ubuntu-latest, ubuntu-24.04, ubuntu-22.04, ubuntu-26.04"
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 

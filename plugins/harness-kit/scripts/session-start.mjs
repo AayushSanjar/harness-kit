@@ -36,6 +36,14 @@ const REVIEWER = "harness-kit:reviewer";
 const EVAL_WARNING =
   "harness-kit WARNING: HARNESS_KIT_EVAL is set in this session, so the Stop hook is OFF: " +
   "Claude can finish while the project's checks fail. Unset HARNESS_KIT_EVAL and start a new session.";
+// The report's Summary template: each heading with what goes under it, in this order.
+const SUMMARY_HEADINGS = [
+  `"Result:" one line.`,
+  `"Evidence:" output lines quoted exactly (the final line of each test or check run, and the key FAIL line of each deliberate break), never paraphrased.`,
+  `"Deviations:" anything done differently from, or beyond, the brief (including any git command run); "none" if none.`,
+  `"Decide:" what the person must decide; "none" if none.`,
+  `"Your commands:" the exact commands the person runs next, in order.`,
+];
 
 const manifest = JSON.parse(
   readFileSync(new URL("../.claude-plugin/plugin.json", import.meta.url), "utf8"),
@@ -67,8 +75,9 @@ if (input.agent_type !== REVIEWER) {
   if (path) {
     lines.push(
       `harness-kit: write your final report to ${path} (replace what is there). ` +
-        `Start it with a section "## Summary" of at most 10 lines: the result, what failed, and what the person must decide. ` +
-        `Never commit it: .reports/ is for the person, not for git.`,
+        `Start it with a section "## Summary" of at most 15 lines, under exactly these headings, in this order: ` +
+        SUMMARY_HEADINGS.join(" ") +
+        ` Never commit it: .reports/ is for the person, not for git.`,
     );
   }
   if (process.env.HARNESS_KIT_EVAL) {

@@ -114,7 +114,8 @@ FIX_JSON="$(canned fix $'## Items\nR1 — FAIL — app.txt:2 no test\n\n## Verdi
 
 # new_repo NAME: a repository whose origin is the bare repository NAME.git, with main
 # (a checklist, a check command, app.txt) pushed, and a branch "feature" with one more
-# commit, not pushed. Prints its path.
+# commit, not pushed. The check command runs .harness/check.sh with --skip-reviewed, which
+# ship.sh requires before a review. Prints its path.
 new_repo() {
   local dir="$WORK/$1" bare="$WORK/$1.git"
   git init -q --bare "$bare"
@@ -122,7 +123,8 @@ new_repo() {
   git -C "$dir" init -q -b main
   printf 'hello\n' >"$dir/app.txt"
   printf '# Review checklist\n\n- R1: app.txt changes have a test\n' >"$dir/.harness/review-checklist.md"
-  printf 'echo "check: 1 passed"\n' >"$dir/.harness/check-command"
+  printf 'echo "check: 1 passed"\n' >"$dir/.harness/check.sh"
+  printf 'sh .harness/check.sh --skip-reviewed\n' >"$dir/.harness/check-command"
   git -C "$dir" add -A && git -C "$dir" commit -q -m "main: initial"
   git -C "$dir" remote add origin "$bare"
   git -C "$dir" push -q -u origin main
@@ -217,8 +219,8 @@ if [ "$STATUS" -eq 0 ] && [ "$left" = "feature.md latest.md pinned.md team-live.
   [ "$(readlink "$dir/.reports/latest.md")" = feature.md ] &&
   [ "$(sed -n 1p <<<"$OUT")" = "harness-kit $VERSION loaded" ] &&
   grep -qF "write your final report to $dir/.reports/feature.md" <<<"$line2" &&
-  grep -qF '"## Summary"' <<<"$line2" && grep -q 'at most 10 lines' <<<"$line2" &&
-  grep -q 'what the person must decide' <<<"$line2" && grep -q 'Never commit it' <<<"$line2" &&
+  grep -qF '"## Summary"' <<<"$line2" && grep -q 'at most 15 lines' <<<"$line2" &&
+  grep -q 'Never commit it' <<<"$line2" &&
   [ "$(wc -l <<<"$OUT" | tr -d ' ')" = 2 ] &&
   grep -q 'removed the stale report .reports/gone.md' <<<"$ERR" &&
   grep -q 'removed the stale report .reports/old.md' <<<"$ERR"; then
@@ -227,6 +229,17 @@ else
   result "session-start: stale reports removed; the current, live and latest.md's reports kept" no \
     "$(describe)
 left: $left"
+fi
+
+# 2b. The Summary template: the report line names all five headings, in this order.
+headings="$(grep -oE '"(Result|Evidence|Deviations|Decide|Your commands):"' <<<"$line2" | tr '\n' ' ')"
+want='"Result:" "Evidence:" "Deviations:" "Decide:" "Your commands:" '
+if [ "$headings" = "$want" ] && grep -qF '"Decide:" what the person must decide; "none" if none.' <<<"$line2"; then
+  result "session-start: the Summary template has Result, Evidence, Deviations, Decide, Your commands, in that order" yes ""
+else
+  result "session-start: the Summary template has Result, Evidence, Deviations, Decide, Your commands, in that order" no \
+    "headings found, in order: $headings
+line 2: $line2"
 fi
 
 # 3. check-reports: an untracked report passes; a staged one fails, and so does a
@@ -433,6 +446,36 @@ if [ "$STATUS" -eq 1 ] && [ -e "$dir.log/claude-args" ] &&
   result "ship.sh: stops on a non-PASS review and shows the verdict" yes ""
 else
   result "ship.sh: stops on a non-PASS review and shows the verdict" no "$(describe)"
+fi
+
+# 14b. A failing check: ship.sh runs it before the review, stops, and never calls claude;
+# nothing committed, pushed or asked of gh.
+dir="$(new_repo ship-check-red)"
+printf 'echo "FAIL unit tests: 1 failed"\nexit 1\n' >"$dir/.harness/check.sh"
+git -C "$dir" commit -q -am "feature: break the check"
+head_before="$(rev "$dir" HEAD)"
+run_ship "$dir" "$PASS_JSON" success
+if [ "$STATUS" -eq 1 ] && grep -q '^FAIL unit tests: 1 failed$' <<<"$OUT" &&
+  grep -q 'STOPPED: the check failed (exit 1, above): sh .harness/check.sh --skip-reviewed. No review was started.' <<<"$ERR" &&
+  [ ! -e "$dir.log/claude-args" ] && [ ! -e "$dir.log/gh-calls" ] && [ ! -e "$dir/.harness/reviews.tsv" ] &&
+  [ "$(rev "$dir" HEAD)" = "$head_before" ] && [ -z "$(remote_rev "$dir" feature)" ]; then
+  result "ship.sh: a failing check stops it before the review, with no claude call" yes ""
+else
+  result "ship.sh: a failing check stops it before the review, with no claude call" no "$(describe)"
+fi
+
+# 14c. A check command without --skip-reviewed: ship.sh never adds it; it stops before the
+# check and the review, and prints the line to write.
+dir="$(new_repo ship-no-flag)"
+printf 'sh .harness/check.sh\n' >"$dir/.harness/check-command"
+git -C "$dir" commit -q -am "feature: check without the flag"
+run_ship "$dir" "$PASS_JSON" success
+if [ "$STATUS" -eq 1 ] && grep -q 'STOPPED: the first line of .harness/check-command does not pass --skip-reviewed' <<<"$ERR" &&
+  grep -qF '(for a single command: sh .harness/check.sh --skip-reviewed)' <<<"$ERR" &&
+  ! grep -q 'check: 1 passed' <<<"$OUT" && [ ! -e "$dir.log/claude-args" ] && [ ! -e "$dir.log/gh-calls" ]; then
+  result "ship.sh: a check command without --skip-reviewed stops it before the check and the review" yes ""
+else
+  result "ship.sh: a check command without --skip-reviewed stops it before the check and the review" no "$(describe)"
 fi
 
 # 15. Red CI: the review is committed and the branch pushed, then it stops with the run's

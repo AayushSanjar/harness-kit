@@ -41,10 +41,11 @@ new_project() {
   echo "$dir"
 }
 
-# run_gate DIR SESSION STOP_HOOK_ACTIVE: run the hook; sets OUT, ERR, STATUS.
+# run_gate DIR SESSION STOP_HOOK_ACTIVE [AGENT_TYPE]: run the hook; sets OUT, ERR, STATUS.
 run_gate() {
-  local input
-  input=$(printf '{"session_id":"%s","hook_event_name":"Stop","cwd":"%s","stop_hook_active":%s}' "$2" "$1" "$3")
+  local input agent=""
+  [ $# -ge 4 ] && agent=$(printf ',"agent_type":"%s"' "$4")
+  input=$(printf '{"session_id":"%s","hook_event_name":"Stop","cwd":"%s","stop_hook_active":%s%s}' "$2" "$1" "$3" "$agent")
   OUT="$(CLAUDE_PROJECT_DIR="$1" node "$GATE" <<<"$input" 2>"$WORK/stderr")"
   STATUS=$?
   ERR="$(cat "$WORK/stderr")"
@@ -142,6 +143,24 @@ if [ "$STATUS" -eq 0 ] && [ -z "$OUT" ] && [ -z "$ERR" ] && [ ! -e "$WORK/eval-m
 fi
 result "HARNESS_KIT_EVAL=1: the stop is allowed silently; without it the same failure blocks" "$ok" "$eval_log
 without it: $(describe)"
+
+# 7. The reviewer (agent_type harness-kit:reviewer, as `claude --agent` reports it): a
+# failing check does not block; the stop is allowed silently and the check does not run.
+dir="$(new_project reviewer "touch \"$WORK/reviewer.ran\"; echo \"FAIL broken\"; exit 1")"
+run_gate "$dir" s-reviewer false harness-kit:reviewer
+if [ "$STATUS" -eq 0 ] && [ -z "$OUT" ] && [ -z "$ERR" ] && [ ! -e "$WORK/reviewer.ran" ]; then
+  result "agent_type harness-kit:reviewer: the stop is allowed silently and the check is not run" yes ""
+else
+  result "agent_type harness-kit:reviewer: the stop is allowed silently and the check is not run" no "$(describe)"
+fi
+
+# 8. Any other agent: the same failing check still blocks.
+run_gate "$dir" s-other-agent false Explore
+if [ "$STATUS" -eq 0 ] && is_block "$OUT" && [ -e "$WORK/reviewer.ran" ]; then
+  result "agent_type Explore: the same failing check still blocks" yes ""
+else
+  result "agent_type Explore: the same failing check still blocks" no "$(describe)"
+fi
 
 if [ "$failures" -ne 0 ]; then
   echo "$failures stop-gate case(s) failed"

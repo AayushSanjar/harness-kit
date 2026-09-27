@@ -14,11 +14,18 @@
 // set to anything non-empty the stop is allowed silently and the check is not run: a
 // read-only reviewer on a historical commit cannot fix the checks, and a block would
 // only spend its turns and budget.
+//
+// Off for the reviewer: review.sh and eval-reviewer.sh start it with `claude --agent
+// harness-kit:reviewer`, and hook input carries agent_type, "Present when the session uses
+// `--agent` or the hook fires inside a subagent" (same page). For that agent_type the stop
+// is allowed silently and the check is not run, for the same reason: the reviewer is
+// read-only and cannot fix the checks. Any other agent_type, or none, is gated as usual.
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+const REVIEWER = "harness-kit:reviewer";
 const MAX_BLOCKS = 3;
 const MAX_FEEDBACK_LINES = 50;
 const INSTRUCTION =
@@ -44,7 +51,7 @@ function readCount(file) {
 }
 
 const input = readInput();
-if (process.env.HARNESS_KIT_EVAL) process.exit(0);
+if (process.env.HARNESS_KIT_EVAL || input.agent_type === REVIEWER) process.exit(0);
 const projectDir = process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd();
 
 let command;

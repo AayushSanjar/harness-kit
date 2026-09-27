@@ -9,8 +9,13 @@
 #      detached HEAD, or with uncommitted changes to tracked files (.harness/reviews.tsv
 #      excepted: review.sh writes it). Untracked files, such as .reports/, do not count.
 #   2. If check-reviewed.mjs does not pass for the branch's current diff, and the working
-#      tree's .harness/reviews.tsv has no PASS for it yet, run review.sh; a verdict other
-#      than PASS stops here, and the verdict is shown.
+#      tree's .harness/reviews.tsv has no PASS for it yet, first run the project's check:
+#      the first line of .harness/check-command, as it is. That line must carry
+#      --skip-reviewed as a word, as land.sh requires (the branch is not reviewed yet, so the
+#      review check would fail); ship.sh never adds it. A missing flag or a failing check
+#      stops here, before any review is started (a review costs money). With no
+#      check-command there is nothing to run, as in review.sh. Then run review.sh; a verdict
+#      other than PASS stops here, and the verdict is shown.
 #   3. If .harness/reviews.tsv changed, commit it alone: "Record review of <branch>: PASS".
 #      Then check-reviewed.mjs must pass at HEAD.
 #   4. Push the branch to origin.
@@ -123,6 +128,18 @@ else
   if [ "$pending" = PASS ]; then
     say "$REVIEWS already has an uncommitted PASS for this diff; not reviewing again"
   else
+    check="$( { [ -f .harness/check-command ] && head -n 1 .harness/check-command; } | tr -d '\r')"
+    if [ -z "$check" ]; then
+      say "no .harness/check-command, so there is no check to run before the review"
+    else
+      grep -qE '(^|[[:space:]])--skip-reviewed([[:space:]]|$)' <<<"$check" ||
+        stop "the first line of .harness/check-command does not pass --skip-reviewed, so it would run the review check, which cannot pass before the review. No review was started. Add the flag where the project's check reads it (for a single command: $(sed -E 's/[[:space:]]+$//' <<<"$check") --skip-reviewed), commit, then re-run ship.sh."
+      say "running the check before the review: $check"
+      /bin/sh -c "$check" </dev/null
+      status=$?
+      [ "$status" -eq 0 ] ||
+        stop "the check failed (exit $status, above): $check. No review was started. Fix what it reports, commit, then re-run ship.sh."
+    fi
     say "no PASS review for the branch's current diff; running review.sh"
     bash "$HERE/review.sh"
     status=$?
