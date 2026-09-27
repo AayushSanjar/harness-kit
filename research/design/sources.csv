@@ -1,0 +1,314 @@
+title,url,publisher,date,primary_or_secondary,used_in_file
+Modelling interface aesthetics (full text),https://www.academia.edu/11749849/Modelling_interface_aesthetics,academia.edu copy,2003,primary,02-automated-checks.md
+What we found when we tested tools on the world's least-accessible webpage,https://accessibility.blog.gov.uk/2017/02/24/what-we-found-when-we-tested-tools-on-the-worlds-least-accessible-webpage/,UK GDS,2017-02-24,primary,02-automated-checks.md
+Semi-Automated Accessibility Testing Coverage Report,https://accessibility.deque.com/hubfs/Semi-Automated-Accessibility-Testing-Coverage-Report.pdf,Deque,2022-03-11,primary,02-automated-checks.md
+Accessibility Insights for Web: Assessment,https://accessibilityinsights.io/docs/web/getstarted/assessment/,Microsoft,undated; accessed 2026-09-27,primary,02-automated-checks.md
+Accessibility Insights for Web: FastPass,https://accessibilityinsights.io/docs/web/getstarted/fastpass/,Microsoft,undated; accessed 2026-09-27,primary,02-automated-checks.md
+Frontend Design (third-party mirror of Anthropic's skill),https://agenticskills.io/skills/frontend-design,AgenticSkills,synced 2026-05-24,secondary,04-ai-evaluation.md
+More Meaningful Typography,https://alistapart.com/article/more-meaningful-typography/,A List Apart,2011-05-03,primary,02-automated-checks.md
+Accessibility tool audit: results,https://alphagov.github.io/accessibility-tool-audit/index.html,UK GDS,2018-04-13,primary,02-automated-checks.md
+Accessible charts checklist,https://analysisfunction.civilservice.gov.uk/policy-store/charts-a-checklist,UK Government Analysis Function,2023-05-02,primary,03-data-visualisation.md
+Data visualisation: charts,https://analysisfunction.civilservice.gov.uk/policy-store/data-visualisation-charts/,UK Government Analysis Function,2022-05-19,primary,03-data-visualisation.md
+Data visualisation: colours,https://analysisfunction.civilservice.gov.uk/policy-store/data-visualisation-colours-in-charts/,UK Government Analysis Function,2026-02-12,primary,03-data-visualisation.md
+Building effective agents,https://www.anthropic.com/engineering/building-effective-agents,Anthropic,2024-12-19,primary,00-glossary.md; 04-ai-evaluation.md
+Demystifying evals for AI agents,https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents,Anthropic,2026-01-09,primary,04-ai-evaluation.md; 05-template.md
+Harness design for long-running application development,https://www.anthropic.com/engineering/harness-design-long-running-apps,Anthropic,2026-03-24,primary,00-glossary.md; 01-benchmark.md; 04-ai-evaluation.md; 05-template.md; 06-open-questions.md
+Introducing Claude Design by Anthropic Labs,https://www.anthropic.com/news/claude-design-anthropic-labs,Anthropic,2026-04-17,primary,00-glossary.md; 04-ai-evaluation.md
+@atlaskit/tokens 20.0.0 package listing,https://app.unpkg.com/@atlaskit/tokens@20.0.0,Atlassian via unpkg,about 2026-09-24,primary,02-automated-checks.md; 05-template.md
+@atlaskit/tokens 20.0.0 codemods listing,https://app.unpkg.com/@atlaskit/tokens@20.0.0/files/codemods,Atlassian via unpkg,undated; accessed 2026-09-27,primary,00-glossary.md
+Match levels (Applitools Eyes),https://applitools.com/docs/eyes/concepts/best-practices/match-levels,Applitools,undated; accessed 2026-09-27,primary,00-glossary.md; 02-automated-checks.md
+Applitools Eyes Figma plugin,https://applitools.com/docs/eyes/integrations/design-validation/figma-plugin,Applitools,undated; accessed 2026-09-27,primary,02-automated-checks.md
+Flaky test detection (Argos),https://argos-ci.com/docs/learn/reliability-and-flakiness/flaky-test-detection,Argos,undated; accessed 2026-09-27,primary,02-automated-checks.md
+Playwright SDK reference (Argos),https://argos-ci.com/docs/reference/playwright,Argos,undated; accessed 2026-09-27,primary,02-automated-checks.md
+Self-Refine (abstract page),https://arxiv.org/abs/2303.17651,arXiv,2023-03-30,primary,04-ai-evaluation.md
+Judging the Judges,https://arxiv.org/abs/2406.12624,arXiv (GEM 2025 workshop),2025-08-18,primary,04-ai-evaluation.md; 05-template.md
+Vision language models are blind,https://arxiv.org/abs/2407.06581,arXiv,2025-03-27,primary,01-benchmark.md
+Style over Substance: Failure Modes of LLM Judges,https://arxiv.org/abs/2409.15268,arXiv (ICLR 2025),2025-01-27,primary,04-ai-evaluation.md
+Self-Preference Bias in LLM-as-a-Judge,https://arxiv.org/abs/2410.21819,arXiv,2025-06-21,primary,01-benchmark.md; 06-open-questions.md
+DesignRepair (abstract page),https://arxiv.org/abs/2411.01606,arXiv,2024-11-03,primary,04-ai-evaluation.md
+Pairwise or Pointwise? Evaluating Feedback Protocols for Bias in LLM-Based Evaluation (abstract page),https://arxiv.org/abs/2504.14716,arXiv (COLM 2025),2025-08-21,primary,01-benchmark.md; 04-ai-evaluation.md; 06-open-questions.md
+WebGen-Agent (abstract page),https://arxiv.org/abs/2509.22644,arXiv,2025-09-26,primary,04-ai-evaluation.md
+ChartJudgeBench,https://arxiv.org/abs/2609.24210,arXiv,2026-09-21,primary,02-automated-checks.md
+Large Language Models are not Fair Evaluators,https://arxiv.org/html/2305.17926,arXiv,2023-08-30,primary,00-glossary.md; 01-benchmark.md; 04-ai-evaluation.md; 05-template.md
+Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena,https://arxiv.org/html/2306.05685,arXiv,2023-12-24,primary,00-glossary.md; 01-benchmark.md; 04-ai-evaluation.md
+Calibrating LLM-Based Evaluator (AutoCalibrate),https://arxiv.org/html/2309.13308,arXiv,2023-09-23,primary,04-ai-evaluation.md
+ConstitutionMaker,https://arxiv.org/html/2310.15428,arXiv / IUI 2024,undated; accessed 2026-09-27,primary,04-ai-evaluation.md
+MLLM-as-a-Judge (full text),https://arxiv.org/html/2402.04788,arXiv (ICML 2024),2024-06-11,primary,01-benchmark.md
+Design2Code,https://arxiv.org/html/2403.03163,arXiv (NAACL 2025),2025-02-09,primary,02-automated-checks.md; 04-ai-evaluation.md
+Design2Code (version 1 full text),https://arxiv.org/html/2403.03163v1,arXiv,2024-03-05,primary,02-automated-checks.md
+Generating Automatic Feedback on UI Mockups with Large Language Models,https://arxiv.org/html/2403.13139,arXiv (CHI 2024),2024-03-19,primary,04-ai-evaluation.md
+Who Validates the Validators?,https://arxiv.org/html/2404.12272,arXiv,2024-04-18,primary,00-glossary.md; 04-ai-evaluation.md; 05-template.md
+UIClip: A Data-driven Model for Assessing User Interface Design,https://arxiv.org/html/2404.12500,arXiv,2024-04-18,primary,01-benchmark.md; 04-ai-evaluation.md
+LLM Evaluators Recognize and Favor Their Own Generations,https://arxiv.org/html/2404.13076,arXiv,2024-04-15,primary,00-glossary.md; 01-benchmark.md; 06-open-questions.md
+Aligning LLM Agents by Learning Latent Preference from User Edits (full text),https://arxiv.org/html/2404.15269,arXiv,2024-11-23,primary,04-ai-evaluation.md
+Replacing Judges with Juries (PoLL),https://arxiv.org/html/2404.18796,arXiv,2024-05-01,primary,00-glossary.md; 04-ai-evaluation.md
+Inverse Constitutional AI (full text),https://arxiv.org/html/2406.06560v2,arXiv / ICLR 2025,2025-04-21,primary,00-glossary.md; 04-ai-evaluation.md; 06-open-questions.md
+UICoder (full text),https://arxiv.org/html/2406.07739v1,arXiv,2024-06-11,primary,04-ai-evaluation.md
+UICrit: Enhancing Automated Design Evaluation with a UI Critique Dataset,https://arxiv.org/html/2407.08850,arXiv (UIST 2024),2024-08-13,primary,04-ai-evaluation.md; 05-template.md; 06-open-questions.md
+ViPer (full text),https://arxiv.org/html/2407.17365,arXiv,2024-07-24,primary,04-ai-evaluation.md
+Pairwise or Pointwise? Evaluating Feedback Protocols for Bias in LLM-Based Evaluation (full text),https://arxiv.org/html/2504.14716,arXiv (COLM 2025),2025-08-21,primary,01-benchmark.md; 04-ai-evaluation.md; 06-open-questions.md
+WiserUI-Bench,https://arxiv.org/html/2505.05026v5,arXiv,2026-06-04,primary,00-glossary.md; 01-benchmark.md; 04-ai-evaluation.md; 05-template.md; 06-open-questions.md
+ArtifactsBench,https://arxiv.org/html/2507.04952,arXiv,2025-09-29,primary,00-glossary.md; 01-benchmark.md; 02-automated-checks.md; 04-ai-evaluation.md; 05-template.md; 06-open-questions.md
+Rubrics as Rewards,https://arxiv.org/html/2507.17746v2,arXiv (Scale AI),2025-10-03,primary,04-ai-evaluation.md; 05-template.md
+UI-Bench,https://arxiv.org/html/2508.20410v3,arXiv,2025-09-03,primary,04-ai-evaluation.md
+Is this chart lying to me? (Misviz benchmark),https://arxiv.org/html/2508.21675v1,arXiv,2025,primary,03-data-visualisation.md; 05-template.md
+OpenRubrics (full text),https://arxiv.org/html/2510.07743,arXiv,2026-02-03,primary,04-ai-evaluation.md; 05-template.md
+ReLook,https://arxiv.org/html/2510.11498v1,arXiv,2025-10-13,primary,04-ai-evaluation.md; 05-template.md
+"Auto-Rubric (full text, v1)",https://arxiv.org/html/2510.17314v1,arXiv,2025-10-20,primary,04-ai-evaluation.md
+WebDevJudge: Evaluating (M)LLMs as Critiques for Web Development Quality (version 1),https://arxiv.org/html/2510.18560v1,arXiv,2025-10-21,primary,01-benchmark.md
+WebDevJudge: Evaluating (M)LLMs as Critiques for Web Development Quality (version 3),https://arxiv.org/html/2510.18560v3,arXiv,2026-03-03,primary,00-glossary.md; 01-benchmark.md; 04-ai-evaluation.md; 06-open-questions.md
+DesignPref: Capturing Personal Preferences in Visual Design Generation,https://arxiv.org/html/2511.20513v1,arXiv,2025-11,primary,00-glossary.md; 01-benchmark.md; 04-ai-evaluation.md; 05-template.md; 06-open-questions.md
+Structured visualization design knowledge for grounding language-model feedback,https://arxiv.org/html/2512.20306v2,arXiv,undated; accessed 2026-09-27,primary,03-data-visualisation.md
+MLLM-as-a-Judge Exhibits Model Preference Bias,https://arxiv.org/html/2604.11589v1,arXiv,2026-04-13,primary,01-benchmark.md; 06-open-questions.md
+Auto-Rubric as Reward (full text),https://arxiv.org/html/2605.08354v1,arXiv,2026-05-08,primary,04-ai-evaluation.md
+Automated Reporting of GUI Design Violations for Mobile Apps,https://arxiv.org/pdf/1802.04732,arXiv/ICSE,2018-02-13,primary,02-automated-checks.md
+Truncating the Y-Axis,https://arxiv.org/pdf/1907.02035,ACM CHI,2020,primary,00-glossary.md; 03-data-visualisation.md
+Surfacing Visualization Mirages,https://arxiv.org/pdf/2001.02316,ACM CHI,2020,primary,00-glossary.md; 03-data-visualisation.md; 05-template.md
+An Empirical Analysis of UI-based Flaky Tests,https://arxiv.org/pdf/2103.02669,arXiv/ICSE,2021-03-03,primary,02-automated-checks.md
+Measuring Categorical Perception,https://arxiv.org/pdf/2303.15583,ACM CHI,2023,primary,03-data-visualisation.md
+Self-Refine: Iterative Refinement with Self-Feedback (PDF),https://arxiv.org/pdf/2303.17651,arXiv,2023-03-30,primary,04-ai-evaluation.md
+Button usage,https://atlassian.design/components/button/usage,Atlassian,undated; accessed 2026-09-27,primary,02-automated-checks.md; 04-ai-evaluation.md; 05-template.md
+Border,https://atlassian.design/foundations/border,Atlassian,undated; accessed 2026-09-27,primary,00-glossary.md; 02-automated-checks.md
+Color,https://atlassian.design/foundations/color,Atlassian,undated; accessed 2026-09-27,primary,01-benchmark.md; 02-automated-checks.md; 05-template.md; 06-open-questions.md
+Data visualization color,https://atlassian.design/foundations/color/data-visualization-color,Atlassian,undated; accessed 2026-09-27,primary,00-glossary.md; 01-benchmark.md; 02-automated-checks.md; 03-data-visualisation.md; 05-template.md
+Empty state,https://atlassian.design/foundations/content/designing-messages/empty-state,Atlassian,undated; accessed 2026-09-27,primary,01-benchmark.md; 05-template.md
+Error messages,https://atlassian.design/foundations/content/designing-messages/error-messages,Atlassian,undated; accessed 2026-09-27,primary,01-benchmark.md; 05-template.md
+Language and grammar,https://atlassian.design/foundations/content/language-and-grammar,Atlassian,undated; accessed 2026-09-27,primary,00-glossary.md; 01-benchmark.md; 02-automated-checks.md; 05-template.md
+Elevation,https://atlassian.design/foundations/elevation,Atlassian,undated; accessed 2026-09-27,primary,00-glossary.md; 02-automated-checks.md
+Grid,https://atlassian.design/foundations/grid,Atlassian,undated; accessed 2026-09-27,primary,00-glossary.md; 02-automated-checks.md
+Radius,https://atlassian.design/foundations/radius,Atlassian,undated; accessed 2026-09-27,primary,00-glossary.md; 02-automated-checks.md; 05-template.md
+Spacing,https://atlassian.design/foundations/spacing,Atlassian,undated; accessed 2026-09-27,primary,00-glossary.md; 01-benchmark.md; 02-automated-checks.md; 05-template.md
+Design tokens overview,https://atlassian.design/foundations/tokens/design-tokens,Atlassian,undated; accessed 2026-09-27,primary,00-glossary.md; 02-automated-checks.md; 05-template.md
+Use tokens in code,https://atlassian.design/foundations/tokens/use-tokens-in-code,Atlassian,undated; accessed 2026-09-27,primary,02-automated-checks.md
+Typography,https://atlassian.design/foundations/typography,Atlassian,undated; accessed 2026-09-27,primary,00-glossary.md; 01-benchmark.md; 02-automated-checks.md; 05-template.md
+Product typefaces and scale,https://atlassian.design/foundations/typography/product-typefaces-and-scale,Atlassian,undated; accessed 2026-09-27,primary,00-glossary.md; 01-benchmark.md; 02-automated-checks.md
+Marketplace partners,https://atlassian.design/get-started/design/marketplace-partners,Atlassian,undated; accessed 2026-09-27,primary,02-automated-checks.md
+Forms pattern,https://atlassian.design/patterns/forms,Atlassian,undated; accessed 2026-09-27,primary,02-automated-checks.md; 05-template.md
+Typography GA,https://atlassian.design/whats-new/new-typography-in-general-availability/,Atlassian,2025-09-09,primary,01-benchmark.md; 02-automated-checks.md
+"Introducing ""vibe design"" with Stitch",https://blog.google/innovation-and-ai/models-and-research/google-labs/stitch-ai-ui-design/,Google,2026-03-18,primary,04-ai-evaluation.md
+Percy SDK workflow,https://www.browserstack.com/docs/percy/integrate/percy-sdk-workflow,BrowserStack,undated; accessed 2026-09-27,primary,02-automated-checks.md
+Percy Diff sensitivity,https://www.browserstack.com/docs/percy/project-settings/diff-sensitivity,BrowserStack,undated; accessed 2026-09-27,primary,02-automated-checks.md
+How It Works (Taste),https://buildwithtaste.com/how-it-works,Taste,undated; accessed 2026-09-27,primary,04-ai-evaluation.md
+Linting for Visualization,https://c4pgv.dbvis.de/McNutt_Kindlmann_2018.pdf,VisGuides workshop,2018,primary,03-data-visualisation.md
+Visual sensitivity to color errors in images of natural scenes,https://www.cambridge.org/core/journals/visual-neuroscience/article/visual-sensitivity-to-color-errors-in-images-of-natural-scenes/D5109E53ECB9C49C90C45B7C5CD92513,Cambridge/Visual Neuroscience,2006-05,primary,02-automated-checks.md
+Carbon axes and labels,https://carbondesignsystem.com/data-visualization/axes-and-labels/,IBM,undated; accessed 2026-09-27,primary,03-data-visualisation.md
+Carbon chart anatomy,https://carbondesignsystem.com/data-visualization/chart-anatomy/,IBM,undated; accessed 2026-09-27,primary,03-data-visualisation.md
+Carbon color palettes,https://carbondesignsystem.com/data-visualization/color-palettes/,IBM,undated; accessed 2026-09-27,primary,03-data-visualisation.md; 05-template.md
+Carbon legends,https://carbondesignsystem.com/data-visualization/legends/,IBM,undated; accessed 2026-09-27,primary,03-data-visualisation.md
+Carbon spacing,https://carbondesignsystem.com/elements/spacing/overview/,IBM,2026-09-23,primary,01-benchmark.md; 02-automated-checks.md; 05-template.md
+Carbon type sets,https://carbondesignsystem.com/elements/typography/type-sets/,IBM,2026-09-23,primary,00-glossary.md; 02-automated-checks.md; 05-template.md
+@atlaskit/eslint-plugin-design-system README,https://cdn.jsdelivr.net/npm/@atlaskit/eslint-plugin-design-system/README.md,Atlassian via jsdelivr,v16.13.2,primary,00-glossary.md; 01-benchmark.md; 02-automated-checks.md; 05-template.md; 06-open-questions.md
+Atlassian ESLint design-system plugin: recommended flat preset (compiled file),https://cdn.jsdelivr.net/npm/@atlaskit/eslint-plugin-design-system/dist/cjs/presets/recommended-flat.codegen.js,Atlassian via jsdelivr,undated; accessed 2026-09-27,primary,02-automated-checks.md; 06-open-questions.md
+@atlaskit/stylelint-design-system README,https://cdn.jsdelivr.net/npm/@atlaskit/stylelint-design-system/README.md,Atlassian via jsdelivr,v5.1.4,primary,02-automated-checks.md
+@atlaskit/tokens 20.0.0 package files,https://cdn.jsdelivr.net/npm/@atlaskit/tokens@20.0.0/,Atlassian via jsdelivr,undated; accessed 2026-09-27,primary,02-automated-checks.md
+@atlaskit/tokens 20.0.0 dark theme file,https://cdn.jsdelivr.net/npm/@atlaskit/tokens@20.0.0/dist/esm/artifacts/themes/atlassian-dark.js,Atlassian via jsdelivr,undated; accessed 2026-09-27,primary,02-automated-checks.md; 05-template.md
+@atlaskit/tokens 20.0.0 light theme file,https://cdn.jsdelivr.net/npm/@atlaskit/tokens@20.0.0/dist/esm/artifacts/themes/atlassian-light.js,Atlassian via jsdelivr,undated; accessed 2026-09-27,primary,00-glossary.md; 02-automated-checks.md; 05-template.md
+Atlassian tokens 20.0.0: spacing theme file,https://cdn.jsdelivr.net/npm/@atlaskit/tokens@20.0.0/dist/esm/artifacts/themes/atlassian-spacing.js,Atlassian via jsdelivr,undated; accessed 2026-09-27,primary,05-template.md
+@atlaskit/tokens 20.0.0 typography-finesse theme file,https://cdn.jsdelivr.net/npm/@atlaskit/tokens@20.0.0/dist/esm/artifacts/themes/atlassian-typography-finesse.js,Atlassian via jsdelivr,undated; accessed 2026-09-27,primary,02-automated-checks.md
+@atlaskit/tokens 20.0.0 typography theme file,https://cdn.jsdelivr.net/npm/@atlaskit/tokens@20.0.0/dist/esm/artifacts/themes/atlassian-typography.js,Atlassian via jsdelivr,undated; accessed 2026-09-27,primary,02-automated-checks.md
+@atlaskit/tokens 20.0.0 raw typography tokens,https://cdn.jsdelivr.net/npm/@atlaskit/tokens@20.0.0/dist/esm/artifacts/tokens-raw/atlassian-typography.js,Atlassian via jsdelivr,undated; accessed 2026-09-27,primary,00-glossary.md; 02-automated-checks.md; 05-template.md
+"Comparing automatic accessibility testing tools (doctoral symposium paper, 2024)",https://ceur-ws.org/Vol-3776/paper05.pdf,CEUR-WS,2024,primary,02-automated-checks.md
+Chartability Workbook,https://chartability.github.io/POUR-CAF/,Chartability,undated; accessed 2026-09-27,primary,00-glossary.md; 03-data-visualisation.md; 05-template.md
+Chromatic Font loading,https://www.chromatic.com/docs/font-loading/,Chromatic,undated; accessed 2026-09-27,primary,00-glossary.md; 02-automated-checks.md
+Chromatic Threshold,https://www.chromatic.com/docs/threshold/,Chromatic,undated; accessed 2026-09-27,primary,02-automated-checks.md
+Chromatic Unstable tests,https://www.chromatic.com/docs/unstable-tests/,Chromatic,undated; accessed 2026-09-27,primary,02-automated-checks.md
+Chromium ui/gfx switches.cc (source code),https://chromium.googlesource.com/chromium/src/+/main/ui/gfx/switches.cc,Chromium,undated; accessed 2026-09-27,primary,00-glossary.md
+Claude Design now stays on brand,https://claude.com/blog/claude-design-stays-on-brand-for-daily-work,Anthropic,2026-06-17,primary,04-ai-evaluation.md
+Improving frontend design through Skills,https://claude.com/blog/improving-frontend-design-through-skills,Anthropic,2025-11-12,primary,00-glossary.md; 04-ai-evaluation.md
+Handling overlapping points,https://clauswilke.com/dataviz/overlapping-points.html,Claus Wilke,undated; accessed 2026-09-27,primary,00-glossary.md; 03-data-visualisation.md; 05-template.md
+Best practices for Claude Code,https://code.claude.com/docs/en/best-practices,Anthropic,undated; accessed 2026-09-27,primary,00-glossary.md; 02-automated-checks.md; 04-ai-evaluation.md; 05-template.md
+How Claude remembers your project,https://code.claude.com/docs/en/memory,Anthropic,undated; accessed 2026-09-27,primary,00-glossary.md; 04-ai-evaluation.md
+Skills,https://code.claude.com/docs/en/skills,Anthropic,undated; accessed 2026-09-27,primary,00-glossary.md; 04-ai-evaluation.md
+Documenting Architecture Decisions,https://www.cognitect.com/blog/2011/11/15/documenting-architecture-decisions,Cognitect,2011-11-15,primary,04-ai-evaluation.md
+ColorBrewer 2.0,https://colorbrewer2.org/,Penn State,undated; accessed 2026-09-27,primary,03-data-visualisation.md
+Atlassian ESLint plugins fail with ESLint 9.x (forum thread),https://community.developer.atlassian.com/t/atlassian-eslint-plugins-fail-with-eslint-9-x/82141,community with staff reply,2024-07-27,secondary,02-automated-checks.md; 06-open-questions.md
+New Atlassian fonts in Forge apps with Custom UI (forum thread),https://community.developer.atlassian.com/t/new-atlassian-fonts-in-forge-apps-with-custom-ui/93747,community,2025-07-10,secondary,02-automated-checks.md; 05-template.md; 06-open-questions.md
+Inside a Lead Time Distribution,https://connected-knowledge.com/2014/09/07/inside-lead-time-distribution/,Connected Knowledge,2014-09-07,primary,03-data-visualisation.md; 05-template.md; 06-open-questions.md
+Automating the Design of Graphical Presentations (Mackinlay),https://courses.ischool.berkeley.edu/i247/f05/readings/Mackinlay_APT_TOG86.pdf,ACM TOG,1986,primary,03-data-visualisation.md
+Choosing Effective Colours,https://www.csc2.ncsu.edu/faculty/healey/download/viz.96.pdf,IEEE Visualization,1996,primary,03-data-visualisation.md
+UI-Lens: Assessing General MLLMs' Potential to Automate UI Display Quality Assurance (CVPR 2026 poster page),https://cvpr.thecvf.com/virtual/2026/poster/38861,CVF,undated; accessed 2026-09-27,primary,00-glossary.md; 01-benchmark.md; 02-automated-checks.md; 04-ai-evaluation.md; 05-template.md; 06-open-questions.md
+"Axes, grids and legends",https://data.europa.eu/apps/data-visualisation-guide/axes-grids-and-legends,data.europa.eu,2023,primary,00-glossary.md; 03-data-visualisation.md
+EU data visualisation guide: Colour for categories,https://data.europa.eu/apps/data-visualisation-guide/colour-for-categories,data.europa.eu,undated; accessed 2026-09-27,primary,03-data-visualisation.md
+Choosing colors,https://www.datawrapper.de/blog/colors,Datawrapper,2018/2025,primary,03-data-visualisation.md
+Dual axis,https://www.datawrapper.de/blog/dualaxis,Datawrapper,2018-05-08,primary,03-data-visualisation.md
+Automated Accessibility Coverage Report,https://www.deque.com/automated-accessibility-coverage-report/,Deque,2026-07-10,primary,02-automated-checks.md
+avoid-inline-spacing rule,https://dequeuniversity.com/rules/axe/4.10/avoid-inline-spacing,Deque,undated; accessed 2026-09-27,primary,02-automated-checks.md
+color-contrast rule,https://dequeuniversity.com/rules/axe/4.10/color-contrast,Deque,undated; accessed 2026-09-27,primary,02-automated-checks.md
+link-in-text-block rule,https://dequeuniversity.com/rules/axe/4.10/link-in-text-block,Deque,undated; accessed 2026-09-27,primary,02-automated-checks.md
+Table component,https://design-system.service.gov.uk/components/table/,GOV.UK Design System,undated; accessed 2026-09-27,primary,02-automated-checks.md; 05-template.md
+GOV.UK layout,https://design-system.service.gov.uk/styles/layout/,GDS,undated; accessed 2026-09-27,primary,00-glossary.md; 01-benchmark.md; 02-automated-checks.md; 05-template.md
+GOV.UK spacing,https://design-system.service.gov.uk/styles/spacing/,GDS,undated; accessed 2026-09-27,primary,01-benchmark.md; 02-automated-checks.md
+GOV.UK type scale,https://design-system.service.gov.uk/styles/type-scale/,GDS,undated; accessed 2026-09-27,primary,02-automated-checks.md; 05-template.md
+Design Tokens Format Module 2025.10,https://www.designtokens.org/tr/2025.10/format/,W3C DTCG,2025-10-28,primary,00-glossary.md; 02-automated-checks.md
+Material 3 in Compose,https://developer.android.com/develop/ui/compose/designsystems/material3,Google,2026-09-22,primary,02-automated-checks.md
+Make apps more accessible,https://developer.android.com/guide/topics/ui/accessibility/apps,Google,2026-09-22,primary,02-automated-checks.md
+Atlassian developer changelog,https://developer.atlassian.com/changelog/,Atlassian,2026-09-22 and 2026-09-23 entries,primary,00-glossary.md; 01-benchmark.md; 02-automated-checks.md; 05-template.md
+Automation action guidelines,https://developer.atlassian.com/platform/forge/action-components-guidelines/,Atlassian,2025-11-01,primary,02-automated-checks.md
+Design tokens and theming,https://developer.atlassian.com/platform/forge/design-tokens-and-theming/,Atlassian,2024-10-30,primary,00-glossary.md; 01-benchmark.md; 02-automated-checks.md; 05-template.md
+Forge manifest reference: dashboard widget module,https://developer.atlassian.com/platform/forge/manifest-reference/modules/dashboard-widget/,Atlassian,2026-09-08,primary,05-template.md
+Jira dashboard gadget module,https://developer.atlassian.com/platform/forge/manifest-reference/modules/jira-dashboard-gadget/,Atlassian,2025-08-12,primary,00-glossary.md; 02-automated-checks.md; 05-template.md
+UI Kit components,https://developer.atlassian.com/platform/forge/ui-kit/components/,Atlassian,2024-01-29 as shown,primary,01-benchmark.md; 02-automated-checks.md; 05-template.md
+Bar chart,https://developer.atlassian.com/platform/forge/ui-kit/components/bar-chart/,Atlassian,2026-08-20,primary,02-automated-checks.md
+Line chart,https://developer.atlassian.com/platform/forge/ui-kit/components/line-chart/,Atlassian,2026-08-20,primary,00-glossary.md; 02-automated-checks.md
+XCSS,https://developer.atlassian.com/platform/forge/ui-kit/components/xcss/,Atlassian,2025-11-24,primary,00-glossary.md; 02-automated-checks.md
+useWidgetContext,https://developer.atlassian.com/platform/forge/ui-kit/hooks/use-widget-context/,Atlassian,2026-09-14,primary,00-glossary.md; 01-benchmark.md; 02-automated-checks.md; 05-template.md; 06-open-questions.md
+CSS Overview panel,https://developer.chrome.com/docs/devtools/css-overview,Google,undated; accessed 2026-09-27,primary,02-automated-checks.md
+Lighthouse accessibility score,https://developer.chrome.com/docs/lighthouse/accessibility/scoring,Google,2025-10-22,primary,00-glossary.md; 02-automated-checks.md
+Element.scrollWidth,https://developer.mozilla.org/en-US/docs/Web/API/Element/scrollWidth,MDN,2025-04-19,primary,02-automated-checks.md; 05-template.md
+MDN FontFaceSet.ready,https://developer.mozilla.org/en-US/docs/Web/API/FontFaceSet/ready,MDN,2024-10-08,primary,02-automated-checks.md
+getComputedStyle,https://developer.mozilla.org/en-US/docs/Web/API/Window/getComputedStyle,MDN,2026-05-11,primary,00-glossary.md; 02-automated-checks.md
+MDN font-display,https://developer.mozilla.org/en-US/docs/Web/CSS/@font-face/font-display,MDN,2026-09-10,primary,02-automated-checks.md
+font-variant-numeric,https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant-numeric,MDN Web Docs,2026-09-10,primary,00-glossary.md; 02-automated-checks.md; 05-template.md
+Code Connect,https://developers.figma.com/docs/code-connect/,Figma,undated; accessed 2026-09-27,primary,02-automated-checks.md
+Figma MCP tools,https://developers.figma.com/docs/figma-mcp-server/tools-and-prompts/,Figma,undated; accessed 2026-09-27,primary,00-glossary.md; 02-automated-checks.md
+Test your app in a browser,https://docs.lovable.dev/features/browser-testing,Lovable,undated; accessed 2026-09-27,primary,02-automated-checks.md; 04-ai-evaluation.md
+Personalization,https://docs.midjourney.com/hc/en-us/articles/32433330574221-Personalization,Midjourney,undated; accessed 2026-09-27,primary,04-ai-evaluation.md
+"Chartability paper (Computer Graphics Forum, EuroVis 2022)",https://www.domoritz.de/papers/2022-Chartability.pdf,Computer Graphics Forum,2022,primary,01-benchmark.md; 03-data-visualisation.md
+Computing Lie Factor by Dividing Percentages,https://www.edwardtufte.com/notebook/computing-lie-factor-by-dividing-percentages/,edwardtufte.com forum,2001-07-30,secondary,03-data-visualisation.md
+Illustration of Small Multiples,https://www.edwardtufte.com/notebook/illustration-of-small-multiples-magic-knight-tours/,edwardtufte.com,2003-08-18,secondary,00-glossary.md
+Quantifying Visual Preferences Around the World,https://www.eecs.harvard.edu/~kgajos/papers/2014/reinecke14visual.pdf,CHI 2014,2014,primary,01-benchmark.md; 04-ai-evaluation.md
+Color difference,https://en.wikipedia.org/wiki/Color_difference,Wikipedia,undated; accessed 2026-09-27,secondary,00-glossary.md; 02-automated-checks.md
+Galen Framework,https://en.wikipedia.org/wiki/Galen_Framework,Wikipedia,undated; accessed 2026-09-27,secondary,02-automated-checks.md
+Shewhart individuals control chart,https://en.wikipedia.org/wiki/Shewhart_individuals_control_chart,Wikipedia,undated; accessed 2026-09-27,secondary,03-data-visualisation.md; 06-open-questions.md
+Automated Layout Failure Detection for Responsive Web Pages without an Explicit Oracle,https://eprints.whiterose.ac.uk/id/eprint/116989/10/c50-3.pdf,ISSTA,2017,primary,02-automated-checks.md
+AlignEval,https://eugeneyan.com/writing/aligneval/,eugeneyan.com,2024-10-27,primary,04-ai-evaluation.md
+Evaluating the Effectiveness of LLM-Evaluators,https://eugeneyan.com/writing/llm-evaluators/,eugeneyan.com (practitioner survey),2024-08,primary,04-ai-evaluation.md
+AI Design QA Agent,https://www.figma.com/solutions/ai-design-qa-agent/,Figma,undated; accessed 2026-09-27,primary,04-ai-evaluation.md
+Galen configuration,https://galenframework.com/docs/getting-started-configuration/,Galen,undated; accessed 2026-09-27,primary,02-automated-checks.md
+stylelint-declaration-strict-value,https://github.com/AndyOGo/stylelint-declaration-strict-value,open-source project,undated; accessed 2026-09-27,primary,02-automated-checks.md
+"Deterministic rendering preset (pull request 421, cypress-plugin-visual-regression-diff)",https://github.com/FRSOURCE/cypress-plugin-visual-regression-diff/pull/421,GitHub,2026-09-22,secondary,02-automated-checks.md; 06-open-questions.md
+Lighthouse default config,https://github.com/GoogleChrome/lighthouse/blob/main/core/config/default-config.js,Google/GitHub,undated; accessed 2026-09-27,primary,02-automated-checks.md
+Lighthouse v12.0.0 release,https://github.com/GoogleChrome/lighthouse/releases/tag/v12.0.0,Google/GitHub,2024-04-22,primary,02-automated-checks.md
+Lighthouse v13.0.0 release,https://github.com/GoogleChrome/lighthouse/releases/tag/v13.0.0,Google/GitHub,10 Oct (year not shown),primary,02-automated-checks.md
+IBM Equal Access Accessibility Checker repository,https://github.com/IBMa/equal-access,IBM/GitHub,release 2026-06-01,primary,02-automated-checks.md
+SAPC-APCA repository,https://github.com/Myndex/SAPC-APCA,GitHub,undated; accessed 2026-09-27,primary,06-open-questions.md
+Siteimprove Alfa,https://github.com/Siteimprove/alfa,Siteimprove/GitHub,undated; accessed 2026-09-27,primary,02-automated-checks.md
+Use RFCs and ADRs (proposal 001),https://github.com/alphagov/govuk-design-system-architecture/blob/main/proposals/001-use-rfcs-and-adrs-to-discuss-proposals-and-record-decisions.md,GOV.UK (GitHub),2018-03-16,primary,04-ai-evaluation.md
+Carbon stylelint plugin,https://github.com/carbon-design-system/stylelint-plugin-carbon-tokens,IBM,undated; accessed 2026-09-27,primary,02-automated-checks.md; 05-template.md
+axe-core README,https://github.com/dequelabs/axe-core,Deque/GitHub,undated; accessed 2026-09-27,primary,02-automated-checks.md
+axe-core check options,https://github.com/dequelabs/axe-core/blob/develop/doc/check-options.md,Deque/GitHub,undated; accessed 2026-09-27,primary,02-automated-checks.md
+axe-core rule descriptions,https://github.com/dequelabs/axe-core/blob/develop/doc/rule-descriptions.md,Deque/GitHub,undated; accessed 2026-09-27,primary,00-glossary.md; 02-automated-checks.md; 05-template.md
+axe-core message catalogue,https://github.com/dequelabs/axe-core/blob/develop/locales/_template.json,Deque/GitHub,undated; accessed 2026-09-27,primary,00-glossary.md; 02-automated-checks.md
+Design Lint,https://github.com/destefanis/design-lint,open-source project,undated; accessed 2026-09-27,primary,02-automated-checks.md
+"see package, Okabe–Ito palette source",https://github.com/easystats/see/blob/main/R/scale_color_okabeito.R,easystats,undated; accessed 2026-09-27,secondary,03-data-visualisation.md
+Galen Framework,https://github.com/galenframework/galen,GitHub,release 15 Mar 2019,primary,02-automated-checks.md
+Quixote,https://github.com/jamesshore/quixote,Quixote,undated; accessed 2026-09-27,primary,02-automated-checks.md
+Playwright GitHub issue 13873 (ARM and x86 screenshot differences),https://github.com/microsoft/playwright/issues/13873,Microsoft/GitHub,opened 2022-05; accessed 2026-09-27,primary,06-open-questions.md
+Playwright issue 23559: headless and headed screenshots differ,https://github.com/microsoft/playwright/issues/23559,GitHub,2023-06-07,secondary,02-automated-checks.md
+react-scanner,https://github.com/moroshko/react-scanner,open-source project,undated; accessed 2026-09-27,primary,02-automated-checks.md
+Pa11y,https://github.com/pa11y/pa11y,Pa11y/GitHub,undated; accessed 2026-09-27,primary,02-automated-checks.md
+css-analyzer,https://github.com/projectwallace/css-analyzer,Project Wallace,undated; accessed 2026-09-27,primary,02-automated-checks.md
+ReDeCheck,https://github.com/redecheck/redecheck,GitHub,undated; accessed 2026-09-27,primary,02-automated-checks.md
+HTML_CodeSniffer,https://github.com/squizlabs/HTML_CodeSniffer,Squiz/GitHub,undated; accessed 2026-09-27,primary,02-automated-checks.md
+Applitools introduces Visual AI guardrails (press release),https://www.globenewswire.com/news-release/2026/09/15/3361865/0/en/applitools-introduces-visual-ai-guardrails-to-prevent-quality-degradation-and-reduce-review-burden-in-agentic-coding.html,GlobeNewswire,2026-09-15,primary,02-automated-checks.md
+Government design principles,https://www.gov.uk/guidance/government-design-principles,GOV.UK,2025-04-02,primary,04-ai-evaluation.md
+ReDeCheck ISSTA 2017 paper,https://www.gregorykapfhammer.com/download/research/papers/key/Walsh2017-paper.pdf,ISSTA 2017 (author copy),2017,primary,01-benchmark.md; 02-automated-checks.md
+Viser (ICST 2019) abstract,https://www.gregorykapfhammer.com/research/papers/althomali2019/index.html,author site,2019,primary,02-automated-checks.md
+Tufte's principles for the visual display of quantitative information (blog summary),https://guypursey.com/blog/202001041530-tufte-principles-visual-display-quantitative-information,personal blog,undated; accessed 2026-09-27,secondary,00-glossary.md; 03-data-visualisation.md
+AI Evals FAQ,https://hamel.dev/blog/posts/evals-faq/,hamel.dev,2026-09-21 (modified),primary,00-glossary.md; 04-ai-evaluation.md; 05-template.md
+Using LLM-as-a-Judge For Evaluation: A Complete Guide,https://hamel.dev/blog/posts/llm-judge/,hamel.dev (practitioner blog),2026-09-01,primary,00-glossary.md; 04-ai-evaluation.md; 05-template.md; 06-open-questions.md
+Check designs in Figma,https://help.figma.com/hc/en-us/articles/39592284074263-Check-designs-in-Figma,Figma,undated; accessed 2026-09-27,primary,02-automated-checks.md
+IBM automated verification,https://www.ibm.com/able/toolkit/verify/automated,IBM,2026-08-20,primary,02-automated-checks.md
+Multi-Scale Banking,https://idl.cs.washington.edu/files/2006-Banking-InfoVis.pdf,IEEE TVCG,2006,primary,03-data-visualisation.md
+Crowdsourcing Graphical Perception,https://idl.cs.washington.edu/files/2010-MTurk-CHI.pdf,ACM CHI,2010,primary,00-glossary.md; 03-data-visualisation.md
+Draco,https://idl.cs.washington.edu/files/2019-Draco-InfoVis.pdf,IEEE TVCG,2019,primary,00-glossary.md; 01-benchmark.md; 03-data-visualisation.md; 04-ai-evaluation.md; 05-template.md
+Draco 2,https://idl.cs.washington.edu/files/2023-Draco2-VIS.pdf,IEEE VIS,2023,primary,03-data-visualisation.md
+VizLinter,https://idvxlab.com/papers/2021VIS_VizLinter_Chen.pdf,IEEE VIS/TVCG,2021,primary,00-glossary.md; 03-data-visualisation.md
+"Colour vision deficiency simulation (Machado, Oliveira and Fernandes; project page)",https://www.inf.ufrgs.br/~oliveira/pubs_files/CVD_Simulation/CVD_Simulation.html,UFRGS,2009,primary,03-data-visualisation.md
+Lie Factor,https://infovis-wiki.net/wiki/Lie_Factor,InfoVis:Wiki,undated; accessed 2026-09-27,secondary,00-glossary.md; 03-data-visualisation.md
+Attention web designers: 50 milliseconds (abstract only),https://www.ingentaconnect.com/content/tandf/tbit/2006/00000025/00000002/art00003,Behaviour & Information Technology,2006-03-01,primary,04-ai-evaluation.md
+Aalto Interface Metrics (AIM) paper,https://interfacemetrics.aalto.fi/static/publications/oulasvirta_et_al_2018.pdf,UIST 2018 Adjunct,2018,primary,02-automated-checks.md
+NIST/SEMATECH e-Handbook: variables control charts and Western Electric rules,https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc32.htm,NIST,undated; accessed 2026-09-27,primary,00-glossary.md; 03-data-visualisation.md
+NIST/SEMATECH e-Handbook: individuals control charts,https://www.itl.nist.gov/div898/handbook/pmc/section3/pmc322.htm,NIST,undated; accessed 2026-09-27,primary,00-glossary.md; 03-data-visualisation.md; 05-template.md
+Color Universal Design,https://jfly.uni-koeln.de/color/,Okabe & Ito,2002/2008,primary,03-data-visualisation.md
+Extension of Wilkinson's Algorithm,https://justintalbot.com/research/extension-of-wilkinson.pdf,IEEE TVCG,2010,primary,03-data-visualisation.md
+Empirical Model of Slope Ratio Comparisons,https://justintalbot.com/research/slope-ratio-comparisons.pdf,IEEE InfoVis,2012,primary,00-glossary.md; 03-data-visualisation.md
+The Kanban Guide,https://kanbanguides.org/english/,Kanban Guides,2025,primary,00-glossary.md; 03-data-visualisation.md
+Predicting users' first impressions…,https://kgajos.seas.harvard.edu/papers/reinecke13aesthetics.pdf,CHI 2013 (author copy),2013,primary,02-automated-checks.md
+Aligning LLM-as-a-Judge with Human Preferences,https://www.langchain.com/blog/aligning-llm-as-a-judge-with-human-preferences,LangChain,2024-06-26,primary,04-ai-evaluation.md
+Pseudolocalization,https://learn.microsoft.com/en-us/globalization/methodology/pseudolocalization,Microsoft,2022-08-12,primary,00-glossary.md; 01-benchmark.md; 02-automated-checks.md; 05-template.md
+Data visualization guidelines,https://learn.microsoft.com/en-us/office/dev/add-ins/design/data-visualization-guidelines,Microsoft,2025-10-29,primary,03-data-visualisation.md
+Can Multimodal LLMs Model Expert Ratings in Mobile UI Usability Evaluation?,https://link.springer.com/chapter/10.1007/978-3-032-30549-7_12,Springer (HCII 2026),2026-07-05,primary,04-ai-evaluation.md
+Does style matter? Style control in Chatbot Arena,https://lmsys.org/blog/2024-08-28-style-control/,LMSYS,2024-08-29,primary,04-ai-evaluation.md
+Metrics and keylines (Material 1),https://m1.material.io/layout/metrics-keylines.html,Google,undated (archived),primary,00-glossary.md; 02-automated-checks.md
+Graphical Perception (Cleveland & McGill),https://math.pku.edu.cn/teachers/xirb/Courses/biostatistics/Biostatistics2016/GraphicalPerception_Jasa1984.pdf,JASA,1984,primary,00-glossary.md; 01-benchmark.md; 03-data-visualisation.md
+"Arcs, Angles, or Areas",https://media.eagereyes.org/papers/2016/Skau-EuroVis-2016.pdf,Computer Graphics Forum,2016,primary,03-data-visualisation.md
+Apple's UI dos and don'ts: typography (secondary summary),https://median.co/blog/apples-ui-dos-and-donts-typography,Median.co,2024-10-01,secondary,02-automated-checks.md
+Color Blindness,https://www.nei.nih.gov/learn-about-eye-health/eye-conditions-and-diseases/color-blindness,National Eye Institute,2025-11-05,primary,00-glossary.md; 03-data-visualisation.md
+Design Critiques,https://www.nngroup.com/articles/design-critiques/,NN/g,2016-10-23,primary,04-ai-evaluation.md
+Design Principles to Support Better Decision Making,https://www.nngroup.com/articles/design-principles/,NN/g,2020-08-02,primary,04-ai-evaluation.md
+Worldwide prevalence of red-green color deficiency,https://opg.optica.org/josaa/abstract.cfm?uri=josaa-29-3-313,JOSA A,2012,primary,03-data-visualisation.md
+Measuring visual clutter (PDF),https://pdfs.semanticscholar.org/c831/8039383ab2963c3b7778db5f71fcb4a00f32.pdf,Journal of Vision (copy),2007,primary,02-automated-checks.md
+Common Pitfalls in Dashboard Design,https://www.perceptualedge.com/articles/Whitepapers/Common_Pitfalls.pdf,Perceptual Edge,2006,primary,03-data-visualisation.md
+Practical Rules for Using Color in Charts,https://www.perceptualedge.com/articles/visual_business_intelligence/rules_for_using_color.pdf,Perceptual Edge,2008,primary,03-data-visualisation.md
+Save the Pies for Dessert,https://www.perceptualedge.com/articles/visual_business_intelligence/save_the_pies_for_dessert.pdf,Perceptual Edge,2007,primary,03-data-visualisation.md
+The Chartjunk Debate,https://www.perceptualedge.com/articles/visual_business_intelligence/the_chartjunk_debate.pdf,Perceptual Edge,2011,primary,03-data-visualisation.md
+Design Example 14,https://www.perceptualedge.com/example14.php,Perceptual Edge,undated; accessed 2026-09-27,primary,03-data-visualisation.md
+"Make It Big! (Rello and colleagues, CHI 2016)",https://pielot.org/pubs/Rello2016-Fontsize.pdf,CHI 2016 (author copy),2016,primary,02-automated-checks.md; 05-template.md
+Claude computer-use tool documentation,https://platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool,Anthropic,undated; accessed 2026-09-27,primary,02-automated-checks.md; 06-open-questions.md
+Prompting best practices,https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices,Anthropic,undated; accessed 2026-09-27,primary,00-glossary.md; 01-benchmark.md; 04-ai-evaluation.md; 05-template.md; 06-open-questions.md
+Vision,https://platform.claude.com/docs/en/build-with-claude/vision,Anthropic,undated; accessed 2026-09-27,primary,01-benchmark.md; 05-template.md; 06-open-questions.md
+Define success criteria and build evaluations,https://platform.claude.com/docs/en/test-and-evaluate/develop-tests,Anthropic,undated; accessed 2026-09-27,primary,01-benchmark.md; 04-ai-evaluation.md; 05-template.md
+Accessibility testing (Playwright),https://playwright.dev/docs/accessibility-testing,Microsoft,undated; accessed 2026-09-27,primary,02-automated-checks.md
+"Locator API, including boundingBox (Playwright)",https://playwright.dev/docs/api/class-locator#locator-bounding-box,Microsoft,undated; accessed 2026-09-27,primary,00-glossary.md; 02-automated-checks.md
+"LocatorAssertions, including toHaveCSS (Playwright)",https://playwright.dev/docs/api/class-locatorassertions,Microsoft,undated; accessed 2026-09-27,primary,02-automated-checks.md
+"PageAssertions, including toHaveScreenshot (Playwright)",https://playwright.dev/docs/api/class-pageassertions#page-assertions-to-have-screenshot-1,Microsoft,undated; accessed 2026-09-27,primary,00-glossary.md; 02-automated-checks.md; 06-open-questions.md
+TestOptions (Playwright),https://playwright.dev/docs/api/class-testoptions,Microsoft,undated; accessed 2026-09-27,primary,00-glossary.md; 02-automated-checks.md; 05-template.md
+ARIA snapshots,https://playwright.dev/docs/aria-snapshots,Microsoft (Playwright),undated; accessed 2026-09-26 (cited from research/06-behaviour-checks.md),primary,00-glossary.md; 02-automated-checks.md
+Clock (Playwright),https://playwright.dev/docs/clock,Microsoft,undated; accessed 2026-09-27,primary,02-automated-checks.md
+Visual comparisons (Playwright),https://playwright.dev/docs/test-snapshots,Microsoft,undated; accessed 2026-09-27,primary,00-glossary.md; 02-automated-checks.md
+Perceptibility and Acceptability Thresholds (dentistry),https://pmc.ncbi.nlm.nih.gov/articles/PMC11733899/,PMC,2024-12-01,secondary,02-automated-checks.md
+jest-image-snapshot README,https://raw.githubusercontent.com/americanexpress/jest-image-snapshot/main/README.md,American Express,undated; accessed 2026-09-27,primary,00-glossary.md; 02-automated-checks.md
+frontend-design SKILL.md (anthropics/skills),https://raw.githubusercontent.com/anthropics/skills/main/skills/frontend-design/SKILL.md,Anthropic,undated; accessed 2026-09-27,primary,01-benchmark.md; 02-automated-checks.md; 04-ai-evaluation.md; 05-template.md
+Galen GalenProperty.java (source code),https://raw.githubusercontent.com/galenframework/galen/master/galen-core/src/main/java/com/galenframework/config/GalenProperty.java,Galen,undated; accessed 2026-09-27,primary,02-automated-checks.md
+BackstopJS README,https://raw.githubusercontent.com/garris/BackstopJS/master/README.md,BackstopJS,undated; accessed 2026-09-27,primary,02-automated-checks.md
+looks-same constants.js,https://raw.githubusercontent.com/gemini-testing/looks-same/master/lib/constants.js,gemini-testing,undated; accessed 2026-09-27,primary,00-glossary.md; 02-automated-checks.md
+pixelmatch main-branch index.js (source code),https://raw.githubusercontent.com/mapbox/pixelmatch/main/index.js,Mapbox,undated; accessed 2026-09-27,primary,00-glossary.md; 02-automated-checks.md; 06-open-questions.md
+Playwright chromiumSwitches.ts (source code),https://raw.githubusercontent.com/microsoft/playwright/main/packages/playwright-core/src/server/chromium/chromiumSwitches.ts,Microsoft,undated; accessed 2026-09-27,primary,02-automated-checks.md
+Bronze Simple Mode,https://www.readtech.org/ARC/tests/bronze-simple-mode/,APCA project (readtech.org),undated; accessed 2026-09-27,primary,00-glossary.md
+Computation of Interface Aesthetics,https://www.researchgate.net/profile/Aliaksei-Miniukovich/publication/300726008_Computation_of_Interface_Aesthetics/links/57d7e0b108ae5f03b49812c7/Computation-of-Interface-Aesthetics.pdf,CHI 2015 (author copy),2015,primary,02-automated-checks.md
+Arc Length-Based Aspect Ratio Selection,https://www.researchgate.net/profile/John-Gerth/publication/221700115_Arc_Length-Based_Aspect_Ratio_Selection/links/02e7e524d83da5da94000000/Arc-Length-Based-Aspect-Ratio-Selection.pdf,IEEE TVCG,2011,primary,03-data-visualisation.md
+"Benchmarking web accessibility evaluation tools (Vigo and colleagues, W4A 2013)",https://ro.ecu.edu.au/ecuworks2013/236/,Edith Cowan University repository,2013,primary,02-automated-checks.md
+Fonts and Typography,https://www.section508.gov/develop/fonts-typography/,US GSA Section508.gov,Mar 2026,primary,01-benchmark.md; 02-automated-checks.md; 05-template.md
+Axes and gridlines,https://service-manual.ons.gov.uk/data-visualisation/guidance/axes-and-gridlines,Office for National Statistics,undated; accessed 2026-09-27,primary,03-data-visualisation.md; 06-open-questions.md
+Useful Junk?,https://sites.stat.columbia.edu/gelman/communication/Bateman2010.pdf,ACM CHI,2010,primary,03-data-visualisation.md
+How physical text layout affects reading from screen,https://stu.westga.edu/~ssynan1/literacy/Dyson.pdf,Behaviour & Information Technology (third-party-hosted copy),2004,primary,02-automated-checks.md
+Style Dictionary DTCG page,https://styledictionary.com/info/dtcg/,Style Dictionary,undated; accessed 2026-09-27,primary,00-glossary.md; 02-automated-checks.md
+Methods of calculating rolling average,https://support.atlassian.com/jira-software-cloud/docs/methods-of-calculating-rolling-average-on-the-control-chart/,Atlassian,undated; accessed 2026-09-27,primary,03-data-visualisation.md
+View and understand the control chart,https://support.atlassian.com/jira-software-cloud/docs/view-and-understand-the-control-chart/,Atlassian,undated; accessed 2026-09-27,primary,00-glossary.md; 03-data-visualisation.md; 05-template.md; 06-open-questions.md
+Set up your design system in Claude Design,https://support.claude.com/en/articles/14604397-set-up-your-design-system-in-claude-design,Anthropic,"""updated this week""",primary,04-ai-evaluation.md
+Get started with Claude Design,https://support.claude.com/en/articles/14604416-get-started-with-claude-design,Anthropic,"""updated this week""",primary,04-ai-evaluation.md
+Touch target size (Android accessibility help),https://support.google.com/accessibility/android/answer/7101858,Google,undated; accessed 2026-09-27,primary,02-automated-checks.md
+A Study on Dual-Scale Data Charts,https://swmprats.net/_isenberg/publications/papers/Isenberg_2011_ASO.pdf,IEEE TVCG,2011,primary,03-data-visualisation.md
+@atlaskit/tokens 20.0.0 raw shape tokens,https://unpkg.com/@atlaskit/tokens@20.0.0/dist/esm/artifacts/tokens-raw/atlassian-shape.js,Atlassian via unpkg,undated; accessed 2026-09-27,primary,02-automated-checks.md
+pixelmatch 7.2.0 README,https://unpkg.com/pixelmatch@7.2.0/README.md,Mapbox/npm,undated; accessed 2026-09-27,primary,02-automated-checks.md
+pixelmatch 7.2.0 index.js,https://unpkg.com/pixelmatch@7.2.0/index.js,Mapbox/npm,undated; accessed 2026-09-27,primary,02-automated-checks.md; 06-open-questions.md
+Profiles and Moodboards,https://updates.midjourney.com/profiles-and-moodboards/,Midjourney,2024-12-16,primary,04-ai-evaluation.md
+Urban Institute style guide,https://urbaninstitute.github.io/graphics-styleguide/,Urban Institute,2025-08-27,primary,03-data-visualisation.md
+Tufte on graphics,https://users.wpi.edu/~jdp/ma2611_18D/lecture_notes/graphics/Tufte/Tufte_on_graphics.pdf,Worcester Polytechnic Institute,undated; accessed 2026-09-27,secondary,03-data-visualisation.md
+What Makes a Visualization Memorable?,https://vcg.seas.harvard.edu/publications/20130101-what-makes-a-visualization-memorable/paper,IEEE TVCG,2013,primary,03-data-visualisation.md
+How we made v0 an effective coding agent,https://vercel.com/blog/how-we-made-v0-an-effective-coding-agent,Vercel,2026-01-07,primary,04-ai-evaluation.md
+Text size in translation,https://www.w3.org/International/articles/article-text-size,W3C i18n,undated; accessed 2026-09-27,primary,02-automated-checks.md
+Web Content Accessibility Guidelines (WCAG) 2.2,https://www.w3.org/TR/WCAG22/,W3C,2024-12-12,primary,00-glossary.md; 01-benchmark.md; 02-automated-checks.md; 05-template.md
+WCAG 3.0 Working Draft,https://www.w3.org/TR/wcag-3.0/,W3C,2026-09-10,primary,00-glossary.md; 01-benchmark.md; 02-automated-checks.md; 06-open-questions.md
+Understanding Success Criterion 1.4.3: Contrast (Minimum),https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html,W3C WAI,2026-06-01,primary,00-glossary.md; 02-automated-checks.md; 05-template.md; 06-open-questions.md
+Understanding Success Criterion 2.4.13: Focus Appearance,https://www.w3.org/WAI/WCAG22/Understanding/focus-appearance.html,W3C WAI,2026-08-10,primary,02-automated-checks.md; 05-template.md
+Understanding Success Criterion 2.4.11: Focus Not Obscured (Minimum),https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html,W3C WAI,2026-06-15,primary,00-glossary.md; 02-automated-checks.md; 05-template.md
+Understanding Success Criterion 2.4.7: Focus Visible,https://www.w3.org/WAI/WCAG22/Understanding/focus-visible.html,W3C WAI,2026-07-12,primary,02-automated-checks.md; 05-template.md
+Understanding Success Criterion 1.4.11: Non-text Contrast,https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html,W3C WAI,2026-06-15,primary,00-glossary.md; 01-benchmark.md; 02-automated-checks.md; 03-data-visualisation.md; 05-template.md
+Understanding Success Criterion 1.4.10: Reflow,https://www.w3.org/WAI/WCAG22/Understanding/reflow.html,W3C WAI,2026-08-10,primary,00-glossary.md; 02-automated-checks.md; 05-template.md
+Understanding Success Criterion 2.5.5: Target Size (Enhanced),https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html,W3C WAI,2026-05-11,primary,02-automated-checks.md
+Understanding Success Criterion 2.5.8: Target Size (Minimum),https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html,W3C WAI,2026-05-11,primary,00-glossary.md; 02-automated-checks.md; 05-template.md; 06-open-questions.md
+Understanding Success Criterion 1.4.12: Text Spacing,https://www.w3.org/WAI/WCAG22/Understanding/text-spacing.html,W3C WAI,2025-10-01,primary,02-automated-checks.md
+Understanding Success Criterion 1.4.1: Use of Color,https://www.w3.org/WAI/WCAG22/Understanding/use-of-color.html,W3C,2025-09-16,primary,03-data-visualisation.md; 05-template.md
+Understanding Success Criterion 1.4.8: Visual Presentation,https://www.w3.org/WAI/WCAG22/Understanding/visual-presentation.html,W3C WAI,2026-03-09,primary,01-benchmark.md; 02-automated-checks.md; 05-template.md
+WCAG 2.2 Approved as an ISO Standard,https://www.w3.org/WAI/news/2025-10-21/wcag22-iso,W3C WAI,2025-10-21,primary,00-glossary.md; 01-benchmark.md
+ACT rule 59br37 (text not clipped at 200% zoom; proposed),https://www.w3.org/WAI/standards-guidelines/act/rules/59br37/,W3C WAI,undated; accessed 2026-09-27,primary,02-automated-checks.md
+ACT rule afw4f7 (text has minimum contrast),https://www.w3.org/WAI/standards-guidelines/act/rules/afw4f7/,W3C WAI,2023-08-30,primary,02-automated-checks.md
+ACT rule oj04fd (focus visible),https://www.w3.org/WAI/standards-guidelines/act/rules/oj04fd/,W3C WAI,2023-08-30,primary,00-glossary.md; 02-automated-checks.md
+DTCG stable-version announcement,https://www.w3.org/community/design-tokens/2025/10/28/design-tokens-specification-reaches-first-stable-version/,W3C DTCG,2025-10-28,primary,02-automated-checks.md
+WAVE help,https://wave.webaim.org/help,WebAIM,undated; accessed 2026-09-27,primary,02-automated-checks.md
+Evaluating Contrast,https://webaim.org/articles/contrast/evaluating,WebAIM,2021-01-09,primary,02-automated-checks.md
+WebAIM Million 2026,https://webaim.org/projects/million/,WebAIM,2026-03-30,primary,02-automated-checks.md
+Choose a comfortable measure,http://webtypography.net/2.1.2,webtypography.net,undated; accessed 2026-09-27,secondary,02-automated-checks.md
+What is design critique?,https://www.zeitspace.com/blog/what-is-design-critique-communication,Zeitspace,2020-05-14,secondary,04-ai-evaluation.md
