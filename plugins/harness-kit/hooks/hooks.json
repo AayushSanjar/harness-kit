@@ -1,5 +1,5 @@
 {
-  "description": "harness-kit: announce that the plugin loaded, block Claude from stopping while the project's checks fail, refuse tool calls that would put a secret in the repository, and refuse a deploy while the project's pre-deploy check fails",
+  "description": "harness-kit: announce that the plugin loaded, block Claude from stopping while the project's checks fail, refuse tool calls that would put a secret in the repository, refuse a deploy while the project's pre-deploy check fails, and keep the harness-kit reviewer read-only",
   "hooks": {
     "SessionStart": [
       {
@@ -48,6 +48,16 @@
             "command": "node",
             "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/predeploy-gate.mjs"],
             "timeout": 600
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash|WebFetch|WebSearch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/reviewer-guard.mjs"]
           }
         ]
       }
