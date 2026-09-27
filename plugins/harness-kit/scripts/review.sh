@@ -12,12 +12,16 @@
 #   check-command          the project's check; its real output goes to the reviewer
 #   review-reads           optional; one project-relative path per line (# comments and
 #                          blank lines skipped), such as a spec, copied in whole
-# Limits, from the environment: REVIEW_MAX_TURNS (default 40) and REVIEW_MAX_BUDGET_USD
-# (default 3.00).
+# Limits, from the environment: REVIEW_MAX_TURNS (default 40), REVIEW_MAX_BUDGET_USD
+# (default 3.00) and REVIEW_MAX_INPUT_BYTES (default 250000, the most the reviewer's input
+# may hold; review-lib.sh's review_build_input says where the default comes from).
 #
 # WHAT IS REVIEWED is the committed branch: the diff from the merge-base with the base to
 # HEAD, excluding .harness/reviews.tsv. Uncommitted changes are shown to the reviewer as
-# `git status` but are not part of the diff or its hash; commit first.
+# `git status` but are not part of the diff or its hash; commit first. In the reviewer's
+# input a deleted file is one line, "deleted: <path> (<N> lines)", and a renamed file is
+# "renamed: <old> -> <new>" plus any change to its content; added and modified files are
+# shown in full.
 #
 # THE RECORD. On a completed review it prints the full review, then appends ONE line to
 # .harness/reviews.tsv, tab-separated:
@@ -26,8 +30,9 @@
 # function CI runs, so the two cannot disagree. Commit the line; CI's check-reviewed.mjs
 # passes only if the latest line for the branch's current diff hash says PASS.
 #
-# IT FAILS CLOSED. No checklist, no item IDs in it, a missing review-reads file, a failed
-# or limited-out run, output that is not the expected JSON, a missing or malformed VERDICT
+# IT FAILS CLOSED. No checklist, no item IDs in it, a missing review-reads file, an input
+# over REVIEW_MAX_INPUT_BYTES (the message names the largest parts; claude is not started),
+# a failed or limited-out run, output that is not the expected JSON, a missing or malformed VERDICT
 # line, a VERDICT that does not list exactly the checklist's IDs, a PASS with an F, or HEAD
 # moving during the run: each exits 1 and appends nothing.
 #

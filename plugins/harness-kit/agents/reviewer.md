@@ -16,7 +16,7 @@ Your input is one document with these sections, each headed `=== <NAME> ===`:
 - `CHECK COMMAND` — the project's check command, its exit status and its REAL output, run by the script just before you started. It is not a summary. You cannot run it again.
 - `GIT LOG` — every commit on the branch since the merge-base, with full messages.
 - `GIT STATUS` — the working tree when the review started. Uncommitted changes are NOT part of what you are reviewing; if there are any, say so as a finding.
-- `DIFF` — the full diff from the merge-base to the head commit.
+- `DIFF` — the diff from the merge-base to the head commit. Added and modified files are shown in full. A deleted file is one line, `deleted: <path> (<N> lines)`, without its content; a renamed file is a line `renamed: <old> -> <new>`, followed in the diff by any change to its content.
 - `READ: <path>` — zero or more extra files the project asked you to read, such as a spec.
 
 You may Read, Grep and Glob the project folder for more evidence. The committed diff is what you judge; the files on disk are there to give it context.

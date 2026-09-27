@@ -133,6 +133,19 @@ else
 row: $row"
 fi
 
+# 1b. With nothing deleted or renamed, the DIFF section is exactly `git diff` from the
+# merge-base to HEAD, as before.
+expected_diff="$(printf '=== DIFF ===\n'; git -C "$dir" diff --no-color --no-ext-diff main HEAD)"
+diff_section="$(sed -n '/^=== DIFF ===$/,$p' <<<"$stdin")"
+if [ -n "$stdin" ] && [ "$diff_section" = "$expected_diff" ] && ! grep -q '^deleted: \|^renamed: ' <<<"$stdin"; then
+  result "review.sh: added and modified files keep their full diff, unchanged" yes ""
+else
+  result "review.sh: added and modified files keep their full diff, unchanged" no "DIFF section:
+$diff_section
+expected:
+$expected_diff"
+fi
+
 # 2. No checklist: exit non-zero, nothing appended, claude never started.
 dir="$(new_repo no-checklist)"
 git -C "$dir" rm -q .harness/review-checklist.md && git -C "$dir" commit -q -m "drop checklist"
@@ -182,6 +195,60 @@ if [ "$STATUS" -ne 0 ] && [ ! -e "$dir/.harness/reviews.tsv" ] && [ ! -e "$dir.l
   result "review.sh: a missing review-reads file exits non-zero and appends nothing" yes ""
 else
   result "review.sh: a missing review-reads file exits non-zero and appends nothing" no "$(describe)"
+fi
+
+# with_main_files DIR: adds big.txt (6000 lines) and notes.txt (10 lines) on main, and
+# rebases feature onto it, leaving feature checked out.
+with_main_files() {
+  git -C "$1" checkout -q main
+  seq -f 'old line %g of the big file' 1 6000 >"$1/big.txt"
+  seq -f 'note %g' 1 10 >"$1/notes.txt"
+  git -C "$1" add -A && git -C "$1" commit -q -m "main: big.txt and notes.txt"
+  git -C "$1" checkout -q feature && git -C "$1" rebase -q main
+}
+
+# 6b. A branch deleting a large file shows it as one summary line, never its content, and a
+# renamed file as "renamed: old -> new" plus its content change; the review completes.
+dir="$(new_repo deleted)"
+with_main_files "$dir"
+git -C "$dir" rm -q big.txt
+git -C "$dir" mv notes.txt docs-notes.txt
+sed -i.bak 's/^note 5$/note five/' "$dir/docs-notes.txt" && rm -f "$dir/docs-notes.txt.bak"
+git -C "$dir" add -A && git -C "$dir" commit -q -m "feature: drop big.txt, rename notes.txt"
+run_review "$dir" "$PASS_JSON"
+stdin="$(cat "$dir.log/stdin" 2>/dev/null)"
+if [ "$STATUS" -eq 0 ] && [ "$(lines_in "$dir/.harness/reviews.tsv")" = 1 ] &&
+  grep -qx 'deleted: big.txt (6000 lines)' <<<"$stdin" && ! grep -q 'of the big file' <<<"$stdin" &&
+  grep -qx 'renamed: notes.txt -> docs-notes.txt' <<<"$stdin" &&
+  grep -qx -- '-note 5' <<<"$stdin" && grep -qx '+note five' <<<"$stdin" &&
+  grep -q '^+world$' <<<"$stdin"; then
+  result "review.sh: a deleted file is one summary line, a renamed file a line plus its change" yes ""
+else
+  result "review.sh: a deleted file is one summary line, a renamed file a line plus its change" no "$(describe)
+DIFF section: $(sed -n '/^=== DIFF ===$/,$p' <<<"$stdin" | head -n 40)"
+fi
+
+# 6c. An input over the limit stops before any claude call: exit 1, nothing appended, and
+# the message names the largest file and says to split the branch. With
+# REVIEW_MAX_INPUT_BYTES raised, the same branch is reviewed.
+dir="$(new_repo oversized)"
+seq -f 'new line %g of the huge file, long enough to add up quickly' 1 5000 >"$dir/huge.txt"
+git -C "$dir" add -A && git -C "$dir" commit -q -m "feature: add huge.txt"
+run_review "$dir" "$PASS_JSON"
+over_status=$STATUS over_err="$ERR" over_called=no
+[ -e "$dir.log/args" ] && over_called=yes
+REVIEW_MAX_INPUT_BYTES=1000000 run_review "$dir" "$PASS_JSON"
+if [ "$over_status" -eq 1 ] && [ "$over_called" = no ] &&
+  grep -q "the reviewer's input is [0-9]* bytes, over the limit of 250000 (REVIEW_MAX_INPUT_BYTES)" <<<"$over_err" &&
+  grep -q 'The largest parts: huge.txt ([0-9]* bytes), ' <<<"$over_err" &&
+  grep -q 'Split the branch into smaller branches' <<<"$over_err" &&
+  grep -q 'nothing was appended to .harness/reviews.tsv' <<<"$over_err" &&
+  [ "$STATUS" -eq 0 ] && [ -e "$dir.log/args" ] && [ "$(lines_in "$dir/.harness/reviews.tsv")" = 1 ]; then
+  result "review.sh: an input over the limit stops before claude; a raised limit lets it through" yes ""
+else
+  result "review.sh: an input over the limit stops before claude; a raised limit lets it through" no "over the limit: exit $over_status, claude called: $over_called
+stderr: $over_err
+with the limit raised: $(describe)"
 fi
 
 # ---------------------------------------------------------------------------------------

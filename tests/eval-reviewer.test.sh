@@ -544,4 +544,46 @@ regrade: $(describe)
 claude calls during the regrade: $(cat "$dir.log/calls" 2>/dev/null || echo 0)"
 fi
 
+
+# 21. A case whose head deletes a large file: the input shows it as one summary line, never
+# its content, and the run is graded as usual.
+dir="$(new_repo deleted)"
+git -C "$dir" checkout -q -b big base
+seq -f 'old line %g of the big file' 1 6000 >"$dir/big.txt"
+git -C "$dir" add -A && git -C "$dir" commit -q -m "add big.txt"
+git -C "$dir" tag with-big
+git -C "$dir" rm -q big.txt && git -C "$dir" commit -q -m "drop big.txt"
+git -C "$dir" tag dropped
+git -C "$dir" checkout -q main
+cases "$dir" $'c1\tcontrol\twith-big\tdropped\t-\t-'
+FAKE_JSON="$CLEAN_JSON" run_eval "$dir"
+stdin="$(cat "$dir.log/stdin" 2>/dev/null)"
+if [ "$STATUS" -eq 0 ] && [ "$(row c1)" = 'c1 control PASS CLEAN $0.1234 12.3' ] &&
+  grep -qx 'deleted: big.txt (6000 lines)' <<<"$stdin" && ! grep -q 'of the big file' <<<"$stdin" &&
+  untouched "$dir" && no_worktree "$dir"; then
+  result "eval: a deleted file is one summary line in the input" yes ""
+else
+  result "eval: a deleted file is one summary line in the input" no "$(describe)
+DIFF section: $(sed -n '/^=== DIFF ===$/,$p' <<<"$stdin" | head -n 20)"
+fi
+
+# 22. A case whose input is over the limit is an ERROR before any claude call, naming the
+# largest file; the next case still runs, and no worktree is left.
+dir="$(new_repo oversized)"
+git -C "$dir" checkout -q -b huge base
+seq -f 'new line %g of the huge file, long enough to add up quickly' 1 5000 >"$dir/huge.txt"
+git -C "$dir" add -A && git -C "$dir" commit -q -m "add huge.txt"
+git -C "$dir" checkout -q main
+cases "$dir" $'d1\tdefect\tbase\thuge\thuge\\.txt\tsize' $'c1\tcontrol\tbase\tclean-change\t-\t-'
+FAKE_JSON="$CLEAN_JSON" run_eval "$dir"
+if [ "$STATUS" -eq 1 ] && [ "$(row d1)" = 'd1 defect - ERROR $0.0000 0.0' ] &&
+  [ "$(row c1)" = 'c1 control PASS CLEAN $0.1234 12.3' ] && [ "$(cat "$dir.log/calls" 2>/dev/null)" = 1 ] &&
+  grep -q "d1 run 1 is an ERROR: the reviewer's input is [0-9]* bytes, over the limit of 250000 (REVIEW_MAX_INPUT_BYTES), so claude was not started. The largest parts: huge.txt (" <<<"$ERR" &&
+  untouched "$dir" && no_worktree "$dir"; then
+  result "eval: an input over the limit is an ERROR before any claude call" yes ""
+else
+  result "eval: an input over the limit is an ERROR before any claude call" no "$(describe)
+claude calls: $(cat "$dir.log/calls" 2>/dev/null || echo 0)"
+fi
+
 [ "$failures" -eq 0 ]

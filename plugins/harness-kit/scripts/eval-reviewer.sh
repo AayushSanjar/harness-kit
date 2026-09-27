@@ -7,7 +7,8 @@
 #
 # For people, in their own terminal: every run spends real money on one headless Claude run,
 # within review.sh's limits (REVIEW_MAX_TURNS, default 40; REVIEW_MAX_BUDGET_USD, default
-# 3.00, per run). --regrade makes no Claude call and costs nothing.
+# 3.00, per run; REVIEW_MAX_INPUT_BYTES, default 250000). --regrade makes no Claude call and
+# costs nothing.
 #
 # THE CASES, in .harness/reviewer-eval/cases.tsv: one per line, tab-separated, # comments and
 # blank lines skipped; "-" stands for an empty field. The last three fields are optional
@@ -60,7 +61,8 @@
 #            "C1 — FAIL —": the status word is never taken for the keyword.
 #   control  CLEAN if the verdict is PASS, or if every FAILED item is in na_items and there
 #            is no finding; otherwise FALSE ALARM
-#   ERROR    the run did not complete (limits, a failed run, a malformed VERDICT line). It
+#   ERROR    the run did not complete (limits, a failed run, a malformed VERDICT line), or
+#            its input was over REVIEW_MAX_INPUT_BYTES, so Claude was never started. It
 #            counts against the reviewer: as not caught for a defect, as a false alarm for a
 #            control.
 # The review graded is the final message of the run, the result event's text.
