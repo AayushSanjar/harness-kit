@@ -1,0 +1,9 @@
+# Which files make up each check that .harness/mutations.tsv names, for land.sh:
+# one "check<TAB>path" per line. A change to a path replays that check's faults.
+failing check: blocks with the FAIL line as feedback	tests/stop-gate.test.sh
+4 failures in a row: 4th allows the stop and prints the budget line	tests/stop-gate.test.sh
+Write a JWT: denied, value not echoed	tests/guard-secrets.test.sh
+check-reviewed: an edited old line fails (append-only)	tests/review.test.sh
+ship.sh: stops on red CI with the run's URL; main untouched	tests/ship.test.sh
+check-defects: an edited line fails	tests/check-defects.test.sh
+replay-faults: a SURVIVED fault exits non-zero	tests/replay-faults.test.sh

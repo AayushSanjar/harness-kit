@@ -1,0 +1,12 @@
+# Fault replays for harness-kit itself, run by plugins/harness-kit/scripts/replay-faults.sh
+# (locally, and in this public repository's CI). One per line, tab-separated:
+#   id  file  find  replacement  check
+# Each puts back a break an earlier increment proved, and names the tests/validate.sh case
+# that must FAIL with it.
+stop-gate-no-block	plugins/harness-kit/scripts/stop-gate.mjs	process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");	process.exit(0);	failing check: blocks with the FAIL line as feedback
+stop-gate-no-budget	plugins/harness-kit/scripts/stop-gate.mjs	if (previous >= MAX_BLOCKS) {	if (false) {	4 failures in a row: 4th allows the stop and prints the budget line
+guard-secrets-no-jwt	plugins/harness-kit/scripts/guard-secrets.mjs	{ name: "a JWT (JSON Web Token)", re: /\beyJ	{ name: "a JWT (JSON Web Token)", re: /\bNEVER-eyJ	Write a JWT: denied, value not echoed
+check-reviewed-not-append-only	plugins/harness-kit/scripts/check-reviewed.mjs	if (now[i] !== before[i]) {	if (false) {	check-reviewed: an edited old line fails (append-only)
+ship-red-ci-passes	plugins/harness-kit/scripts/ship.sh	[ "$conclusion" = success ] ||	true ||	ship.sh: stops on red CI with the run's URL; main untouched
+check-defects-edits-allowed	plugins/harness-kit/scripts/check-defects.mjs	if (now[i] === before[i]) continue;	continue;	check-defects: an edited line fails
+replay-survived-passes	plugins/harness-kit/scripts/replay-faults.sh	[ "$survived" -eq 0 ] && [ "$errors" -eq 0 ]	[ "$errors" -eq 0 ]	replay-faults: a SURVIVED fault exits non-zero
