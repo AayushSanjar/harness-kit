@@ -28,7 +28,7 @@ out="$(claude plugin validate "$PLUGIN" --strict 2>&1)"
 check "claude plugin validate --strict (plugin: plugins/harness-kit)" "$out" $?
 
 # (b) The SessionStart script prints exactly the expected line and exits 0.
-expected="harness-kit 0.3.0 loaded"
+expected="harness-kit 0.4.0 loaded"
 out="$(node "$PLUGIN/scripts/session-start.mjs" 2>&1)"
 status=$?
 if [ "$status" -eq 0 ] && [ "$out" = "$expected" ]; then
@@ -86,6 +86,10 @@ check "tests/guard-secrets.test.sh (all cases)" "" $?
 # string, including the guard and its test.
 out="$(cd "$ROOT" && node "$PLUGIN/scripts/guard-secrets.mjs" --scan 2>&1)"
 check "guard-secrets.mjs --scan on this repository: no findings" "$out" $?
+
+# (i) The pre-deploy gate's and deploy.sh's behaviour cases, one per line.
+bash "$ROOT/tests/predeploy-gate.test.sh"
+check "tests/predeploy-gate.test.sh (all cases)" "" $?
 
 if [ "$failures" -ne 0 ]; then
   echo "$failures check(s) failed"
