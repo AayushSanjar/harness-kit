@@ -27,10 +27,16 @@ check "claude plugin validate --strict (marketplace: repository root)" "$out" $?
 out="$(claude plugin validate "$PLUGIN" --strict 2>&1)"
 check "claude plugin validate --strict (plugin: plugins/harness-kit)" "$out" $?
 
-# (b) The SessionStart script prints exactly the expected line and exits 0.
-expected="harness-kit 0.6.2 loaded"
-out="$(node "$PLUGIN/scripts/session-start.mjs" 2>&1)"
+# (b) The SessionStart script prints exactly the expected line and exits 0. It runs in an
+# empty folder outside any git repository, so there is no report line and no .reports/
+# folder is made here, and without HARNESS_KIT_EVAL, so there is no warning (tests/ship.test.sh
+# covers both).
+expected="harness-kit 0.7.0 loaded"
+empty="$(mktemp -d)"
+out="$(cd "$empty" && env -u HARNESS_KIT_EVAL -u CLAUDE_PROJECT_DIR GIT_CEILING_DIRECTORIES="$(dirname "$empty")" \
+  node "$PLUGIN/scripts/session-start.mjs" </dev/null 2>&1)"
 status=$?
+rm -rf "$empty"
 if [ "$status" -eq 0 ] && [ "$out" = "$expected" ]; then
   check "session-start.mjs prints \"$expected\"" "" 0
 else
@@ -100,6 +106,16 @@ check "tests/review.test.sh (all cases)" "" $?
 # grades, cleans up its worktrees and never writes .harness/reviews.tsv, one per line.
 bash "$ROOT/tests/eval-reviewer.test.sh"
 check "tests/eval-reviewer.test.sh (all cases)" "" $?
+
+# (l) The person's own steps: report-path.sh, session-start.mjs's report line, stale
+# reports and HARNESS_KIT_EVAL warning, check-reports.mjs, land.sh and ship.sh (with a fake
+# gh and a local bare repository as the remote, nothing touches GitHub), one per line.
+bash "$ROOT/tests/ship.test.sh"
+check "tests/ship.test.sh (all cases)" "" $?
+
+# (m) No report is tracked in this repository.
+out="$(cd "$ROOT" && node "$PLUGIN/scripts/check-reports.mjs" 2>&1)"
+check "check-reports.mjs on this repository: nothing tracked under .reports/" "$out" $?
 
 if [ "$failures" -ne 0 ]; then
   echo "$failures check(s) failed"

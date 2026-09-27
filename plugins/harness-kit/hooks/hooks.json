@@ -1,5 +1,5 @@
 {
-  "description": "harness-kit: announce that the plugin loaded, block Claude from stopping while the project's checks fail, refuse tool calls that would put a secret in the repository, refuse a deploy while the project's pre-deploy check fails, and keep the harness-kit reviewer read-only",
+  "description": "harness-kit: announce that the plugin loaded and where Claude writes its final report (removing stale reports, and warning when HARNESS_KIT_EVAL has turned the Stop hook off), block Claude from stopping while the project's checks fail, refuse tool calls that would put a secret in the repository, refuse a deploy while the project's pre-deploy check fails, and keep the harness-kit reviewer read-only",
   "hooks": {
     "SessionStart": [
       {
