@@ -326,4 +326,26 @@ else
 first run (bad kind): exit $kind_status: $kind_err"
 fi
 
+# 12. A review-reads file added after the case's head (docs/STATE.md, created on main after
+# the defect) is not an error in eval mode: the run completes, and the input shows one
+# "not present at this commit" line in its place, after the spec that does exist.
+dir="$(new_repo missing-read)"
+printf 'docs/spec.md\ndocs/STATE.md\n' >"$dir/.harness/review-reads"
+printf '# State\n\nToday: the expiry check is fixed.\n' >"$dir/docs/STATE.md"
+git -C "$dir" add -A && git -C "$dir" commit -q -m "add docs/STATE.md"
+cases "$dir" $'d1\tdefect\tbase\tdefect\tsrc/auth\\.js\texpir'
+FAKE_JSON="$CAUGHT_JSON" run_eval "$dir"
+stdin="$(cat "$dir.log/stdin" 2>/dev/null)"
+read_section="$(sed -n '/^=== READ: docs\/STATE.md ===$/,$p' <<<"$stdin")"
+if [ "$STATUS" -eq 0 ] && [ "$(row d1)" = 'd1 defect FIX-FIRST CAUGHT $0.1234 12.3' ] &&
+  [ "$read_section" = $'=== READ: docs/STATE.md ===\ndocs/STATE.md: not present at this commit' ] &&
+  grep -qx '=== READ: docs/spec.md ===' <<<"$stdin" && grep -qx 'S1: a token older than MAX_AGE is refused.' <<<"$stdin" &&
+  ! grep -q 'Today: the expiry check is fixed' <<<"$stdin" &&
+  untouched "$dir" && no_worktree "$dir"; then
+  result "eval: a review-reads file missing at the case's head is shown as not present, not an ERROR" yes ""
+else
+  result "eval: a review-reads file missing at the case's head is shown as not present, not an ERROR" no "$(describe)
+READ section: $read_section"
+fi
+
 [ "$failures" -eq 0 ]

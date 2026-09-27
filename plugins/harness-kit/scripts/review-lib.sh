@@ -52,11 +52,17 @@ review_load_reads() {
   done <"$list"
 }
 
+# review_check_reads [--missing-ok]: fails if a review-reads file does not exist. With
+# --missing-ok (eval mode only: a historical head can predate a file) a missing file is not
+# an error; its source is emptied and review_build_input says it is not present.
 review_check_reads() {
-  local i=0
+  local missing_ok="${1:-}" i=0
   while [ "$i" -lt "${#REVIEW_READS[@]}" ]; do
-    [ -f "${REVIEW_READ_SOURCES[$i]}" ] ||
-      review_fail ".harness/review-reads names ${REVIEW_READS[$i]}, which does not exist" || return 1
+    if [ ! -f "${REVIEW_READ_SOURCES[$i]}" ]; then
+      [ "$missing_ok" = --missing-ok ] ||
+        review_fail ".harness/review-reads names ${REVIEW_READS[$i]}, which does not exist" || return 1
+      REVIEW_READ_SOURCES[$i]=""
+    fi
     i=$((i + 1))
   done
 }
@@ -87,7 +93,8 @@ review_check_section() {
 
 # review_build_input OUT PROJECT BRANCH BASE_REF MERGE_BASE HEAD CHECKLIST CHECK_SECTION:
 # writes the reviewer's whole input to OUT. CHECK_SECTION is a file holding the body of the
-# CHECK COMMAND section. Uses REVIEW_ID_LIST, REVIEW_READS and REVIEW_READ_SOURCES.
+# CHECK COMMAND section. Uses REVIEW_ID_LIST, REVIEW_READS and REVIEW_READ_SOURCES (an
+# empty source, left by review_check_reads --missing-ok, is shown as not present).
 review_build_input() {
   local out="$1" project="$2" branch="$3" base_ref="$4" merge_base="$5" head="$6" checklist="$7" check_section="$8" i=0
   {
@@ -117,7 +124,11 @@ review_build_input() {
     while [ "$i" -lt "${#REVIEW_READS[@]}" ]; do
       echo
       echo "=== READ: ${REVIEW_READS[$i]} ==="
-      cat "${REVIEW_READ_SOURCES[$i]}"
+      if [ -n "${REVIEW_READ_SOURCES[$i]}" ]; then
+        cat "${REVIEW_READ_SOURCES[$i]}"
+      else
+        echo "${REVIEW_READS[$i]}: not present at this commit"
+      fi
       i=$((i + 1))
     done
   } >"$out" || review_fail "could not build the reviewer's input" || return 1

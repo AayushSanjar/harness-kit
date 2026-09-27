@@ -171,11 +171,24 @@ else
   result "review.sh: a VERDICT missing a checklist item appends nothing" no "$(describe)"
 fi
 
+# 6. A review-reads file that does not exist fails closed, as ever (only eval-reviewer.sh
+# tolerates one): exit non-zero, nothing appended, claude never started.
+dir="$(new_repo missing-read)"
+printf 'docs/STATE.md\n' >"$dir/.harness/review-reads"
+git -C "$dir" add -A && git -C "$dir" commit -q -m "review-reads names a file that does not exist"
+run_review "$dir" "$PASS_JSON"
+if [ "$STATUS" -ne 0 ] && [ ! -e "$dir/.harness/reviews.tsv" ] && [ ! -e "$dir.log/args" ] &&
+  grep -q 'review-reads names docs/STATE.md, which does not exist' <<<"$ERR"; then
+  result "review.sh: a missing review-reads file exits non-zero and appends nothing" yes ""
+else
+  result "review.sh: a missing review-reads file exits non-zero and appends nothing" no "$(describe)"
+fi
+
 # ---------------------------------------------------------------------------------------
 # check-reviewed.mjs
 # ---------------------------------------------------------------------------------------
 
-# 6. A committed PASS for the current diff passes.
+# 7. A committed PASS for the current diff passes.
 dir="$(new_repo check-pass)"
 run_review "$dir" "$PASS_JSON"
 git -C "$dir" add .harness/reviews.tsv && git -C "$dir" commit -q -m "review: PASS"
@@ -186,7 +199,7 @@ else
   result "check-reviewed: a matching PASS passes" no "$(describe)"
 fi
 
-# 7. The same repository after one more commit: the diff changed, so it fails.
+# 8. The same repository after one more commit: the diff changed, so it fails.
 printf 'hello\nworld\nagain\n' >"$dir/app.txt"
 git -C "$dir" commit -q -am "feature: one more line"
 run_check "$dir"
@@ -198,7 +211,7 @@ else
   result "check-reviewed: a changed diff fails" no "$(describe)"
 fi
 
-# 8. A committed FIX-FIRST for the current diff fails, naming the verdict.
+# 9. A committed FIX-FIRST for the current diff fails, naming the verdict.
 dir="$(new_repo check-fix)"
 run_review "$dir" "$FIX_JSON"
 review_status=$STATUS
@@ -212,7 +225,7 @@ else
 review.sh exit: $review_status"
 fi
 
-# 9. An old line (committed on main) edited on the branch fails, even though the branch
+# 10. An old line (committed on main) edited on the branch fails, even though the branch
 # also has a PASS for its current diff. The PASS alone is checked first, as a control.
 dir="$(new_repo check-append-only)"
 git -C "$dir" checkout -q main
@@ -236,7 +249,7 @@ else
 control (before the edit) exit: $control_status"
 fi
 
-# 10. A branch with no diff against its base passes, and says why.
+# 11. A branch with no diff against its base passes, and says why.
 dir="$(new_repo check-empty)"
 git -C "$dir" checkout -q -b empty main
 run_check "$dir"

@@ -18,6 +18,8 @@
 #   spec-replacement  optional; a file (project-relative or absolute) used in place of the
 #                     FIRST path in .harness/review-reads, so a case can hide traces of its
 #                     later fix. It is also copied over that file in the worktree.
+# A review-reads file missing at a case's head (added later than that commit) is not an
+# error here, unlike in review.sh: its READ section says "<path>: not present at this commit".
 # Both regexes are JavaScript regular expressions, matched without regard to case.
 #
 # EACH RUN checks out head in a temporary git worktree (detached, with git hooks off) and
@@ -137,7 +139,7 @@ run_case() {
     [ "$spec" = - ] || REVIEW_READ_SOURCES[0]="$spec"
     printf '%s\n' "$EVAL_LINE" >"$run/check-section.txt"
     branch="$(git -C "$WORKTREE" symbolic-ref --short -q HEAD || echo "(detached)")"
-    { review_check_reads && review_build_input "$run/input.md" "$WORKTREE" "$branch" "$base" "$merge_base" \
+    { review_check_reads --missing-ok && review_build_input "$run/input.md" "$WORKTREE" "$branch" "$base" "$merge_base" \
       "$head_sha" "$CHECKLIST" "$run/check-section.txt"; } || why="$REVIEW_ERROR"
   fi
   if [ -z "$why" ]; then
