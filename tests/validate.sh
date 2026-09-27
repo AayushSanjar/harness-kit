@@ -28,7 +28,7 @@ out="$(claude plugin validate "$PLUGIN" --strict 2>&1)"
 check "claude plugin validate --strict (plugin: plugins/harness-kit)" "$out" $?
 
 # (b) The SessionStart script prints exactly the expected line and exits 0.
-expected="harness-kit 0.5.0 loaded"
+expected="harness-kit 0.6.0 loaded"
 out="$(node "$PLUGIN/scripts/session-start.mjs" 2>&1)"
 status=$?
 if [ "$status" -eq 0 ] && [ "$out" = "$expected" ]; then
@@ -95,6 +95,11 @@ check "tests/predeploy-gate.test.sh (all cases)" "" $?
 # check-reviewed.mjs and the reviewer guard hook, one per line.
 bash "$ROOT/tests/review.test.sh"
 check "tests/review.test.sh (all cases)" "" $?
+
+# (k) The reviewer evaluation's cases: eval-reviewer.sh (with a fake claude, no API calls)
+# grades, cleans up its worktrees and never writes .harness/reviews.tsv, one per line.
+bash "$ROOT/tests/eval-reviewer.test.sh"
+check "tests/eval-reviewer.test.sh (all cases)" "" $?
 
 if [ "$failures" -ne 0 ]; then
   echo "$failures check(s) failed"

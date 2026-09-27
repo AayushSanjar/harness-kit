@@ -36,11 +36,8 @@
 set -u
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLUGIN_ROOT="$(cd "$HERE/.." && pwd)"
-AGENT="harness-kit:reviewer"
-MAX_TURNS="${REVIEW_MAX_TURNS:-40}"
-MAX_BUDGET="${REVIEW_MAX_BUDGET_USD:-3.00}"
-MAX_CHECK_LINES=3000
+# shellcheck source=review-lib.sh
+. "$HERE/review-lib.sh"
 
 die() {
   echo "harness-kit review.sh: $*; nothing was appended to .harness/reviews.tsv" >&2
@@ -52,24 +49,9 @@ H="$PROJECT/.harness"
 CHECKLIST="$H/review-checklist.md"
 cd "$PROJECT" || die "cannot enter $PROJECT"
 
-[ -s "$CHECKLIST" ] || die "no .harness/review-checklist.md (or it is empty): there is nothing to review against"
-ids="$(sed -nE 's/^[[:space:]]*([-*][[:space:]]+)?\**([A-Za-z][A-Za-z0-9_-]*[0-9])\**:[[:space:]].*/\2/p' "$CHECKLIST")"
-[ -n "$ids" ] || die ".harness/review-checklist.md has no items (an item is a line like \"- R1: ...\")"
-dupes="$(sort <<<"$ids" | uniq -d | tr '\n' ' ')"
-[ -z "$dupes" ] || die ".harness/review-checklist.md repeats item IDs: $dupes"
-id_list="$(paste -sd, - <<<"$ids")"
-
-reads=()
-if [ -f "$H/review-reads" ]; then
-  while IFS= read -r line || [ -n "$line" ]; do
-    line="${line%$'\r'}"
-    line="${line#"${line%%[![:space:]]*}"}"
-    line="${line%"${line##*[![:space:]]}"}"
-    case "$line" in "" | "#"*) continue ;; esac
-    [ -f "$PROJECT/$line" ] || die ".harness/review-reads names $line, which does not exist"
-    reads+=("$line")
-  done <"$H/review-reads"
-fi
+review_load_checklist "$CHECKLIST" || die "$REVIEW_ERROR"
+review_load_reads "$H/review-reads" "$PROJECT"
+review_check_reads || die "$REVIEW_ERROR"
 
 state="$(node "$HERE/check-reviewed.mjs" --hash)" || die "could not work out the branch's diff: $state"
 IFS=$'\t' read -r base_ref merge_base diff_hash <<<"$state"
@@ -85,104 +67,14 @@ fi
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/harness-kit-review.XXXXXX")" || die "cannot make a temporary folder"
 trap 'rm -rf "$work"' EXIT
-input="$work/input.md"
 
-{
-  echo "=== REVIEW ==="
-  echo "project:     $PROJECT"
-  echo "branch:      $branch"
-  echo "base:        $base_ref"
-  echo "merge-base:  $merge_base"
-  echo "head:        $head"
-  echo "checklist:   $CHECKLIST"
-  echo "item IDs:    $id_list"
-  echo
-  echo "=== CHECKLIST ==="
-  cat "$CHECKLIST"
-  echo
-  echo "=== CHECK COMMAND ==="
-  check=""
-  [ -f "$H/check-command" ] && check="$(head -n 1 "$H/check-command" | tr -d '\r')"
-  if [ -z "$check" ]; then
-    echo "none: the project has no .harness/check-command, so no check was run"
-  else
-    echo "command: $check"
-    echo "Running the check command..." >&2
-    /bin/sh -c 'exec 2>&1; eval "$1"' harness-kit-review "$check" </dev/null >"$work/check.out"
-    check_status=$?
-    total="$(wc -l <"$work/check.out" | tr -d ' ')"
-    echo "exit status: $check_status"
-    if [ "$total" -gt "$MAX_CHECK_LINES" ]; then
-      echo "output (last $MAX_CHECK_LINES of $total lines; $((total - MAX_CHECK_LINES)) earlier lines omitted):"
-      tail -n "$MAX_CHECK_LINES" "$work/check.out"
-    else
-      echo "output:"
-      cat "$work/check.out"
-    fi
-  fi
-  echo
-  echo "=== GIT LOG ==="
-  git log --no-color --format=fuller "$merge_base..HEAD"
-  echo
-  echo "=== GIT STATUS ==="
-  git -c color.status=false status
-  echo
-  echo "=== DIFF ==="
-  git diff --no-color --no-ext-diff "$merge_base" HEAD -- . ':(exclude).harness/reviews.tsv'
-  for path in ${reads[@]+"${reads[@]}"}; do
-    echo
-    echo "=== READ: $path ==="
-    cat "$PROJECT/$path"
-  done
-} >"$input" || die "could not build the reviewer's input"
+review_check_section "$H" "$work" >"$work/check-section.txt"
+review_build_input "$work/input.md" "$PROJECT" "$branch" "$base_ref" "$merge_base" "$head" "$CHECKLIST" \
+  "$work/check-section.txt" || die "$REVIEW_ERROR"
 
-# Piped stdin is capped at 10 MB (code.claude.com/docs/en/headless).
-[ "$(wc -c <"$input")" -le 10000000 ] || die "the reviewer's input is over 10 MB; review a smaller branch"
-
-echo "harness-kit review.sh: reviewing $branch against $base_ref (limits: $MAX_TURNS turns, \$$MAX_BUDGET)..." >&2
-claude -p "Review this branch. Your whole input follows: judge it as your instructions say, and end with the VERDICT line." \
-  --disallowedTools Write Edit NotebookEdit Bash WebFetch WebSearch \
-  --plugin-dir "$PLUGIN_ROOT" \
-  --agent "$AGENT" \
-  --output-format json \
-  --max-turns "$MAX_TURNS" \
-  --max-budget-usd "$MAX_BUDGET" \
-  <"$input" >"$work/out.json"
-run_status=$?
-
-# Checks the run and the VERDICT line; writes the review to review.txt and
-# "verdict<TAB>items<TAB>cost<TAB>duration" to record.tsv.
-node - "$work" "$run_status" "$id_list" <<'NODE' || die "the review did not complete"
-const fs = require("fs");
-const [work, runStatus, idList] = process.argv.slice(2);
-const stop = (why) => { console.error(`harness-kit review.sh: ${why}`); process.exit(1); };
-let out;
-try {
-  out = JSON.parse(fs.readFileSync(`${work}/out.json`, "utf8"));
-} catch {
-  stop(`claude exited ${runStatus} without the expected JSON output`);
-}
-const text = typeof out.result === "string" ? out.result : "";
-if (runStatus !== "0" || out.type !== "result" || out.is_error !== false || out.subtype !== "success") {
-  const detail = [text, ...(out.errors ?? [])].filter(Boolean).join(" | ").slice(0, 2000);
-  stop(`the run failed: exit ${runStatus}, subtype ${out.subtype}, is_error ${out.is_error}${detail ? `: ${detail}` : ""}`);
-}
-fs.writeFileSync(`${work}/review.txt`, text.replace(/\s+$/, "") + "\n");
-const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-const verdictLines = lines.filter((l) => l.startsWith("VERDICT"));
-const last = lines[lines.length - 1] ?? "";
-const m = /^VERDICT (PASS|FIX-FIRST|STOP) ((?:[A-Za-z0-9_-]+=(?:P|F|NA))(?:,[A-Za-z0-9_-]+=(?:P|F|NA))*)$/.exec(last);
-if (!m) stop("the review does not end with a well-formed VERDICT line");
-if (verdictLines.length !== 1) stop(`the review has ${verdictLines.length} VERDICT lines, not one`);
-const [, verdict, items] = m;
-const got = items.split(",").map((pair) => pair.split("=")[0]).join(",");
-if (got !== idList) stop(`the VERDICT line lists ${got}, but the checklist's items are ${idList}`);
-if (verdict === "PASS" && /=F(,|$)/.test(items)) stop("the VERDICT is PASS with a FAILED item");
-const cost = Number(out.total_cost_usd);
-const ms = Number(out.duration_ms);
-if (!Number.isFinite(cost) || !Number.isFinite(ms)) stop("the JSON output has no total_cost_usd or duration_ms");
-fs.writeFileSync(`${work}/record.tsv`, [verdict, items, cost.toFixed(4), (ms / 1000).toFixed(1)].join("\t"));
-NODE
+echo "harness-kit review.sh: reviewing $branch against $base_ref (limits: $REVIEW_TURNS turns, \$$REVIEW_BUDGET)..." >&2
+review_run "$PROJECT" "$work/input.md" "$work/out.json"
+review_parse "$work" "$?" "review.sh" || die "$REVIEW_ERROR"
 
 cat "$work/review.txt"
 [ "$(git rev-parse HEAD)" = "$head" ] || die "HEAD moved during the review, so the verdict may not match the diff"
