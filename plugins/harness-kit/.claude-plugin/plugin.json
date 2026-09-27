@@ -1,6 +1,6 @@
 {
   "name": "harness-kit",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "A reusable Claude Code harness of skills, hooks and agents that keeps coding agents honest.",
   "author": {
     "name": "AayushSanjar"

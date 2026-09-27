@@ -2,20 +2,29 @@
 // The parts of eval-reviewer.sh that are easier in JavaScript. See eval-reviewer.sh for what
 // the cases, the grades and the totals mean.
 //
-//   node eval-reviewer.mjs cases CASES_TSV PROJECT READ_COUNT
-//       Check every case; print them one per line, tab-separated, with every empty field
-//       as "-" and a spec replacement as an absolute path. Exit 1 with the problems if any.
-//   node eval-reviewer.mjs grade REVIEW_TXT KIND FILE_RE KEYWORD_RE VERDICT ITEMS
+//   node eval-reviewer.mjs cases CASES_TSV PROJECT READ_COUNT ID_LIST
+//       Check every case against the checklist's IDs (ID_LIST, "R1,R2,..."); print them
+//       one per line, 9 tab-separated fields, with every empty field as "-" and a spec
+//       replacement as an absolute path. Exit 1 with the problems if any.
+//   node eval-reviewer.mjs grade REVIEW_TXT KIND FILE_RE KEYWORD_RE VERDICT ITEMS NA_ITEMS EXPECTED_ITEM
 //       Print CAUGHT or MISSED for a defect, CLEAN or FALSE ALARM for a control.
+//   node eval-reviewer.mjs result TRANSCRIPT OUT_JSON
+//       Write the last "result" event of a stream-json transcript to OUT_JSON, the same
+//       JSON `--output-format json` prints; write nothing if there is none.
 //   node eval-reviewer.mjs cost OUT_JSON
 //       Print "cost duration" from a run's JSON output, 0 for what it lacks: a run that
 //       failed still spent money.
 //   node eval-reviewer.mjs summary RESULTS_TSV REPEAT
 //       Print one line per run, then the totals.
-import { existsSync, readFileSync, statSync } from "node:fs";
+//   node eval-reviewer.mjs regrade RESULTS_DIR < CASES
+//       Grade the saved runs in RESULTS_DIR again, with this grader and CASES (the output
+//       of `cases`); write RESULTS_DIR/regraded.tsv and print its summary. Exit 1 if a run
+//       is an ERROR.
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const cases = (file, project, readCount) => {
+const cases = (file, project, readCount, idList) => {
+  const ids = new Set(idList.split(","));
   const problems = [];
   const seen = new Set();
   const out = [];
@@ -23,11 +32,11 @@ const cases = (file, project, readCount) => {
     const where = `cases.tsv line ${i + 1}`;
     if (raw.trim() === "" || raw.trimStart().startsWith("#")) return;
     const f = raw.split("\t").map((field) => field.trim()).map((field) => (field === "-" ? "" : field));
-    if (f.length < 6 || f.length > 7) {
-      problems.push(`${where}: ${f.length} fields, not 6 or 7`);
+    if (f.length < 6 || f.length > 9) {
+      problems.push(`${where}: ${f.length} fields, not 6 to 9`);
       return;
     }
-    const [id, kind, base, head, fileRe, keywordRe, spec = ""] = f;
+    const [id, kind, base, head, fileRe, keywordRe, spec = "", naItems = "", expected = ""] = f;
     if (!/^[A-Za-z0-9._-]+$/.test(id)) problems.push(`${where}: the id "${id}" is not letters, digits, ".", "_" and "-"`);
     else if (seen.has(id)) problems.push(`${where}: the id "${id}" is used twice`);
     seen.add(id);
@@ -46,13 +55,20 @@ const cases = (file, project, readCount) => {
         }
       }
     }
+    const na = naItems ? naItems.split(",").map((i) => i.trim()) : [];
+    for (const i of na) if (!ids.has(i)) problems.push(`${where}: na_items names "${i}", which is not a checklist item (${idList})`);
+    if (expected) {
+      if (kind !== "defect") problems.push(`${where}: expected_item is for a defect, not a ${kind}`);
+      if (!ids.has(expected)) problems.push(`${where}: expected_item "${expected}" is not a checklist item (${idList})`);
+      if (na.includes(expected)) problems.push(`${where}: expected_item "${expected}" is also in na_items`);
+    }
     let specPath = "";
     if (spec) {
       specPath = resolve(project, spec);
       if (!existsSync(specPath) || !statSync(specPath).isFile()) problems.push(`${where}: the spec replacement ${spec} does not exist`);
       if (readCount === "0") problems.push(`${where}: a spec replacement needs a spec: list it first in .harness/review-reads`);
     }
-    out.push([id, kind, base, head, fileRe || "-", keywordRe || "-", specPath || "-"].join("\t"));
+    out.push([id, kind, base, head, fileRe || "-", keywordRe || "-", specPath || "-", na.join(",") || "-", expected || "-"].join("\t"));
   });
   if (out.length === 0) problems.push("cases.tsv has no cases");
   if (problems.length) {
@@ -62,12 +78,13 @@ const cases = (file, project, readCount) => {
   console.log(out.join("\n"));
 };
 
-// A defect is CAUGHT only if the verdict is not PASS and a FAILED item's text or a
-// finding's text matches both regexes.
-const grade = (file, kind, fileRe, keywordRe, verdict, items) => {
-  if (kind === "control") return verdict === "PASS" ? "CLEAN" : "FALSE ALARM";
-  if (verdict === "PASS") return "MISSED";
-  const lines = readFileSync(file, "utf8").split(/\r?\n/);
+// Split a review into its item blocks and its findings. An item block begins at a line
+// that starts with a checklist ID and holds the lines below it; its text has the leading
+// "ID — STATUS —" prefix stripped, so the status word is never matched as the defect's
+// keyword. A finding begins at each bullet, numbered point or sub-heading of the Findings
+// section.
+const parseReview = (text, ids) => {
+  const lines = text.split(/\r?\n/);
   const isHeading = (l) => /^#{1,2}\s/.test(l);
   const headingAt = (name) => lines.findIndex((l) => isHeading(l) && new RegExp(`^#{1,2}\\s+${name}\\b`, "i").test(l));
   const section = (name) => {
@@ -78,35 +95,74 @@ const grade = (file, kind, fileRe, keywordRe, verdict, items) => {
   };
   const findingsAt = headingAt("Findings");
 
-  // Item blocks: a line that starts with a checklist ID begins one, and the lines below it
-  // belong to it. The VERDICT line says which items FAILED.
-  const pairs = items.split(",").map((pair) => pair.split("="));
-  const failed = new Set(pairs.filter(([, v]) => v === "F").map(([id]) => id));
-  const idOf = (l) => {
-    const bare = l.replace(/^\s*(?:[-*+]\s+)?[*_`]*/, "");
-    return pairs.map(([id]) => id).find((id) => bare.startsWith(id) && !/[A-Za-z0-9_-]/.test(bare[id.length] ?? ""));
-  };
-  const texts = [];
+  const items = [];
   let item = null;
   for (const l of section("Items") ?? lines.slice(0, findingsAt < 0 ? lines.length : findingsAt)) {
     if (l.startsWith("VERDICT")) break;
-    const id = idOf(l);
+    const bare = l.replace(/^\s*(?:[-*+]\s+)?[*_`]*/, "");
+    const id = ids.find((i) => bare.startsWith(i) && !/[A-Za-z0-9_-]/.test(bare[i.length] ?? ""));
     if (id) {
-      item = failed.has(id) ? [l] : null;
-      if (item) texts.push(item);
-    } else if (item) item.push(l);
+      const rest = bare
+        .slice(id.length)
+        .replace(/^[*_`]*\s*(?:[—–:|-]+\s*)?[*_`]*(?:PASS|FAIL|NA|P|F)\b[*_`]*\s*(?:[—–:|-]+\s*)?/i, "");
+      item = { id, lines: [rest] };
+      items.push(item);
+    } else if (item) item.lines.push(l);
   }
-  // Findings: each bullet, numbered point or sub-heading begins one.
+  const findings = [];
   let finding = null;
   for (const l of section("Findings") ?? []) {
     if (finding === null || /^\s*(?:[-*+]|\d+[.)]|#{3,})\s/.test(l)) {
       finding = [l];
-      texts.push(finding);
+      findings.push(finding);
     } else finding.push(l);
   }
+  return {
+    items: items.map((i) => ({ id: i.id, text: i.lines.join("\n") })),
+    findings: findings.map((f) => f.join("\n")),
+  };
+};
+
+// Rule A: a defect is CAUGHT only if the verdict is not PASS and the file regex and the
+// keyword regex both match inside ONE failed item's text or ONE finding's text; or, with
+// an expected item, if that item FAILED and its text matches the keyword regex. A control
+// is CLEAN on PASS, or when every FAILED item is in its na_items and there is no finding
+// ("None." is not one): a FAIL on an item the input said to mark NA is not a false alarm.
+const gradeRun = ({ text, kind, fileRe, keywordRe, verdict, items, naItems, expectedItem }) => {
+  const pairs = items.split(",").map((pair) => pair.split("="));
+  const failed = new Set(pairs.filter(([, v]) => v === "F").map(([id]) => id));
+  const review = parseReview(text, pairs.map(([id]) => id));
+  if (kind === "control") {
+    if (verdict === "PASS") return "CLEAN";
+    const na = new Set(naItems && naItems !== "-" ? naItems.split(",") : []);
+    const realFindings = review.findings.filter((f) => f.trim() !== "" && !/^\s*(?:[-*+]\s+)?none\b/i.test(f));
+    const onlyNa = failed.size > 0 && [...failed].every((id) => na.has(id));
+    return onlyNa && realFindings.length === 0 ? "CLEAN" : "FALSE ALARM";
+  }
+  if (verdict === "PASS") return "MISSED";
   const fileMatch = new RegExp(fileRe, "i");
   const keywordMatch = new RegExp(keywordRe, "i");
-  return texts.map((t) => t.join("\n")).some((t) => fileMatch.test(t) && keywordMatch.test(t)) ? "CAUGHT" : "MISSED";
+  const failedTexts = review.items.filter((i) => failed.has(i.id)).map((i) => i.text);
+  if ([...failedTexts, ...review.findings].some((t) => fileMatch.test(t) && keywordMatch.test(t))) return "CAUGHT";
+  if (expectedItem && expectedItem !== "-" && failed.has(expectedItem) &&
+    review.items.some((i) => i.id === expectedItem && keywordMatch.test(i.text))) return "CAUGHT";
+  return "MISSED";
+};
+
+const grade = (file, kind, fileRe, keywordRe, verdict, items, naItems = "-", expectedItem = "-") =>
+  gradeRun({ text: readFileSync(file, "utf8"), kind, fileRe, keywordRe, verdict, items, naItems, expectedItem });
+
+const result = (transcript, outFile) => {
+  let last = null;
+  for (const line of readFileSync(transcript, "utf8").split("\n")) {
+    try {
+      const event = JSON.parse(line);
+      if (event?.type === "result") last = event;
+    } catch {
+      // Not a JSON line: skip it.
+    }
+  }
+  if (last) writeFileSync(outFile, JSON.stringify(last));
 };
 
 const cost = (file) => {
@@ -163,10 +219,44 @@ const summary = (file, repeatArg) => {
   console.log(`total time:        ${rows.reduce((s, r) => s + r.duration, 0).toFixed(1)}s`);
 };
 
+const regrade = (dir) => {
+  const byId = new Map();
+  for (const line of readFileSync(0, "utf8").split("\n").filter(Boolean)) {
+    const [id, kind, , , fileRe, keywordRe, , naItems, expectedItem] = line.split("\t");
+    byId.set(id, { kind, fileRe, keywordRe, naItems, expectedItem });
+  }
+  const rows = readFileSync(`${dir}/results.tsv`, "utf8").trim().split("\n").slice(1);
+  const out = ["id\trun\tkind\tverdict\toutcome\tcost-usd\tduration-s"];
+  let repeat = 1;
+  for (const row of rows) {
+    const [id, run, , , , cost, duration] = row.split("\t");
+    const c = byId.get(id);
+    if (!c) {
+      console.error(`eval-reviewer.mjs: ${id} run ${run} is left out: case "${id}" is no longer in cases.tsv`);
+      continue;
+    }
+    repeat = Math.max(repeat, Number(run));
+    const runDir = `${dir}/runs/${id}.${run}`;
+    let verdict = "-";
+    let outcome = "ERROR";
+    if (existsSync(`${runDir}/record.tsv`) && existsSync(`${runDir}/review.txt`)) {
+      let items;
+      [verdict, items] = readFileSync(`${runDir}/record.tsv`, "utf8").split("\t");
+      outcome = gradeRun({ text: readFileSync(`${runDir}/review.txt`, "utf8"), ...c, verdict, items });
+    }
+    out.push([id, run, c.kind, verdict, outcome, cost, duration].join("\t"));
+  }
+  writeFileSync(`${dir}/regraded.tsv`, out.join("\n") + "\n");
+  summary(`${dir}/regraded.tsv`, String(repeat));
+  if (out.some((l) => l.split("\t")[4] === "ERROR")) process.exit(1);
+};
+
 const [command, ...args] = process.argv.slice(2);
 if (command === "cases") cases(...args);
 else if (command === "grade") console.log(grade(...args));
+else if (command === "result") result(...args);
 else if (command === "cost") cost(...args);
+else if (command === "regrade") regrade(...args);
 else if (command === "summary") summary(...args);
 else {
   console.error(`eval-reviewer.mjs: unknown command "${command}"`);

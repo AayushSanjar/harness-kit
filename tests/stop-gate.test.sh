@@ -12,6 +12,8 @@ trap 'rm -rf "$WORK"' EXIT
 # runs never see each other's counts.
 export TMPDIR="$WORK/tmp"
 mkdir -p "$TMPDIR"
+# The gate is off under HARNESS_KIT_EVAL; only case 6 sets it.
+unset HARNESS_KIT_EVAL
 failures=0
 
 result() {
@@ -126,6 +128,20 @@ run_gate "$dir" s-reset true
 log="$log"$'\n'"fail after pass: $(describe)"
 { is_block "$OUT" && grep -q 'block 1 of 3' <<<"$OUT"; } || ok=no
 result "pass after fail resets the count" "$ok" "$log"
+
+# 6. Under HARNESS_KIT_EVAL=1 (a reviewer evaluation) a failing check does not block: the
+# stop is allowed silently and the check does not even run. The same project without the
+# variable still blocks.
+dir="$(new_project eval-mode "touch \"$WORK/eval-mode.ran\"; echo \"FAIL broken\"; exit 1")"
+HARNESS_KIT_EVAL=1 run_gate "$dir" s-eval false
+eval_log="with HARNESS_KIT_EVAL=1: $(describe)"
+ok=no
+if [ "$STATUS" -eq 0 ] && [ -z "$OUT" ] && [ -z "$ERR" ] && [ ! -e "$WORK/eval-mode.ran" ]; then
+  run_gate "$dir" s-eval false
+  if is_block "$OUT" && [ -e "$WORK/eval-mode.ran" ]; then ok=yes; fi
+fi
+result "HARNESS_KIT_EVAL=1: the stop is allowed silently; without it the same failure blocks" "$ok" "$eval_log
+without it: $(describe)"
 
 if [ "$failures" -ne 0 ]; then
   echo "$failures stop-gate case(s) failed"

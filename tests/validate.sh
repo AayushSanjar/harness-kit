@@ -28,7 +28,7 @@ out="$(claude plugin validate "$PLUGIN" --strict 2>&1)"
 check "claude plugin validate --strict (plugin: plugins/harness-kit)" "$out" $?
 
 # (b) The SessionStart script prints exactly the expected line and exits 0.
-expected="harness-kit 0.6.1 loaded"
+expected="harness-kit 0.6.2 loaded"
 out="$(node "$PLUGIN/scripts/session-start.mjs" 2>&1)"
 status=$?
 if [ "$status" -eq 0 ] && [ "$out" = "$expected" ]; then

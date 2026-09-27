@@ -7,6 +7,13 @@
 // allowed and the person is told through systemMessage. The count lives in the
 // OS temp folder, resets when the checks pass, and resets when
 // stop_hook_active is false (a fresh stop, not a continuation from a block).
+//
+// Off during a reviewer evaluation: eval-reviewer.sh runs the reviewer with
+// HARNESS_KIT_EVAL=1, and a hook process inherits claude's environment ("A hook process
+// inherits the parent environment", code.claude.com/docs/en/hooks). With that variable
+// set to anything non-empty the stop is allowed silently and the check is not run: a
+// read-only reviewer on a historical commit cannot fix the checks, and a block would
+// only spend its turns and budget.
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -37,6 +44,7 @@ function readCount(file) {
 }
 
 const input = readInput();
+if (process.env.HARNESS_KIT_EVAL) process.exit(0);
 const projectDir = process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd();
 
 let command;

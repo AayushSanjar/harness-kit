@@ -91,12 +91,15 @@ review_check_section() {
   fi
 }
 
-# review_build_input OUT PROJECT BRANCH BASE_REF MERGE_BASE HEAD CHECKLIST CHECK_SECTION:
-# writes the reviewer's whole input to OUT. CHECK_SECTION is a file holding the body of the
-# CHECK COMMAND section. Uses REVIEW_ID_LIST, REVIEW_READS and REVIEW_READ_SOURCES (an
-# empty source, left by review_check_reads --missing-ok, is shown as not present).
+# review_build_input OUT PROJECT BRANCH BASE_REF MERGE_BASE HEAD CHECKLIST CHECK_SECTION
+# [CHECKLIST_SHOWN]: writes the reviewer's whole input to OUT. CHECK_SECTION is a file
+# holding the body of the CHECK COMMAND section. The checklist is copied from CHECKLIST;
+# the input names it as CHECKLIST_SHOWN (default CHECKLIST), the copy the reviewer can
+# Read. Uses REVIEW_ID_LIST, REVIEW_READS and REVIEW_READ_SOURCES (an empty source, left
+# by review_check_reads --missing-ok, is shown as not present).
 review_build_input() {
   local out="$1" project="$2" branch="$3" base_ref="$4" merge_base="$5" head="$6" checklist="$7" check_section="$8" i=0
+  local checklist_shown="${9:-$7}"
   {
     echo "=== REVIEW ==="
     echo "project:     $project"
@@ -104,7 +107,7 @@ review_build_input() {
     echo "base:        $base_ref"
     echo "merge-base:  $merge_base"
     echo "head:        $head"
-    echo "checklist:   $checklist"
+    echo "checklist:   $checklist_shown"
     echo "item IDs:    $REVIEW_ID_LIST"
     echo
     echo "=== CHECKLIST ==="
@@ -136,16 +139,19 @@ review_build_input() {
   [ "$(wc -c <"$out")" -le 10000000 ] || review_fail "the reviewer's input is over 10 MB; review a smaller branch" || return 1
 }
 
-# review_run DIR INPUT OUT_JSON: runs the reviewer headless in DIR on INPUT, within the
-# limits; returns claude's exit status.
+# review_run DIR INPUT OUT [--stream]: runs the reviewer headless in DIR on INPUT, within
+# the limits; returns claude's exit status. OUT gets the result JSON, or with --stream the
+# whole stream-json transcript, one event per line, the result event last.
 review_run() {
+  local format=(--output-format json)
+  [ "${4:-}" = --stream ] && format=(--output-format stream-json --verbose)
   (
     cd "$1" &&
       claude -p "Review this branch. Your whole input follows: judge it as your instructions say, and end with the VERDICT line." \
         --disallowedTools Write Edit NotebookEdit Bash WebFetch WebSearch \
         --plugin-dir "$REVIEW_PLUGIN_ROOT" \
         --agent "$REVIEW_AGENT" \
-        --output-format json \
+        "${format[@]}" \
         --max-turns "$REVIEW_TURNS" \
         --max-budget-usd "$REVIEW_BUDGET" \
         <"$2" >"$3"
