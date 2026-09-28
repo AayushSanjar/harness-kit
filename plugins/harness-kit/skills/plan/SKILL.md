@@ -19,7 +19,7 @@ Your job here is the brief, and only the brief. **Change no other file**: no cod
 
 The brief is `.reports/<branch>.brief.md`: the report path the harness-kit SessionStart line gave you, with `.md` replaced by `.brief.md` (for `.reports/feat-login.md`, `.reports/feat-login.brief.md`). If there was no report line, it is the branch name with every `/` replaced by `-`, in `.reports/` at the project root. If a brief is already there, read it first: you are revising it, and the person approves the new one.
 
-Never write `.reports/<branch>.brief.approved`, and never run `approve-brief.sh`: the approval is the person's (the git-guard hook refuses the script to you, and it refuses to run without a terminal).
+Never write `.reports/<branch>.brief.approved`, and never run `approve-brief.sh`: the approval is the person's. The harness-kit hooks refuse both to you: the script, and any file tool or shell command that names an approval file (read one with the Read tool). The script also refuses to run without a terminal.
 
 ## 2. Read the project
 

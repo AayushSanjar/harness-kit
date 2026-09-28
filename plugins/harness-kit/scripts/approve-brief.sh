@@ -12,7 +12,8 @@
 #
 # It refuses (exit 2), writing nothing, when stdin is not a terminal: the answer must come
 # from the person reading the brief, not from a pipe or from Claude's shell. The git-guard
-# hook also denies it to Claude. On a detached HEAD there is no branch, so no brief. With no
+# hook also denies it to Claude, and git-guard and brief-guard deny Claude writing the
+# approval file itself. On a detached HEAD there is no branch, so no brief. With no
 # brief it stops (exit 1) and says to run /plan. Any answer but y or yes (in any case)
 # writes nothing and leaves an earlier approval as it was (exit 1).
 #

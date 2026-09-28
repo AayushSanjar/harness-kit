@@ -16,3 +16,5 @@ git-guard: git push in the real working tree is denied, however it is written	te
 approve-brief.sh: refuses without a terminal and writes nothing; with no brief it says to run /plan	tests/ship.test.sh
 review.sh: the input holds the brief and whether its approval matches	tests/review.test.sh
 ship.sh: no brief, or an approval that does not match, stops before the review with the exact fix	tests/ship.test.sh
+brief-guard: Write, Edit, MultiEdit and NotebookEdit of a *.brief.approved file in the real tree are denied	tests/brief-guard.test.sh
+git-guard: a shell command naming a *.brief.approved file in the real tree is denied	tests/brief-guard.test.sh

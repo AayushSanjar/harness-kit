@@ -1,5 +1,5 @@
 {
-  "description": "harness-kit: announce that the plugin loaded and where Claude writes its final report and its commit message draft (removing stale ones, telling Claude it may commit its own work locally with that draft but never protected files and never push, telling Claude to update or list every file, comment, test and document that describes behaviour it changed, and warning when HARNESS_KIT_EVAL has turned the Stop hook off), block Claude from stopping while the project's checks fail, refuse tool calls that would put a secret in the repository, refuse git push, destructive git commands and the person's scripts (land.sh, ship.sh, release.sh, upgrade.sh, approve-protected.sh, approve-brief.sh) outside scratch copies under the OS temp folder, refuse a deploy while the project's pre-deploy check fails, and keep the harness-kit reviewer read-only",
+  "description": "harness-kit: announce that the plugin loaded and where Claude writes its final report and its commit message draft (removing stale ones, telling Claude it may commit its own work locally with that draft but never protected files and never push, telling Claude to update or list every file, comment, test and document that describes behaviour it changed, and warning when HARNESS_KIT_EVAL has turned the Stop hook off), block Claude from stopping while the project's checks fail, refuse tool calls that would put a secret in the repository, refuse git push, destructive git commands and the person's scripts (land.sh, ship.sh, release.sh, upgrade.sh, approve-protected.sh, approve-brief.sh) outside scratch copies under the OS temp folder, refuse Claude writing a brief's approval (*.brief.approved) with any file tool or shell command outside those copies, refuse a deploy while the project's pre-deploy check fails, and keep the harness-kit reviewer read-only",
   "hooks": {
     "SessionStart": [
       {
@@ -32,6 +32,11 @@
             "type": "command",
             "command": "node",
             "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/guard-secrets.mjs"]
+          },
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/brief-guard.mjs"]
           }
         ]
       },

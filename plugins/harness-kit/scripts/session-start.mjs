@@ -33,8 +33,9 @@
 // draft once the project's check passes (the commit-msg hook from install-hooks.sh checks
 // the message as it is committed), but never a change to a protected file (those go to the
 // person as a patch, applied with land.sh, which runs the approval) and never a push. The
-// git-guard hook (git-guard.mjs) refuses the push, destructive git and the person's
-// scripts outside the temp folder whatever Claude reads here.
+// git-guard hook (git-guard.mjs) refuses the push, destructive git, the person's scripts
+// and any command naming a brief's approval outside the temp folder, and brief-guard.mjs
+// refuses the file tools that approval, whatever Claude reads here.
 //
 // THE BLAST-RADIUS LINE. After the report, commit draft and commit lines comes one more: before finishing, Claude
 // searches for every file, comment, test and document that describes behaviour it changed,

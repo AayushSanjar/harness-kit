@@ -172,6 +172,12 @@ check "tests/release.test.sh (all cases)" "" $?
 bash "$ROOT/tests/git-guard.test.sh"
 check "tests/git-guard.test.sh (all cases)" "" $?
 
+# (w) The guards that keep Claude from writing a brief's approval (*.brief.approved):
+# brief-guard.mjs on the file tools and git-guard.mjs on Bash, in the real working tree and
+# in scratch copies (calls are given to the hooks, never run), one per line.
+bash "$ROOT/tests/brief-guard.test.sh"
+check "tests/brief-guard.test.sh (all cases)" "" $?
+
 # (r) The record-defect and plan skills are started only by the person: their frontmatter
 # turns off model invocation.
 for name in record-defect plan; do

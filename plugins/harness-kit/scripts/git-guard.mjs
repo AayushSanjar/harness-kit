@@ -14,16 +14,22 @@
 //   - running land.sh, ship.sh, release.sh, upgrade.sh, approve-protected.sh or
 //     approve-brief.sh (by path, or through bash, sh, zsh, dash, ksh, source or "."): they
 //     are the person's steps (approve-brief.sh is the person approving the plan skill's
-//     brief; it also refuses without a terminal).
+//     brief; it also refuses without a terminal);
+//   - any command with a word naming a brief's approval, a path ending in ".brief.approved"
+//     (as an argument, a redirection's target or an assignment's value, in full or with an
+//     unknown folder in front, such as "$R/x.brief.approved", or a glob such as
+//     *.brief.approved), when that path is not in a scratch copy: a redirect, cp, tee, mv,
+//     rm or even cat. Only approve-brief.sh, the person's, writes an approval; Claude reads
+//     one with the Read tool. A word with whitespace in it (a commit message that mentions
+//     one) is not a path. brief-guard.mjs denies the same files to Write, Edit, MultiEdit
+//     and NotebookEdit.
 // Everything else is left alone: nothing is printed, so the normal permission flow
 // decides. `git commit` is allowed.
 //
-// A SCRATCH COPY is a folder strictly under the OS temp folder: os.tmpdir() (TMPDIR), /tmp,
-// or either one's real path (on macOS /tmp is /private/tmp), with symbolic links resolved,
-// so a link from the temp folder into the project is not a scratch copy (a link that exists
-// when the hook runs: one the same command makes is not seen). A denied command
-// is allowed there, so tests and experiments in throwaway clones still work. A project
-// kept under the temp folder is not guarded.
+// A SCRATCH COPY is a folder strictly under the OS temp folder (guard-lib.mjs, shared with
+// brief-guard.mjs: os.tmpdir(), /tmp, or either one's real path, with symbolic links
+// resolved). A denied command is allowed there, so tests and experiments in throwaway
+// clones still work. A project kept under the temp folder is not guarded.
 //
 // WHERE A COMMAND RUNS. The hook input's cwd (Claude's shell folder), changed by what the
 // command itself does before it: `cd` and `pushd` (`cd` alone is $HOME; `cd -` is unknown),
@@ -43,9 +49,10 @@
 // WHAT THIS IS NOT. It reads command TEXT, as predeploy-gate.mjs does: an alias, a git
 // alias, a script that pushes, or a variable holding the command name are not seen. It
 // stops mistakes, not a determined process. The person's own terminal is not affected.
-import { readFileSync, realpathSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { APPROVAL_REASON, TEMP_ROOTS, isApproval, isScratch } from "./guard-lib.mjs";
 
 const SCRIPTS = new Set(["land.sh", "ship.sh", "release.sh", "upgrade.sh", "approve-protected.sh", "approve-brief.sh"]);
 const SHELLS = new Set(["bash", "sh", "zsh", "dash", "ksh"]);
@@ -65,24 +72,6 @@ try {
 if ((input?.tool_name ?? "") !== "Bash") process.exit(0);
 const command = String(input?.tool_input?.command ?? "");
 const HOME = process.env.HOME || homedir();
-
-// ---------------------------------------------------------------------------------------
-// Scratch copies.
-// ---------------------------------------------------------------------------------------
-
-// PATH with every existing part's symbolic links resolved (a path that does not exist yet
-// keeps its missing tail as written).
-const realish = (path) => {
-  const normal = resolve(path);
-  try {
-    return realpathSync(normal);
-  } catch {
-    const parent = dirname(normal);
-    return parent === normal ? normal : join(realish(parent), basename(normal));
-  }
-};
-const TEMP_ROOTS = [...new Set([tmpdir(), "/tmp"].flatMap((root) => [resolve(root), realish(root)]))];
-const isScratch = (dir) => dir !== UNKNOWN && TEMP_ROOTS.some((root) => realish(dir).startsWith(`${root}/`));
 
 // ---------------------------------------------------------------------------------------
 // Words and tokens. A word is a list of parts: { lit }, { variable, fallback }, { sub }
@@ -476,6 +465,7 @@ const REASONS = {
   push: "Claude never pushes: the person pushes, through ship.sh (or release.sh), after the review and CI.",
   destructive: "it throws work away in the real working tree. If it is needed, put the exact command in the report's \"Your commands\" for the person to run.",
   script: "it is the person's step, run in their own terminal. Put the exact command in the report's \"Your commands\".",
+  approval: APPROVAL_REASON,
 };
 
 const deny = (rule, what, dirs, text) => {
@@ -499,6 +489,17 @@ const runCommand = (element, dirs, vars, inPipeline) => {
   const args = element.words.filter((t) => !t.redirect);
   const values = args.map((t) => valueOf(t.word, dirs, vars));
   const text = values.map((v) => (v === UNKNOWN ? "?" : v)).join(" ");
+
+  // A word naming a brief's approval (an argument, a redirection's target, an assignment's
+  // value), anywhere but a scratch copy.
+  for (const token of element.words) {
+    const whole = valueOf(token.word, dirs, vars);
+    const value = whole !== UNKNOWN && ASSIGNMENT.test(whole) ? whole.replace(ASSIGNMENT, "") : whole;
+    const name = baseOf(token.word, value);
+    if (name === UNKNOWN || /\s/.test(name) || (value !== UNKNOWN && /\s/.test(value)) || !isApproval(name)) continue;
+    const paths = resolveIn(dirs, value);
+    if (![...paths].every(isScratch)) deny("approval", `a command naming ${value === UNKNOWN ? `.../${name}` : value}`, paths, text);
+  }
 
   // NAME=value alone (or export NAME=value): remembered.
   const assignments = values[0] === "export" ? values.slice(1) : values;
