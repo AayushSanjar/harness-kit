@@ -33,7 +33,8 @@ export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.invalid
 export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.invalid
 unset HARNESS_KIT_EVAL CLAUDE_PROJECT_DIR
 # ship.sh: runs appear at once in the fake gh, so never sleep.
-export SHIP_POLL_SECONDS=0 SHIP_CI_APPEAR_SECONDS=0
+export SHIP_POLL_SECONDS=0 SHIP_CI_APPEAR_SECONDS=0 SHIP_GH_RETRY_SECONDS=0
+unset SHIP_GH_TRIES
 
 result() {
   local label="$1" ok="$2" detail="$3"
@@ -80,6 +81,10 @@ chmod +x "$WORK/bin/osascript" "$WORK/bin/uname"
 # <from>th `gh run list` call on (counted in $FAKE_LOG/list-calls). With no runs file there
 # is one run, 4242 of "validate", with the conclusion in $FAKE_LOG/conclusion, listed from
 # the first call. Every run is completed. `--workflow` filters by workflow name.
+# $FAKE_LOG/gh-fail, when it exists, holds lines "<list|watch|view> <how> <n>": the first n
+# calls of `gh run <list|watch|view>` fail that way (counted in
+# $FAKE_LOG/fail-calls-<list|watch|view>): timeout (exit 1 with a network error on stderr)
+# or garbage (exit 0 with an HTML error page), as tests/release.test.sh's fake gh does.
 cat >"$WORK/bin/gh" <<'FAKE'
 #!/usr/bin/env node
 const fs = require("fs");
@@ -87,6 +92,15 @@ const log = process.env.FAKE_LOG;
 const args = process.argv.slice(2);
 fs.appendFileSync(`${log}/gh-calls`, args.join(" ") + "\n");
 const read = (f) => { try { return fs.readFileSync(`${log}/${f}`, "utf8").trim(); } catch { return ""; } };
+const failing = read("gh-fail").split("\n").map((l) => l.trim().split(/\s+/)).find(([sub]) => sub === args[1]);
+if (args[0] === "run" && failing) {
+  const call = Number(read(`fail-calls-${args[1]}`) || 0) + 1;
+  fs.writeFileSync(`${log}/fail-calls-${args[1]}`, String(call));
+  if (call <= Number(failing[2])) {
+    if (failing[1] === "timeout") { console.error("error connecting to api.github.com: dial tcp: i/o timeout"); process.exit(1); }
+    if (failing[1] === "garbage") { console.log("<html><body>502 Bad Gateway</body></html>"); process.exit(0); }
+  }
+}
 const runs = (read("runs") || `4242 validate ${read("conclusion")} 1`).split("\n").map((line) => {
   const [id, workflowName, conclusion, from] = line.trim().split(/\s+/);
   return { databaseId: Number(id), workflowName, status: "completed", conclusion,
@@ -182,7 +196,7 @@ brief_for() {
 # branch when it has none (the brief cases run ship.sh themselves); a fresh fake log each
 # time (a runs file, if a case wrote one, is kept).
 run_ship() {
-  rm -f "$1.log/claude-args" "$1.log/claude-stdin" "$1.log/gh-calls" "$1.log/list-calls" "$1.log/osascript-calls"
+  rm -f "$1.log/claude-args" "$1.log/claude-stdin" "$1.log/gh-calls" "$1.log/list-calls" "$1.log/osascript-calls" "$1.log"/fail-calls-*
   printf '%s\n' "$3" >"$1.log/conclusion"
   brief_for "$1"
   FAKE_JSON="$2" run_in "$1" bash "$SHIP"
@@ -764,6 +778,27 @@ if [ "$STATUS" -eq 0 ] && grep -q 'waiting for a run of the workflow "validate" 
   result "ship.sh: with .harness/ci-workflow, waits for that workflow's run only, then merges" yes ""
 else
   result "ship.sh: with .harness/ci-workflow, waits for that workflow's run only, then merges" no "$(describe)
+gh calls: $(cat "$dir.log/gh-calls" 2>/dev/null)"
+fi
+
+# 20b. gh times out on every read of the run: after 3 tries (no pause here), CI result
+# unknown with the run's URL and "re-run ship.sh"; the review is committed and the branch
+# pushed, but main is not merged or pushed and the report is kept.
+dir="$(new_repo ship-gh-timeout)"
+mkdir -p "$dir/.reports" && printf '# report\n' >"$dir/.reports/feature.md"
+main_before="$(rev "$dir" main)"
+printf 'view timeout 99\n' >"$dir.log/gh-fail"
+run_ship "$dir" "$PASS_JSON" success
+if [ "$STATUS" -eq 1 ] && grep -q 'STOPPED: CI result unknown for CI run 4242' <<<"$ERR" &&
+  grep -q 'https://ci.example.invalid/runs/4242' <<<"$ERR" && grep -q 're-run ship.sh' <<<"$ERR" &&
+  ! grep -q 'CI run [0-9]* passed' <<<"$ERR" && [ "$(grep -c '^run view 4242' "$dir.log/gh-calls")" = 3 ] &&
+  [ "$(rev "$dir" main)" = "$main_before" ] && [ "$(remote_rev "$dir" main)" = "$main_before" ] &&
+  [ "$(git -C "$dir" symbolic-ref --short HEAD)" = feature ] && [ -e "$dir/.reports/feature.md" ] &&
+  [ "$(events "$dir" | tail -n 1)" = "$(printf 'ship.sh\tfeature\tSTOPPED\tci-unknown')" ]; then
+  result "ship.sh: gh timing out on every read of the run stops with CI result unknown and re-run ship.sh; the base is not merged or pushed" yes ""
+else
+  result "ship.sh: gh timing out on every read of the run stops with CI result unknown and re-run ship.sh; the base is not merged or pushed" no "$(describe)
+events: $(events "$dir")
 gh calls: $(cat "$dir.log/gh-calls" 2>/dev/null)"
 fi
 

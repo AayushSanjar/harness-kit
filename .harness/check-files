@@ -32,3 +32,16 @@ land.sh: each stop, with its reason, and each LANDED is a line in .git/harness-k
 ship.sh: each stop, with its reason, and each SHIPPED is a line in .git/harness-kit/events.tsv	tests/ship.test.sh
 release.sh: a failing check stops it before any push	tests/release.test.sh
 harness-metrics: CHECKED lines change no number	tests/harness-metrics.test.sh
+release.sh: gh timing out on every read of the run stops with CI result unknown, the run's URL and how to resume; main and the tag are untouched	tests/release.test.sh
+release.sh: gh printing garbage for the run stops with CI result unknown; main and the tag are untouched	tests/release.test.sh
+release.sh: gh timing out on the run list stops with CI result unknown and the command to look with; nothing is watched	tests/release.test.sh
+release.sh: a failing gh run watch, then GitHub reporting completed and success, passes and says the watch failed	tests/release.test.sh
+release.sh: a run GitHub reports as completed with conclusion failure stops ci-not-green, not unknown, and never says passed	tests/release.test.sh
+release.sh: gh failing twice, then answering, is retried and releases	tests/release.test.sh
+ship.sh: gh timing out on every read of the run stops with CI result unknown and re-run ship.sh; the base is not merged or pushed	tests/ship.test.sh
+harness-metrics: gh timing out: first CI runs are NOT FOUND, not a number	tests/harness-metrics.test.sh
+harness-metrics: gh printing garbage: first CI runs are NOT FOUND, not a number	tests/harness-metrics.test.sh
+harness-metrics: a gh list with entries that are not runs: first CI runs are NOT FOUND, not 0 of 0	tests/harness-metrics.test.sh
+this repository's .harness/defects.tsv passes check-defects.mjs (append-only, well-formed lines)	tests/validate.sh
+this repository's .harness/defects.tsv passes check-defects.mjs (append-only, well-formed lines)	plugins/harness-kit/scripts/check-defects.mjs
+this repository's .harness/defects.tsv passes check-defects.mjs (append-only, well-formed lines)	.harness/defects.tsv

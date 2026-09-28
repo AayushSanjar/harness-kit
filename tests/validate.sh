@@ -48,7 +48,7 @@ check "claude plugin validate --strict (plugin: plugins/harness-kit)" "$out" $?
 # empty folder outside any git repository, so there is no report line, no start-up picture
 # and no .reports/ folder is made here, and without HARNESS_KIT_EVAL, so there is no warning (tests/ship.test.sh
 # covers both).
-expected="harness-kit 0.15.0 loaded"
+expected="harness-kit 0.15.1 loaded"
 empty="$(mktemp -d)"
 out="$(cd "$empty" && env -u HARNESS_KIT_EVAL -u CLAUDE_PROJECT_DIR GIT_CEILING_DIRECTORIES="$(dirname "$empty")" \
   node "$PLUGIN/scripts/session-start.mjs" </dev/null 2>&1)"
@@ -182,6 +182,15 @@ check "tests/brief-guard.test.sh (all cases)" "" $?
 # temporary repositories, one per line.
 bash "$ROOT/tests/session-start.test.sh"
 check "tests/session-start.test.sh (all cases)" "" $?
+
+# (y) This repository checks its own escaped defects (the person's decision):
+# check-defects.mjs on .harness/defects.tsv, which must stay append-only, with every line
+# the branch adds well formed. check-defects.mjs finds the base (main, or origin/main) and
+# its merge-base with HEAD, so in CI it needs the full history, which is why
+# .github/workflows/validate.yml checks out with fetch-depth: 0. --skip-reviewed does not
+# skip it.
+out="$(cd "$ROOT" && node "$PLUGIN/scripts/check-defects.mjs" 2>&1)"
+check "this repository's .harness/defects.tsv passes check-defects.mjs (append-only, well-formed lines)" "$out" $?
 
 # (r) The record-defect and plan skills are started only by the person: their frontmatter
 # turns off model invocation.

@@ -4,9 +4,9 @@
 #
 # Every case runs in a temporary git repository whose "origin" is a local bare repository.
 # release.sh finds a FAKE `gh` first on PATH (the same as tests/ship.test.sh's: canned run
-# JSON, the conclusion in $FAKE_LOG/conclusion), a fake osascript that records calls, and a
-# fake uname ($FAKE_UNAME). Nothing touches GitHub. Prints one PASS or FAIL line per case
-# and exits non-zero if any fail.
+# JSON, the conclusion in $FAKE_LOG/conclusion, and failures from $FAKE_LOG/gh-fail), a fake
+# osascript that records calls, and a fake uname ($FAKE_UNAME). Nothing touches GitHub.
+# Prints one PASS or FAIL line per case and exits non-zero if any fail.
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -19,8 +19,8 @@ failures=0
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.invalid
 export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.invalid
-export SHIP_POLL_SECONDS=0 SHIP_CI_APPEAR_SECONDS=0
-unset FAKE_UNAME
+export SHIP_POLL_SECONDS=0 SHIP_CI_APPEAR_SECONDS=0 SHIP_GH_RETRY_SECONDS=0
+unset FAKE_UNAME SHIP_GH_TRIES
 
 result() {
   local label="$1" ok="$2" detail="$3"
@@ -45,6 +45,10 @@ cat >"$WORK/bin/uname" <<'FAKE'
 #!/bin/sh
 if [ -n "${FAKE_UNAME:-}" ]; then echo "$FAKE_UNAME"; else exec /usr/bin/uname "$@"; fi
 FAKE
+# The fake gh. $FAKE_LOG/gh-fail, when it exists, holds lines "<list|watch|view> <how> <n>":
+# the first n calls of `gh run <list|watch|view>` fail that way, counted in
+# $FAKE_LOG/fail-calls-<list|watch|view>. <how> is timeout (exit 1 with a network error on
+# stderr, as gh prints one) or garbage (exit 0 with an HTML error page on stdout).
 cat >"$WORK/bin/gh" <<'FAKE'
 #!/usr/bin/env node
 const fs = require("fs");
@@ -52,6 +56,15 @@ const log = process.env.FAKE_LOG;
 const args = process.argv.slice(2);
 fs.appendFileSync(`${log}/gh-calls`, args.join(" ") + "\n");
 const read = (f) => { try { return fs.readFileSync(`${log}/${f}`, "utf8").trim(); } catch { return ""; } };
+const failing = read("gh-fail").split("\n").map((l) => l.trim().split(/\s+/)).find(([sub]) => sub === args[1]);
+if (args[0] === "run" && failing) {
+  const call = Number(read(`fail-calls-${args[1]}`) || 0) + 1;
+  fs.writeFileSync(`${log}/fail-calls-${args[1]}`, String(call));
+  if (call <= Number(failing[2])) {
+    if (failing[1] === "timeout") { console.error("error connecting to api.github.com: dial tcp: i/o timeout"); process.exit(1); }
+    if (failing[1] === "garbage") { console.log("<html><body>502 Bad Gateway</body></html>"); process.exit(0); }
+  }
+}
 const run = { databaseId: 4242, workflowName: "validate", status: "completed", conclusion: read("conclusion"),
   url: "https://ci.example.invalid/runs/4242" };
 const sub = `${args[0]} ${args[1]}`;
@@ -85,7 +98,7 @@ new_repo() {
 # run_release DIR CONCLUSION TAG: release.sh in DIR, with a fresh fake log.
 run_release() {
   DIR="$1"
-  rm -f "$DIR.log/gh-calls" "$DIR.log/osascript-calls" "$DIR.log/check-runs"
+  rm -f "$DIR.log/gh-calls" "$DIR.log/osascript-calls" "$DIR.log/check-runs" "$DIR.log"/fail-calls-*
   printf '%s\n' "$2" >"$DIR.log/conclusion"
   (cd "$DIR" && PATH="$WORK/bin:$PATH" FAKE_LOG="$DIR.log" bash "$RELEASE" "$3" >/dev/null 2>"$WORK/stderr")
   STATUS=$?
@@ -212,6 +225,103 @@ if [ "$STATUS" -eq 1 ] && grep -q 'STOPPED: origin/main has commits that next do
   result "release.sh: a base that cannot fast-forward stops it before main or the tag move" yes ""
 else
   result "release.sh: a base that cannot fast-forward stops it before main or the tag move" no "$(describe)"
+fi
+
+# 6-11. gh failing. Each case releases a fresh repository with $DIR.log/gh-fail set; the
+# retries do not pause (SHIP_GH_RETRY_SECONDS=0) and there are 3 tries (the default).
+# untouched DIR MAIN: main (here and on origin) is MAIN, there is no tag v1.2.3, and the
+# person is still on next.
+untouched() {
+  [ "$(remote "$1" refs/heads/main)" = "$2" ] && [ "$(rev "$1" main)" = "$2" ] && [ -z "$(rev "$1" refs/tags/v1.2.3)" ] &&
+    [ -z "$(remote "$1" refs/tags/v1.2.3)" ] && [ "$(git -C "$1" symbolic-ref --short HEAD)" = next ]
+}
+calls() { grep -c "^run $2" "$1.log/gh-calls" 2>/dev/null; }
+last_stop() { grep $'\tSTOPPED\t' "$1/.git/harness-kit/events.tsv" 2>/dev/null | tail -n 1 | cut -f6; }
+
+# 6. Every read of the run times out: after 3 tries, CI result unknown, with the run's URL
+# and how to resume; nothing passes, main and the tag are untouched.
+dir="$(new_repo gh-timeout)"
+main_before="$(rev "$dir" main)"
+printf 'view timeout 99\n' >"$dir.log/gh-fail"
+run_release "$dir" success v1.2.3
+if [ "$STATUS" -eq 1 ] && grep -q 'STOPPED: CI result unknown for CI run 4242' <<<"$ERR" &&
+  grep -q 'https://ci.example.invalid/runs/4242' <<<"$ERR" && grep -q 're-run release.sh v1.2.3' <<<"$ERR" &&
+  grep -q 'i/o timeout' <<<"$ERR" && ! grep -q 'CI run [0-9]* passed' <<<"$ERR" && [ "$(calls "$dir" 'view 4242')" = 3 ] &&
+  [ "$(last_stop "$dir")" = ci-unknown ] && untouched "$dir" "$main_before"; then
+  result "release.sh: gh timing out on every read of the run stops with CI result unknown, the run's URL and how to resume; main and the tag are untouched" yes ""
+else
+  result "release.sh: gh timing out on every read of the run stops with CI result unknown, the run's URL and how to resume; main and the tag are untouched" no "$(describe)
+last stop: $(last_stop "$dir")"
+fi
+
+# 7. Every read of the run prints garbage (exit 0): CI result unknown, never read as a result.
+dir="$(new_repo gh-garbage)"
+main_before="$(rev "$dir" main)"
+printf 'view garbage 99\n' >"$dir.log/gh-fail"
+run_release "$dir" success v1.2.3
+if [ "$STATUS" -eq 1 ] && grep -q 'STOPPED: CI result unknown for CI run 4242' <<<"$ERR" &&
+  grep -q 'not the expected JSON' <<<"$ERR" && ! grep -qE 'CI run [0-9]* passed|not finished|not success' <<<"$ERR" &&
+  [ "$(calls "$dir" 'view 4242')" = 3 ] && [ "$(last_stop "$dir")" = ci-unknown ] && untouched "$dir" "$main_before"; then
+  result "release.sh: gh printing garbage for the run stops with CI result unknown; main and the tag are untouched" yes ""
+else
+  result "release.sh: gh printing garbage for the run stops with CI result unknown; main and the tag are untouched" no "$(describe)
+last stop: $(last_stop "$dir")"
+fi
+
+# 8. The run list times out: CI result unknown, with the command to look with, as there is
+# no run URL; nothing is watched, and it is not taken as "no run appeared".
+dir="$(new_repo gh-list-timeout)"
+main_before="$(rev "$dir" main)"
+printf 'list timeout 99\n' >"$dir.log/gh-fail"
+run_release "$dir" success v1.2.3
+if [ "$STATUS" -eq 1 ] && grep -q 'STOPPED: CI result unknown for the CI runs of' <<<"$ERR" &&
+  grep -qF "gh run list --commit $(rev "$dir" next)" <<<"$ERR" && [ "$(calls "$dir" list)" = 3 ] &&
+  [ "$(calls "$dir" watch)" = 0 ] && [ "$(calls "$dir" view)" = 0 ] && ! grep -q 'CI run [0-9]* passed' <<<"$ERR" &&
+  [ "$(last_stop "$dir")" = ci-unknown ] && untouched "$dir" "$main_before"; then
+  result "release.sh: gh timing out on the run list stops with CI result unknown and the command to look with; nothing is watched" yes ""
+else
+  result "release.sh: gh timing out on the run list stops with CI result unknown and the command to look with; nothing is watched" no "$(describe)
+last stop: $(last_stop "$dir")"
+fi
+
+# 9. The v0.15.0 case: gh run watch fails on the network, then GitHub reports the run
+# completed with success: it releases, saying first that the watch failed.
+dir="$(new_repo gh-watch-timeout)"
+printf 'watch timeout 99\n' >"$dir.log/gh-fail"
+run_release "$dir" success v1.2.3
+said="$(grep -n 'gh run watch exited 1 for CI run 4242' <<<"$ERR" | head -n 1 | cut -d: -f1)"
+passed="$(grep -n 'CI run 4242 passed' <<<"$ERR" | head -n 1 | cut -d: -f1)"
+if [ "$STATUS" -eq 0 ] && [ -n "$said" ] && [ -n "$passed" ] && [ "$said" -lt "$passed" ] &&
+  [ "$(remote "$dir" refs/heads/main)" = "$(rev "$dir" next)" ]; then
+  result "release.sh: a failing gh run watch, then GitHub reporting completed and success, passes and says the watch failed" yes ""
+else
+  result "release.sh: a failing gh run watch, then GitHub reporting completed and success, passes and says the watch failed" no "$(describe)"
+fi
+
+# 10. A run GitHub reports completed with conclusion failure: ci-not-green at once, not
+# unknown, not retried, and never passed.
+dir="$(new_repo gh-red)"
+main_before="$(rev "$dir" main)"
+run_release "$dir" failure v1.2.3
+if [ "$STATUS" -eq 1 ] && grep -q 'CI run 4242 finished with conclusion "failure", not success' <<<"$ERR" &&
+  ! grep -qE 'CI run [0-9]* passed|unknown|trying again' <<<"$ERR" && [ "$(calls "$dir" 'view 4242')" = 1 ] &&
+  [ "$(last_stop "$dir")" = ci-not-green ] && untouched "$dir" "$main_before"; then
+  result "release.sh: a run GitHub reports as completed with conclusion failure stops ci-not-green, not unknown, and never says passed" yes ""
+else
+  result "release.sh: a run GitHub reports as completed with conclusion failure stops ci-not-green, not unknown, and never says passed" no "$(describe)
+last stop: $(last_stop "$dir")"
+fi
+
+# 11. gh fails twice on the run, then answers: retried, and it releases.
+dir="$(new_repo gh-retry)"
+printf 'view timeout 2\n' >"$dir.log/gh-fail"
+run_release "$dir" success v1.2.3
+if [ "$STATUS" -eq 0 ] && [ "$(calls "$dir" 'view 4242')" = 3 ] && grep -q 'trying again' <<<"$ERR" &&
+  grep -q 'CI run 4242 passed' <<<"$ERR" && [ "$(remote "$dir" refs/heads/main)" = "$(rev "$dir" next)" ] &&
+  [ "$(remote "$dir" 'refs/tags/v1.2.3^{commit}')" = "$(rev "$dir" next)" ]; then
+  result "release.sh: gh failing twice, then answering, is retried and releases" yes ""
+else
+  result "release.sh: gh failing twice, then answering, is retried and releases" no "$(describe)"
 fi
 
 if [ "$failures" -ne 0 ]; then

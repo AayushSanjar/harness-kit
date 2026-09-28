@@ -1,0 +1,3 @@
+# Escaped defects, one per line, tab-separated, append-only (harness-kit record-defect; checked by check-defects.mjs):
+#   date  id  description  where-found  introducing-commit  test-added  fixing-commit
+2026-09-28	D1	ci_wait ignored a failed gh run watch (network timeout) and printed passed from the next gh read without saying the watch had failed; the v0.15.0 run did pass, so a gh error could sit one step from a release.	person	ee7ffac4cdb85eb81733a2d615f78a645a926618	tests/release.test.sh release.sh: a failing gh run watch, then GitHub reporting completed and success, passes and says the watch failed	this

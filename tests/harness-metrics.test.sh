@@ -2,7 +2,8 @@
 # Tests for plugins/harness-kit/scripts/harness-metrics.mjs. Each case runs in a temporary
 # git repository whose tag pre-harness is a commit dated 2026-09-10T12:00:00Z, with a FAKE
 # `gh` first on PATH: it records its arguments and prints the runs in $FAKE_GH_RUNS, or
-# fails when FAKE_GH_FAIL is set. Nothing touches GitHub. Prints one PASS or FAIL line per
+# fails when FAKE_GH_FAIL is set (not logged in), or FAKE_GH_MODE is timeout (a network
+# error, exit 1) or garbage (an HTML error page, exit 0). Nothing touches GitHub. Prints one PASS or FAIL line per
 # case and exits non-zero if any fail.
 set -u
 
@@ -37,6 +38,10 @@ if [ -n "${FAKE_GH_FAIL:-}" ]; then
   echo "To get started with GitHub CLI, please run:  gh auth login" >&2
   exit 4
 fi
+case "${FAKE_GH_MODE:-}" in
+  timeout) echo "error connecting to api.github.com: dial tcp: i/o timeout" >&2; exit 1 ;;
+  garbage) echo "<html><body>502 Bad Gateway</body></html>"; exit 0 ;;
+esac
 cat "$FAKE_GH_RUNS"
 FAKE
 chmod +x "$WORK/bin/gh"
@@ -321,5 +326,23 @@ if [ "$STATUS" -eq 0 ] &&
 else
   result "harness-metrics: CHECKED lines change no number" no "$(describe)"
 fi
+
+# 17-19. gh answers, but not with runs: number 4 is NOT FOUND with the reason, never a count.
+new_repo gh-broken
+printf '[{"message": "API rate limit exceeded"}, {"databaseId": 5, "headBranch": "feat-b", "headSha": "b1", "status": "completed", "conclusion": "success", "createdAt": "2026-10-01T11:00:00Z", "workflowName": "validate"}]\n' >"$WORK/not-runs.json"
+gh_not_found() {
+  local label="$1" source="$2"
+  if [ "$STATUS" -eq 0 ] && row 4 | grep -qE "^4 +.* +NOT FOUND +$source" && ! row 4 | grep -qE ' [0-9]+ of [0-9]+ '; then
+    result "harness-metrics: $label" yes ""
+  else
+    result "harness-metrics: $label" no "$(describe)"
+  fi
+}
+FAKE_GH_MODE=timeout run gh-broken
+gh_not_found "gh timing out: first CI runs are NOT FOUND, not a number" 'gh run list failed: error connecting to api\.github\.com: dial tcp: i/o timeout'
+FAKE_GH_MODE=garbage run gh-broken
+gh_not_found "gh printing garbage: first CI runs are NOT FOUND, not a number" 'gh run list did not print a JSON list'
+FAKE_GH_RUNS="$WORK/not-runs.json" run gh-broken
+gh_not_found "a gh list with entries that are not runs: first CI runs are NOT FOUND, not 0 of 0" 'gh run list printed 1 entry that is not a run'
 
 [ "$failures" -eq 0 ]

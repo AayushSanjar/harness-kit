@@ -49,6 +49,9 @@
 //      base (.harness/review-base, default main) is judged by the runs for the first
 //      commit it ran CI on; green when all of them concluded success. A branch counts when
 //      its first run started in the period; one still running is listed, not counted.
+//      NOT FOUND when gh fails (exits non-zero or times out), prints something that is not
+//      a JSON list, or lists an entry that is not a run (not an object, or without a
+//      whole-number databaseId or a string status): never a count from a garbled answer.
 //      Misleading: gh shows only a run's latest attempt, so a red first run re-run to green
 //      counts as green, and runs beyond gh's limit (1000 here) or deleted from GitHub are
 //      not seen.
@@ -353,6 +356,11 @@ const firstCiRuns = (root, when) => {
     runs = null;
   }
   if (!Array.isArray(runs)) return notFound("gh run list did not print a JSON list");
+  // A garbled answer is not data: an entry that is not a run makes the number NOT FOUND,
+  // rather than being skipped into a smaller count.
+  const notRuns = runs.filter((run) => run === null || typeof run !== "object" || Array.isArray(run) ||
+    !Number.isInteger(run.databaseId) || typeof run.status !== "string").length;
+  if (notRuns) return notFound(`gh run list printed ${notRuns} ${notRuns === 1 ? "entry that is" : "entries that are"} not a run`);
 
   const byBranch = new Map();
   for (const run of runs) {

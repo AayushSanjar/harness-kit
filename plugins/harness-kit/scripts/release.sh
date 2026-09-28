@@ -18,8 +18,12 @@
 #   3. Push the branch to origin.
 #   4. Wait for CI (ci-lib.sh's ci_wait): the runs for the pushed head commit, waiting up to
 #      SHIP_CI_APPEAR_SECONDS (default 180) for the first to appear, each until it
-#      finishes; anything but "success" stops, printing the run's URL. With
-#      .harness/ci-workflow, only that workflow's runs.
+#      finishes; a completed run with any conclusion but "success" stops, printing the
+#      run's URL. With .harness/ci-workflow, only that workflow's runs. It fails closed: a
+#      gh error, or gh output that is not the JSON expected, is retried (SHIP_GH_TRIES
+#      tries in all, default 3, SHIP_GH_RETRY_SECONDS apart, default 10), then stops with
+#      "CI result unknown" (reason ci-unknown), the run's URL and how to resume, before
+#      the base, the push or the tag.
 #   5. Fast-forward the base to the branch's head: origin/<base> and <base> must both be in
 #      the branch; `git fetch . <head>:<base>` moves the local base (fast-forward only).
 #      Make the tag at the head (a lightweight tag, as harness-kit's earlier ones are),
@@ -65,6 +69,7 @@ if [ $# -ne 1 ] || [ -z "$1" ]; then
   exit 2
 fi
 tag="$1"
+CI_RESUME="re-run release.sh $tag"
 
 PROJECT="$(git rev-parse --show-toplevel 2>/dev/null)" || refuse refused-not-a-repository "not inside a git repository"
 cd "$PROJECT" || exit 2

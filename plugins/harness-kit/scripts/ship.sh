@@ -53,9 +53,12 @@
 #   4. Push the branch to origin.
 #   5. Wait for CI (ci-lib.sh's ci_wait): the runs for the pushed head commit, waiting up
 #      to SHIP_CI_APPEAR_SECONDS (default 180) for the first to appear, each until it
-#      finishes; anything but "success" stops, printing the run's URL. With
-#      .harness/ci-workflow (optional; first line, the workflow as `gh run list
-#      --workflow` takes it), only that workflow's runs.
+#      finishes; a completed run with any conclusion but "success" stops, printing the
+#      run's URL. With .harness/ci-workflow (optional; first line, the workflow as `gh run
+#      list --workflow` takes it), only that workflow's runs. It fails closed: a gh error,
+#      or gh output that is not the JSON expected, is retried (SHIP_GH_TRIES tries in all,
+#      default 3, SHIP_GH_RETRY_SECONDS apart, default 10), then stops with "CI result
+#      unknown" (reason ci-unknown), the run's URL and how to resume, before the merge.
 #   6. Check that the base can fast-forward (origin/<base> and <base> are both in the
 #      branch), switch to the base, `git merge --ff-only <branch>`, push the base with
 #      HARNESS_KIT_SHIP=1 set (the pre-push hook from install-hooks.sh refuses any other
@@ -70,9 +73,9 @@
 #
 # THE EVENT LOG. Each stop and each refusal (event STOPPED; a refusal's reason starts
 # "refused-", such as refused-on-base, and a stop's is short, such as check-failed,
-# review-not-pass or ci-not-green), with its message, and each SHIPPED, is appended to the
-# local event log, .git/harness-kit/events.tsv (events.sh has the format), on the branch
-# being shipped. So is the result of the check run before the review, through events.sh's
+# review-not-pass, ci-not-green or ci-unknown), with its message, and each SHIPPED, is
+# appended to the local event log, .git/harness-kit/events.tsv (events.sh has the format),
+# on the branch being shipped. So is the result of the check run before the review, through events.sh's
 # harness_check_event: a CHECKED line when it differs from the branch's last recorded
 # result. Outside a git repository nothing is recorded.
 #
@@ -98,7 +101,7 @@ POLL="${SHIP_POLL_SECONDS:-10}"
 . "$HERE/ci-lib.sh"
 # shellcheck source=brief-lib.sh
 . "$HERE/brief-lib.sh"
-CI_TOOL=ship.sh CI_APPEAR="$APPEAR" CI_POLL="$POLL"
+CI_TOOL=ship.sh CI_APPEAR="$APPEAR" CI_POLL="$POLL" CI_RESUME="re-run ship.sh"
 
 say() { echo "harness-kit ship.sh: $*" >&2; }
 notify() { ci_notify "$1"; }

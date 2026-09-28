@@ -16,7 +16,11 @@ jobs:
     #   "ubuntu-latest, ubuntu-24.04, ubuntu-22.04, ubuntu-26.04"
     runs-on: ubuntu-24.04
     steps:
+      # The full history: tests/validate.sh runs check-defects.mjs on .harness/defects.tsv,
+      # which needs the base branch (origin/main) and its merge-base with HEAD.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -53,7 +57,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
+      # The full history: replay-faults.sh runs tests/validate.sh, and so check-defects.mjs,
+      # in worktrees of this repository, for its baseline and for every fault.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
