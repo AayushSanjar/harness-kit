@@ -20,10 +20,18 @@
 // `--agent` or the hook fires inside a subagent" (same page). For that agent_type the stop
 // is allowed silently and the check is not run, for the same reason: the reviewer is
 // read-only and cannot fix the checks. Any other agent_type, or none, is gated as usual.
+//
+// THE EVENT LOG. Each check run is passed, with its output, to events.sh's
+// harness_check_event (through bash, in the project folder), which appends a CHECKED line to
+// the local event log, .git/harness-kit/events.tsv, when the result differs from the last
+// one recorded for the branch; the SessionStart hook's start-up picture shows the latest.
+// A recording that fails changes nothing about the decision. When the gate is off
+// (HARNESS_KIT_EVAL, the reviewer, no check-command) nothing runs, so nothing is recorded.
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const REVIEWER = "harness-kit:reviewer";
 const MAX_BLOCKS = 3;
@@ -72,6 +80,16 @@ const sessionId = String(input.session_id || "unknown").replace(/[^A-Za-z0-9_-]/
 const countFile = join(tmpdir(), `harness-kit-stop-gate-${sessionId}.count`);
 
 const result = spawnSync(command, { cwd: projectDir, shell: true, encoding: "utf8" });
+const output = `${result.stdout || ""}\n${result.stderr || ""}`;
+
+// Record the result (events.sh's harness_check_event decides whether it is new).
+const recorded = spawnSync(
+  "bash",
+  ["-c", '. "$1" && harness_check_event stop-gate.mjs "" "$2"', "harness-kit", fileURLToPath(new URL("./events.sh", import.meta.url)),
+    result.status !== null ? String(result.status) : result.signal ? `signal ${result.signal}` : "not run"],
+  { cwd: projectDir, input: output, encoding: "utf8" },
+);
+if (recorded.stderr) process.stderr.write(recorded.stderr);
 
 if (result.status === 0) {
   rmSync(countFile, { force: true });
@@ -86,7 +104,6 @@ if (previous >= MAX_BLOCKS) {
 }
 writeFileSync(countFile, String(previous + 1));
 
-const output = `${result.stdout || ""}\n${result.stderr || ""}`;
 let lines = output.split(/\r?\n/).filter((line) => /^\s*FAIL\b/.test(line));
 if (lines.length === 0) {
   // No FAIL lines: fall back to the tail of the output so Claude sees something.

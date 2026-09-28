@@ -40,7 +40,9 @@
 #
 # THE EVENT LOG. Each stop and each refusal (event STOPPED, with a short reason; a
 # refusal's starts "refused-"), and each RELEASED (what: the tag), is appended to the local
-# event log, .git/harness-kit/events.tsv (events.sh has the format).
+# event log, .git/harness-kit/events.tsv (events.sh has the format). So is the check's
+# result in step 2, through events.sh's harness_check_event: a CHECKED line when it differs
+# from the branch's last recorded result.
 #
 # Exit status: 0 released; 1 stopped (re-run after doing what the message says); 2 refused.
 set -u
@@ -90,8 +92,11 @@ remote_tag="$(git ls-remote --tags "$REMOTE" "refs/tags/$tag^{}" "refs/tags/$tag
 check="$( { [ -f .harness/check-command ] && head -n 1 .harness/check-command; } | tr -d '\r')"
 [ -n "$check" ] || stop no-check-command "there is no .harness/check-command (or its first line is empty), so there is no check to release with. Nothing was pushed."
 say "running the check: $check"
-/bin/sh -c "$check" </dev/null >&2
-status=$?
+check_out="$(mktemp "${TMPDIR:-/tmp}/harness-kit-release-check.XXXXXX")" || stop temp-file "cannot make a temporary file for the check's output. Nothing was pushed."
+trap 'rm -f "$check_out" "$check_out.status"' EXIT
+{ /bin/sh -c "$check" </dev/null 2>&1; echo $? >"$check_out.status"; } | tee "$check_out" >&2
+status="$(cat "$check_out.status")"
+harness_check_event release.sh "$branch" "$status" <"$check_out"
 [ "$status" -eq 0 ] || stop check-failed "the check failed (exit $status, above): $check. Nothing was pushed. Fix what it reports, commit, then re-run release.sh $tag."
 
 # ---------------------------------------------------------------------------------------

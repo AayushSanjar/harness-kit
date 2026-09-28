@@ -72,7 +72,9 @@
 # "refused-", such as refused-on-base, and a stop's is short, such as check-failed,
 # review-not-pass or ci-not-green), with its message, and each SHIPPED, is appended to the
 # local event log, .git/harness-kit/events.tsv (events.sh has the format), on the branch
-# being shipped. Outside a git repository nothing is recorded.
+# being shipped. So is the result of the check run before the review, through events.sh's
+# harness_check_event: a CHECKED line when it differs from the branch's last recorded
+# result. Outside a git repository nothing is recorded.
 #
 # RESUMABLE. Re-running after a stop continues where it stopped. Steps 1-5 are worked out
 # from git and GitHub again each time and cost nothing when already done: a recorded PASS
@@ -273,6 +275,7 @@ else
       git status --porcelain --untracked-files=all >"$saved/tree"
       { /bin/sh -c "$check" </dev/null 2>&1; echo $? >"$saved/status"; } | tee "$saved/output"
       status="$(cat "$saved/status")"
+      harness_check_event ship.sh "$branch" "$status" <"$saved/output"
       [ "$status" -eq 0 ] ||
         stop check-failed "the check failed (exit $status, above): $check. No review was started. Fix what it reports, commit, then re-run ship.sh."
     fi

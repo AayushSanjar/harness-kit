@@ -136,7 +136,7 @@ row 3 | grep -qE '^3 +reviews not PASS on the first try +1 of 2 branches; failed
 row 4 | grep -qE '^4 +branches whose first CI run was green +1 of 2 branches; 1 still running, not counted +gh run list \(read-only\): every branch but main' || ok=no
 row 5a | grep -qE '^5a +review cost and time per branch +\$0\.75 and 140s per branch \(mean of 2\); \$1\.50 in all +\.harness/reviews\.tsv: ' || ok=no
 row 5b | grep -qE '^5b +review cost per month +2026-09 \$1\.20, 2026-10 \$0\.30 ' || ok=no
-row 6 | grep -qE '^6 +land\.sh and ship\.sh stops per branch +1\.5 per branch \(mean of 2; land\.sh 1, ship\.sh 2\) +local record, this machine only: the STOPPED lines of land\.sh and ship\.sh in \.git/harness-kit/events\.tsv dated from 2026-09-10 on, over the branches with any land\.sh or ship\.sh line; 1 line' || ok=no
+row 6 | grep -qE '^6 +land\.sh and ship\.sh stops per branch +1\.5 per branch \(mean of 2; land\.sh 1, ship\.sh 2\) +local record, this machine only: the STOPPED lines of land\.sh and ship\.sh in \.git/harness-kit/events\.tsv dated from 2026-09-10 on, over the branches with any STOPPED, LANDED or SHIPPED line of land\.sh or ship\.sh; 1 line' || ok=no
 grep -qE '^  feat-a +1 +1 +1 +1 +check-failed 1, ci-not-green 1$' <<<"$OUT" || ok=no
 grep -qE '^  feat-b +0 +1 +0 +1 +refused-uncommitted 1$' <<<"$OUT" || ok=no
 ! grep -qE '^  old ' <<<"$OUT" || ok=no
@@ -300,6 +300,26 @@ if [ "$count" = 6 ]; then
   result "harness-metrics: the header has a Misleading sentence for each of the six numbers" yes ""
 else
   result "harness-metrics: the header has a Misleading sentence for each of the six numbers" no "found $count"
+fi
+
+# 16. CHECKED lines (a check result, recorded when it changed) count towards no number: the
+# same records as case 1 plus CHECKED lines of land.sh, ship.sh, release.sh and the Stop
+# hook, one for a branch (feat-z) with no other line, give the same numbers 2 and 6.
+new_repo checked
+fill checked
+printf '%s\t%s\t%s\th\tCHECKED\t%s\t%s\n' \
+  2026-09-12T08:00:00Z land.sh feat-a FAIL "exit 1: unit" \
+  2026-09-12T08:30:00Z ship.sh feat-a PASS - \
+  2026-09-14T08:00:00Z stop-gate.mjs feat-z FAIL "exit 1: lint" \
+  2026-09-14T09:00:00Z land.sh feat-z PASS - \
+  2026-09-15T08:00:00Z release.sh feat-y PASS - >>"$WORK/checked/.git/harness-kit/events.tsv"
+run checked
+if [ "$STATUS" -eq 0 ] &&
+  row 6 | grep -qE '^6 +land\.sh and ship\.sh stops per branch +1\.5 per branch \(mean of 2; land\.sh 1, ship\.sh 2\) ' &&
+  row 2 | grep -qE '^2 +planted faults caught +2 of 3 caught \(1 SURVIVED\) ' && ! grep -qE '^  feat-[yz] ' <<<"$OUT"; then
+  result "harness-metrics: CHECKED lines change no number" yes ""
+else
+  result "harness-metrics: CHECKED lines change no number" no "$(describe)"
 fi
 
 [ "$failures" -eq 0 ]

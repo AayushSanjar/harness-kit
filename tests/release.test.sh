@@ -97,7 +97,8 @@ remote() { git --git-dir="$1.git" rev-parse -q --verify "$2" 2>/dev/null; }
 
 # 1. Green: the check runs once, the branch is pushed, CI is waited for, main is
 # fast-forwarded and pushed with the tag (at the branch's head) through the pre-push hook,
-# and the person ends on main. On macOS a notification says RELEASED; the event log has it.
+# and the person ends on main. On macOS a notification says RELEASED; the event log has it,
+# after the check's result (CHECKED PASS).
 # In the same repository, with the same hook, a plain git push to main is refused.
 dir="$(new_repo green)"
 (cd "$dir" && bash "$SCRIPTS/install-hooks.sh" 2>/dev/null)
@@ -108,7 +109,7 @@ if [ "$STATUS" -eq 0 ] && grep -q 'RELEASED: next' <<<"$ERR" && [ "$(wc -l <"$di
   [ "$(remote "$dir" 'refs/tags/v1.2.3^{commit}')" = "$head" ] && [ "$(rev "$dir" main)" = "$head" ] &&
   [ "$(git -C "$dir" symbolic-ref --short HEAD)" = main ] && grep -q "run list --commit $head" "$dir.log/gh-calls" &&
   grep -q 'harness-kit release.sh RELEASED: v1.2.3' "$dir.log/osascript-calls" &&
-  [ "$(cut -f2,3,5,6 "$dir/.git/harness-kit/events.tsv")" = "$(printf 'release.sh\tnext\tRELEASED\tv1.2.3')" ]; then
+  [ "$(cut -f2,3,5,6 "$dir/.git/harness-kit/events.tsv")" = "$(printf 'release.sh\tnext\tCHECKED\tPASS\nrelease.sh\tnext\tRELEASED\tv1.2.3')" ]; then
   released=yes
 else
   released="$(describe)"
@@ -125,7 +126,8 @@ else
 plain push of main ($plain_status): $plain"
 fi
 
-# 2. A failing check: stops before pushing anything; nothing on the remote moves.
+# 2. A failing check: stops before pushing anything; nothing on the remote moves. The event
+# log has the check's result (CHECKED FAIL, naming the fake check's FAIL line), then the stop.
 dir="$(new_repo red-check)"
 touch "$dir.log/red"
 main_before="$(rev "$dir" main)"
@@ -133,7 +135,9 @@ FAKE_UNAME=Darwin run_release "$dir" success v1.2.3
 if [ "$STATUS" -eq 1 ] && grep -q 'STOPPED: the check failed (exit 1, above): sh scripts/check.sh --skip-reviewed. Nothing was pushed.' <<<"$ERR" &&
   grep -q '^FAIL unit: 1 failed' <<<"$ERR" && [ -z "$(remote "$dir" refs/heads/next)" ] && [ ! -e "$dir.log/gh-calls" ] &&
   [ "$(remote "$dir" refs/heads/main)" = "$main_before" ] && [ -z "$(rev "$dir" refs/tags/v1.2.3)" ] &&
-  grep -q 'STOPPED: the check failed' "$dir.log/osascript-calls"; then
+  grep -q 'STOPPED: the check failed' "$dir.log/osascript-calls" &&
+  [ "$(cut -f2,3,5-7 "$dir/.git/harness-kit/events.tsv" | sed -n 1p)" = "$(printf 'release.sh\tnext\tCHECKED\tFAIL\texit 1: unit: 1 failed')" ] &&
+  [ "$(cut -f5,6 "$dir/.git/harness-kit/events.tsv" | sed -n 2p)" = "$(printf 'STOPPED\tcheck-failed')" ]; then
   result "release.sh: a failing check stops it before any push" yes ""
 else
   result "release.sh: a failing check stops it before any push" no "$(describe)"

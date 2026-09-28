@@ -45,10 +45,10 @@ out="$(claude plugin validate "$PLUGIN" --strict 2>&1)"
 check "claude plugin validate --strict (plugin: plugins/harness-kit)" "$out" $?
 
 # (b) The SessionStart script prints exactly the expected line and exits 0. It runs in an
-# empty folder outside any git repository, so there is no report line and no .reports/
-# folder is made here, and without HARNESS_KIT_EVAL, so there is no warning (tests/ship.test.sh
+# empty folder outside any git repository, so there is no report line, no start-up picture
+# and no .reports/ folder is made here, and without HARNESS_KIT_EVAL, so there is no warning (tests/ship.test.sh
 # covers both).
-expected="harness-kit 0.14.0 loaded"
+expected="harness-kit 0.15.0 loaded"
 empty="$(mktemp -d)"
 out="$(cd "$empty" && env -u HARNESS_KIT_EVAL -u CLAUDE_PROJECT_DIR GIT_CEILING_DIRECTORIES="$(dirname "$empty")" \
   node "$PLUGIN/scripts/session-start.mjs" </dev/null 2>&1)"
@@ -177,6 +177,11 @@ check "tests/git-guard.test.sh (all cases)" "" $?
 # in scratch copies (calls are given to the hooks, never run), one per line.
 bash "$ROOT/tests/brief-guard.test.sh"
 check "tests/brief-guard.test.sh (all cases)" "" $?
+
+# (x) The SessionStart hook's start-up picture (start-picture.mjs), with fake sources in
+# temporary repositories, one per line.
+bash "$ROOT/tests/session-start.test.sh"
+check "tests/session-start.test.sh (all cases)" "" $?
 
 # (r) The record-defect and plan skills are started only by the person: their frontmatter
 # turns off model invocation.

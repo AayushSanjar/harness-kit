@@ -30,7 +30,9 @@
 # patch-does-not-apply, temp-file, apply-failed, approval-failed, check-failed,
 # mutations-unusable, replay-failed) and its message, and each LANDED, is appended to the
 # local event log, .git/harness-kit/events.tsv (events.sh has the format). Usage errors
-# (exit 2) are not recorded.
+# (exit 2) are not recorded. The check's result in step 4 (its output, stdout and stderr
+# together, is shown and saved) goes to events.sh's harness_check_event, which appends a
+# CHECKED line when it differs from the branch's last recorded result.
 #
 # WHICH REPLAYS (step 5). The files the patch changes (git apply --numstat, before it is
 # applied, plus the old name of each renamed file) are compared with .harness/check-files,
@@ -98,7 +100,8 @@ fi
 # from the patch's own "rename from" lines.
 changed="$(mktemp "${TMPDIR:-/tmp}/harness-kit-land.XXXXXX")" || { stopped temp-file "cannot make a temporary file. Nothing was changed."; exit 1; }
 before="$changed.mutations-before"
-trap 'rm -f "$changed" "$before"' EXIT
+check_out="$changed.check-output"
+trap 'rm -f "$changed" "$before" "$check_out" "$check_out.status"' EXIT
 { git apply --numstat -z "$patch" | tr '\0' '\n' | cut -f3-; sed -n 's/^rename from //p' "$patch"; } >"$changed"
 # .harness/mutations.tsv before the patch, so step 5 can tell which entries it adds or changes.
 : >"$before"
@@ -123,8 +126,9 @@ fi
 
 # 4. The check, with --skip-reviewed (step 0).
 say "running the check: $check"
-/bin/sh -c "$check" </dev/null
-status=$?
+{ /bin/sh -c "$check" </dev/null 2>&1; echo $? >"$check_out.status"; } | tee "$check_out"
+status="$(cat "$check_out.status")"
+harness_check_event land.sh "" "$status" <"$check_out"
 if [ "$status" -ne 0 ]; then
   stopped check-failed "the check failed (exit $status): $check. The patch IS applied and nothing was committed."
   say "Next: fix what the check reports and run it again, or: git apply -R '$patch'"

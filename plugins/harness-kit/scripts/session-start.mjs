@@ -42,11 +42,20 @@
 // and updates each or lists it in the report, so a change does not leave its descriptions
 // saying the old thing.
 //
+// THE START-UP PICTURE. After those lines, in a git repository, come the lines of
+// start-picture.mjs (its header says what each holds and where it comes from): the branch
+// and its brief with the goal, the last check result from the local event log with the
+// failing checks, the branch's last review verdict from .harness/reviews.tsv, the
+// uncommitted changes, and the first lines of the project's state file (.harness/state-file,
+// default docs/STATE.md). At most 15 lines, none longer than 200 characters; a missing source
+// is shown as "none" with the reason. Outside a git repository there is no picture.
+//
 // THE REVIEWER. review.sh and eval-reviewer.sh start the reviewer with `claude --agent
 // harness-kit:reviewer`, and SessionStart input carries `agent_type`, "present when you
 // start Claude Code with claude --agent <name>". For that session this hook prints only
-// the version line: the read-only reviewer writes no report, an evaluation's worktree gets
-// no .reports/ folder, and HARNESS_KIT_EVAL is expected there, so there is no warning.
+// the version line (no start-up picture either): the read-only reviewer writes no report,
+// an evaluation's worktree gets no .reports/ folder, and HARNESS_KIT_EVAL is expected
+// there, so there is no warning.
 //
 // THE WARNING. The Stop hook (stop-gate.mjs) is off whenever HARNESS_KIT_EVAL is set to
 // anything non-empty, and "A hook process inherits the parent environment". Set in a
@@ -55,6 +64,7 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { startPicture } from "./start-picture.mjs";
 
 const REVIEWER = "harness-kit:reviewer";
 const EVAL_WARNING =
@@ -137,6 +147,7 @@ if (input.agent_type !== REVIEWER) {
     }
     lines.push(BLAST_RADIUS);
   }
+  lines.push(...startPicture(projectDir));
   if (process.env.HARNESS_KIT_EVAL) {
     lines.push(EVAL_WARNING);
     process.stdout.write(

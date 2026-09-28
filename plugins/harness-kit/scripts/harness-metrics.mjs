@@ -18,8 +18,10 @@
 // never 0: 0 means the source exists and holds nothing for the period. Nothing is estimated.
 //
 // THE EVENT LOG (numbers 2 and 6) is <git common dir>/harness-kit/events.tsv, written by
-// land.sh, ship.sh and replay-faults.sh (events.sh has the format). It is inside .git, so
-// it is never committed: it covers this machine only, from when it was first written.
+// land.sh, ship.sh, release.sh, replay-faults.sh and stop-gate.mjs (events.sh has the
+// format). It is inside .git, so it is never committed: it covers this machine only, from
+// when it was first written. Its CHECKED lines (a check result, when it changed) count
+// towards no number.
 //
 // THE NUMBERS. Files are read from the working tree (for --baseline: as they are at the tag
 // pre-harness). A line whose date is a day (defects.tsv) is in the period when its day is
@@ -56,8 +58,9 @@
 //      money but are not in reviews.tsv, so the cost is a floor; the time is the
 //      reviewer's run time, not how long the person waited.
 //   6. land.sh and ship.sh stops per branch: the STOPPED lines of land.sh and ship.sh in
-//      the local event log dated in the period, over the branches with any land.sh or
-//      ship.sh line there, with each branch's reasons. Labelled "local record, this machine
+//      the local event log dated in the period, over the branches with any STOPPED, LANDED
+//      or SHIPPED line of land.sh or ship.sh there (not their CHECKED lines), with each
+//      branch's reasons. Labelled "local record, this machine
 //      only". No log: NOT FOUND.
 //      Misleading: only this machine's runs since the log was added are there, and a run
 //      ended some other way (Ctrl-C, a crash, a usage error) leaves no line, so a branch
@@ -393,6 +396,7 @@ const stops = (when, log) => {
   const byBranch = new Map();
   for (const e of log.events) {
     if ((e.tool !== "land.sh" && e.tool !== "ship.sh") || !when.contains(e.date)) continue;
+    if (e.event !== "STOPPED" && e.event !== "LANDED" && e.event !== "SHIPPED") continue;
     const b = byBranch.get(e.branch) ?? { "land.sh": 0, "ship.sh": 0, LANDED: 0, SHIPPED: 0, why: new Map() };
     if (e.event === "STOPPED") {
       b[e.tool] += 1;
@@ -409,7 +413,7 @@ const stops = (when, log) => {
     value: n === 0 ? "0 branches" : `${((land + ship) / n).toFixed(1)} per branch (mean of ${n}; land.sh ${land}, ship.sh ${ship})`,
     source:
       `${LOCAL}: the STOPPED lines of land.sh and ship.sh in ${log.shown} dated ${when.label}, ` +
-      `over the branches with any land.sh or ship.sh line${skippedNote(log.skipped, "7-field")}`,
+      `over the branches with any STOPPED, LANDED or SHIPPED line of land.sh or ship.sh${skippedNote(log.skipped, "7-field")}`,
     details: n === 0 ? null : {
       title: "6. land.sh and ship.sh, per branch (local record, this machine only)",
       rows: [

@@ -162,6 +162,91 @@ else
   result "agent_type Explore: the same failing check still blocks" no "$(describe)"
 fi
 
+# THE EVENT LOG. Cases 9-11 run in git repositories (new_git_project), where the hook
+# records its check results in .git/harness-kit/events.tsv through events.sh.
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.invalid
+export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.invalid
+
+# new_git_project NAME CHECK_SCRIPT_BODY: new_project, as a git repository on "feat" with
+# one commit.
+new_git_project() {
+  local dir
+  dir="$(new_project "$1" "$2")"
+  git init -q -b feat "$dir"
+  git -C "$dir" add -A && git -C "$dir" commit -q -m initial
+  echo "$dir"
+}
+# set_check DIR BODY: replace DIR's check script.
+set_check() { printf '#!/bin/sh\n%s\n' "$2" >"$1/scripts/check.sh"; }
+# checked DIR: DIR's event log as "tool branch event what detail" lines.
+checked() { cut -f2,3,5- "$1/.git/harness-kit/events.tsv" 2>/dev/null; }
+
+# 9. A failing check is recorded as FAIL with its FAIL lines' names (not its PASS lines), a
+# passing one as PASS, on the branch, with HEAD.
+dir="$(new_git_project records 'echo "PASS lint"; echo "FAIL unit tests: 2 failed"; echo "  FAIL e2e (exit 1)"; exit 1')"
+run_gate "$dir" s-records false
+first="$(describe)"
+set_check "$dir" 'echo "PASS everything"; exit 0'
+run_gate "$dir" s-records true
+want="$(printf 'stop-gate.mjs\tfeat\tCHECKED\tFAIL\texit 1: unit tests: 2 failed; e2e (exit 1)\nstop-gate.mjs\tfeat\tCHECKED\tPASS\t-')"
+if [ "$(checked "$dir")" = "$want" ] && [ "$(cut -f4 "$dir/.git/harness-kit/events.tsv" | sort -u)" = "$(git -C "$dir" rev-parse HEAD)" ] &&
+  [ "$STATUS" -eq 0 ] && [ -z "$OUT" ] && [ -z "$ERR" ]; then
+  result "stop-gate: records a check in the event log: FAIL with the failing checks' names, or PASS" yes ""
+else
+  result "stop-gate: records a check in the event log: FAIL with the failing checks' names, or PASS" no "log:
+$(checked "$dir")
+first run: $first
+second run: $(describe)"
+fi
+
+# 10. Only a changed result is recorded: the same failing set again (in another order, with
+# another exit status) adds nothing; a different set, PASS after FAIL and FAIL after PASS
+# each add one; PASS again adds nothing.
+dir="$(new_git_project changes 'echo "FAIL a"; echo "FAIL b"; exit 1')"
+run_gate "$dir" s-changes false
+set_check "$dir" 'echo "FAIL b"; echo "FAIL a"; exit 2'
+run_gate "$dir" s-changes false
+set_check "$dir" 'echo "FAIL a"; exit 1'
+run_gate "$dir" s-changes false
+set_check "$dir" 'exit 0'
+run_gate "$dir" s-changes false
+run_gate "$dir" s-changes false
+set_check "$dir" 'echo "FAIL a"; exit 1'
+run_gate "$dir" s-changes false
+want="$(printf '%s\n' "FAIL	exit 1: a; b" "FAIL	exit 1: a" "PASS	-" "FAIL	exit 1: a")"
+if [ "$(checked "$dir" | cut -f4,5)" = "$want" ]; then
+  result "stop-gate: records only a changed result: the same result again adds no line; PASS after FAIL, FAIL after PASS, or a different set of failing checks adds one" yes ""
+else
+  result "stop-gate: records only a changed result: the same result again adds no line; PASS after FAIL, FAIL after PASS, or a different set of failing checks adds one" no \
+    "log:
+$(checked "$dir")"
+fi
+
+# 11. A log that cannot be written (.git/harness-kit is a file) changes nothing but a note:
+# the same block, with the same reason. With HARNESS_KIT_EVAL, or for the reviewer, the
+# gate is off and nothing is recorded.
+dir="$(new_git_project no-log 'echo "FAIL broken"; exit 1')"
+: >"$dir/.git/harness-kit"
+run_gate "$dir" s-no-log false
+reason="$(node -e 'try { console.log(JSON.parse(process.argv[1]).reason) } catch {}' "$OUT")"
+no_log="$(describe)"
+no_log_ok=no
+if [ "$STATUS" -eq 0 ] && is_block "$OUT" && grep -q '^FAIL broken$' <<<"$reason" && grep -q 'block 1 of 3' <<<"$reason" &&
+  grep -q '^harness-kit stop-gate.mjs: note: could not append to .*/no-log/.git/harness-kit/events.tsv$' <<<"$ERR"; then
+  no_log_ok=yes
+fi
+off="$(new_git_project off 'echo "FAIL broken"; exit 1')"
+HARNESS_KIT_EVAL=1 run_gate "$off" s-off false
+run_gate "$off" s-off-reviewer false harness-kit:reviewer
+if [ "$no_log_ok" = yes ] && [ ! -e "$off/.git/harness-kit/events.tsv" ]; then
+  result "stop-gate: a failed recording does not change the decision; the reviewer and HARNESS_KIT_EVAL record nothing" yes ""
+else
+  result "stop-gate: a failed recording does not change the decision; the reviewer and HARNESS_KIT_EVAL record nothing" no \
+    "unwritable log: $no_log
+off: $(checked "$off")"
+fi
+
 if [ "$failures" -ne 0 ]; then
   echo "$failures stop-gate case(s) failed"
   exit 1

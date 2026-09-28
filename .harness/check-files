@@ -18,3 +18,17 @@ review.sh: the input holds the brief and whether its approval matches	tests/revi
 ship.sh: no brief, or an approval that does not match, stops before the review with the exact fix	tests/ship.test.sh
 brief-guard: Write, Edit, MultiEdit and NotebookEdit of a *.brief.approved file in the real tree are denied	tests/brief-guard.test.sh
 git-guard: a shell command naming a *.brief.approved file in the real tree is denied	tests/brief-guard.test.sh
+start-up picture: the brief line says approved with the goal, not approved, changed since it was approved, or none	tests/session-start.test.sh
+start-up picture: the last check is this branch's latest CHECKED line, with its failing checks, or none	tests/session-start.test.sh
+start-up picture: at most 5 failing checks are named, then and N more	tests/session-start.test.sh
+start-up picture: the last review is this branch's latest line in .harness/reviews.tsv, or none	tests/session-start.test.sh
+start-up picture: uncommitted changes are counted by kind in one line, or none	tests/session-start.test.sh
+start-up picture: the state file's first 10 lines, from .harness/state-file or docs/STATE.md, or none	tests/session-start.test.sh
+start-up picture: never more than 15 lines, none longer than 200 characters, a cut line ending in …	tests/session-start.test.sh
+session-start: the reviewer's session gets the version line only (no report, no warning)	tests/ship.test.sh
+stop-gate: records a check in the event log: FAIL with the failing checks' names, or PASS	tests/stop-gate.test.sh
+stop-gate: records only a changed result: the same result again adds no line; PASS after FAIL, FAIL after PASS, or a different set of failing checks adds one	tests/stop-gate.test.sh
+land.sh: each stop, with its reason, and each LANDED is a line in .git/harness-kit/events.tsv	tests/ship.test.sh
+ship.sh: each stop, with its reason, and each SHIPPED is a line in .git/harness-kit/events.tsv	tests/ship.test.sh
+release.sh: a failing check stops it before any push	tests/release.test.sh
+harness-metrics: CHECKED lines change no number	tests/harness-metrics.test.sh
