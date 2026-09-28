@@ -16,15 +16,24 @@
 //   node replay-faults.mjs verdict CHECK LOG STATUS
 //       With the fault: prints KILLED when LOG has a FAIL line for CHECK and STATUS (the
 //       check command's exit status) is not 0; otherwise SURVIVED and why.
-//   node replay-faults.mjs select MUTATIONS CHECK_FILES CHANGED
+//   node replay-faults.mjs fragile MUTATIONS ID
+//       Exit 1, printing why (the ERROR reason, starting "fragile entry"), when the entry's
+//       text to find holds a version (v?digits.digits.digits) or a date (YYYY-MM-DD): a
+//       release or a new date changes that text, and the replay breaks for no fault of the
+//       check. Exit 0 otherwise.
+//   node replay-faults.mjs select MUTATIONS CHECK_FILES CHANGED [BEFORE]
 //       For land.sh: prints, one per line, the IDs of the entries whose own file is among
 //       the paths in CHANGED (a file of paths, one per line), or whose check has a
-//       CHECK_FILES path among them. Notes on stderr name the checks with no CHECK_FILES
-//       line. Exit 2, as list does, when MUTATIONS is unusable.
+//       CHECK_FILES path among them, or that the patch added or changed: no entry in
+//       BEFORE (MUTATIONS as it was before the patch; missing means empty) has the same id
+//       with the same fields. Notes on stderr name the checks with no CHECK_FILES line.
+//       Exit 2, as list does, when MUTATIONS is unusable.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 
 const FIELDS = ["id", "file", "find", "replacement", "check"];
+const VERSION = /v?\d+\.\d+\.\d+/;
+const DATE = /\d{4}-\d{2}-\d{2}/;
 const ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 const read = (path) => (existsSync(path) ? readFileSync(path, "utf8") : null);
@@ -125,10 +134,32 @@ if (command === "list") {
   if (failed && status !== "0") console.log("KILLED");
   else if (failed) console.log(`SURVIVED\tit printed FAIL for "${check}" but the check command exited 0, so nothing would stop`);
   else console.log(`SURVIVED\t"${check}" did not fail with the fault in place (the check command exited ${status})`);
+} else if (command === "fragile") {
+  const [path, id] = args;
+  const entry = mutations(path).entries.find((e) => e.id === id);
+  if (!entry) die(`no entry with the id "${id}" in ${path}`);
+  const found = entry.find.match(VERSION)?.[0];
+  const date = entry.find.match(DATE)?.[0];
+  if (found || date) {
+    console.log(
+      `fragile entry: its text to find holds the ${found ? `version "${found}"` : `date "${date}"`}, which the next ` +
+        `${found ? "release" : "edit"} changes, so the replay would break without any fault in the check. ` +
+        `Find text that names the code instead`,
+    );
+    process.exit(1);
+  }
 } else if (command === "select") {
-  const [path, checkFiles, changedList] = args;
+  const [path, checkFiles, changedList, beforePath] = args;
   const { entries, problems } = mutations(path);
   if (problems.length > 0) die(problems.join("\n"));
+  // The entries as they were before the patch, by id, as their fields joined; a file that
+  // was unusable before counts as far as its well-formed lines go.
+  const before = new Map(
+    rows(beforePath ? read(beforePath) : "")
+      .filter(([, fields]) => fields.length === FIELDS.length)
+      .map(([, fields]) => [fields[0], fields.join("\t")]),
+  );
+  const addedOrChanged = (e) => before.get(e.id) !== FIELDS.map((name) => e[name]).join("\t");
   const files = new Map();
   for (const [, fields] of rows(read(checkFiles))) {
     if (fields.length !== 2 || fields[0] === "" || fields[1] === "") continue;
@@ -142,11 +173,11 @@ if (command === "list") {
   for (const e of entries) {
     const mapped = files.get(e.check);
     if (!mapped) unmapped.add(e.check);
-    if (changed.includes(e.file) || (mapped ?? []).some(touches)) console.log(e.id);
+    if (changed.includes(e.file) || (mapped ?? []).some(touches) || addedOrChanged(e)) console.log(e.id);
   }
   for (const check of unmapped) {
     process.stderr.write(`note: .harness/check-files has no line for the check "${check}", so only a change to an entry's own file starts its replays\n`);
   }
 } else {
-  die("usage: replay-faults.mjs list|apply|baseline|verdict|select ...");
+  die("usage: replay-faults.mjs list|apply|fragile|baseline|verdict|select ...");
 }

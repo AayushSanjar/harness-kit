@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Tests for check-commits.mjs: protected files need a reason in a commit body, and numbers
-# in a commit body need the diff or a "Told:" line.
+# Tests for check-commits.mjs: protected files need a reason in a commit body, numbers in
+# a commit body need the diff or a "Told:" line (which continues onto the lines after it),
+# replay snapshot commits are exempt in a replay (HARNESS_KIT_REPLAY=1) only, and commit
+# references (7 or more digits) and "v" versions are not unsourced numbers.
 #
 # Every case runs in a temporary git repository with main and a branch "feature". Prints
 # one PASS or FAIL line per case and exits non-zero if any fail.
@@ -15,6 +17,7 @@ failures=0
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.invalid
 export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.invalid
+unset HARNESS_KIT_REPLAY
 
 result() {
   local label="$1" ok="$2" detail="$3"
@@ -196,6 +199,83 @@ if [ "$STATUS" -eq 0 ] && grep -q '^PASS check-commits: 1 commit(s) from .* (mer
   result "check-commits: only the commits since the merge-base with .harness/review-base are checked" yes ""
 else
   result "check-commits: only the commits since the merge-base with .harness/review-base are checked" no "$(describe)"
+fi
+
+# 8. A "Told:" line continues onto the lines after it until a blank line or another
+# "Word:" line: a number on a continuation line is sourced, and sources others; one after a
+# "Breaks:" line or a blank line is not.
+dir="$(new_repo told-continues)"
+printf 'hello\nretries = 7\n' >"$dir/app.txt"
+commit "$dir" $'Retry more\n\nRetries are 7 now; 14 runs failed before, the last on 27 Sep.\n- Told: 14 runs failed before the change,\n  counted in the CI history of 27 Sep.\nBreaks: fails below 99 retries.\n\nAlso 55 more.'
+run "$dir"
+if [ "$STATUS" -eq 1 ] && grep -q '^FAIL check-commits: 2 finding(s)' <<<"$OUT" &&
+  grep -qF 'the number 99 is in the body' <<<"$OUT" && grep -qF 'the number 55 is in the body' <<<"$OUT" &&
+  ! grep -qF 'the number 27 ' <<<"$OUT" && ! grep -qF 'the number 14 ' <<<"$OUT"; then
+  result "check-commits: a Told: line continues until a blank line or another Word: line" yes ""
+else
+  result "check-commits: a Told: line continues until a blank line or another Word: line" no "$(describe)"
+fi
+
+# 9. A replay snapshot (a commit whose message starts "harness-kit replay-faults:", as
+# replay-faults.sh makes) at the tip is exempt only in a replay, with HARNESS_KIT_REPLAY=1
+# (which replay-faults.sh sets): its message is not checked and what it changes needs no
+# reason, so the branch passes as it was before it. Without HARNESS_KIT_REPLAY=1 (a real
+# branch, CI), the same commit is checked like any other and fails.
+dir="$(new_repo snapshot)"
+git -C "$dir" commit -q --allow-empty -m $'Notes\n\nNothing protected changed.'
+printf 'echo "check: 2 passed"\n' >"$dir/scripts/check.sh"
+git -C "$dir" add -A
+git -C "$dir" commit -q -m $'harness-kit replay-faults: the working tree\n\n42 things.'
+HARNESS_KIT_REPLAY=1 run "$dir"
+replay="$(describe)"
+replay_ok=no
+[ "$STATUS" -eq 0 ] && grep -q '^PASS check-commits: 1 commit(s) .* (1 replay snapshot commit(s) skipped)' <<<"$OUT" && replay_ok=yes
+run "$dir"
+if [ "$replay_ok" = yes ] && [ "$STATUS" -eq 1 ] && grep -q '^FAIL check-commits: 2 finding(s) in the 2 commit(s)' <<<"$OUT" &&
+  grep -qF '(a) scripts/check.sh is protected' <<<"$OUT" && grep -qF 'the number 42 is in the body' <<<"$OUT"; then
+  result "check-commits: a replay-faults snapshot commit is exempt only with HARNESS_KIT_REPLAY=1" yes ""
+else
+  result "check-commits: a replay-faults snapshot commit is exempt only with HARNESS_KIT_REPLAY=1" no "with HARNESS_KIT_REPLAY=1: $replay
+without: $(describe)"
+fi
+
+# 10. A run of 7 or more digits that git resolves to a commit is a reference, not a number:
+# a commit whose short hash is all digits is made (new messages until one is), then named
+# in a body. Its first 6 digits, which git also resolves to it, are still a number.
+dir="$(new_repo digit-hash)"
+i=0
+digits=""
+while [ "$i" -lt 2000 ]; do
+  h="$(git -C "$dir" commit-tree "HEAD^{tree}" -p HEAD -m "Try $i" </dev/null)"
+  case "${h:0:7}" in *[!0-9]*) ;; *) digits="${h:0:7}"; break ;; esac
+  i=$((i + 1))
+done
+git -C "$dir" update-ref HEAD "$h"
+short="${digits:0:6}"
+git -C "$dir" commit -q --allow-empty -m "Revert" -m "Reverts $digits; 9999999 is not a commit; $short is too short."
+resolves=no
+git -C "$dir" rev-parse -q --verify "$short^{commit}" >/dev/null && resolves=yes
+run "$dir"
+if [ -n "$digits" ] && [ "$resolves" = yes ] && [ "$STATUS" -eq 1 ] && grep -q '^FAIL check-commits: 2 finding(s)' <<<"$OUT" &&
+  grep -qF 'the number 9999999 is in the body' <<<"$OUT" && grep -qF "the number $short is in the body" <<<"$OUT" &&
+  ! grep -qF "the number $digits " <<<"$OUT"; then
+  result "check-commits: 7 or more digits that git resolves to a commit are a reference; fewer are a number" yes ""
+else
+  result "check-commits: 7 or more digits that git resolves to a commit are a reference; fewer are a number" no "digit-only hash: ${digits:-none found}; git resolves $short: $resolves
+$(describe)"
+fi
+
+# 11. A version matches with or without a leading "v": 0.9.0 in a body is sourced by v0.9.0
+# in the diff, and 1.2.3 by v1.2.3 on a Told: line; 0.7.0 has no source.
+dir="$(new_repo versions)"
+printf 'hello\nref: v0.9.0\n' >"$dir/app.txt"
+commit "$dir" $'Pin\n\nPins 0.9.0, after 1.2.3 upstream; 0.7.0 was the last.\nTold: v1.2.3, from the release page.'
+run "$dir"
+if [ "$STATUS" -eq 1 ] && grep -q '^FAIL check-commits: 1 finding(s)' <<<"$OUT" &&
+  grep -qF 'the number 0.7.0 is in the body' <<<"$OUT"; then
+  result "check-commits: a version matches with or without a leading v" yes ""
+else
+  result "check-commits: a version matches with or without a leading v" no "$(describe)"
 fi
 
 if [ "$failures" -ne 0 ]; then

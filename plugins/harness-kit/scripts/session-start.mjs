@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // SessionStart hook: announce the plugin and its version, tell Claude where its final
-// report and its commit message draft go, remove stale ones, and warn the person when the
-// Stop hook is off.
+// report and its commit message draft go (and to update or list everything that describes
+// behaviour it changed), remove stale ones, and warn the person when the Stop hook is off.
 // The version is read from plugin.json so the two can never disagree.
 //
 // What reaches whom (code.claude.com/docs/en/hooks):
@@ -25,6 +25,11 @@
 // person commits with `git commit -F .reports/latest.commit.txt` instead of writing the
 // message by hand.
 //
+// THE BLAST-RADIUS LINE. After the report and commit draft lines comes one more: before finishing, Claude
+// searches for every file, comment, test and document that describes behaviour it changed,
+// and updates each or lists it in the report, so a change does not leave its descriptions
+// saying the old thing.
+//
 // THE REVIEWER. review.sh and eval-reviewer.sh start the reviewer with `claude --agent
 // harness-kit:reviewer`, and SessionStart input carries `agent_type`, "present when you
 // start Claude Code with claude --agent <name>". For that session this hook prints only
@@ -43,6 +48,9 @@ const REVIEWER = "harness-kit:reviewer";
 const EVAL_WARNING =
   "harness-kit WARNING: HARNESS_KIT_EVAL is set in this session, so the Stop hook is OFF: " +
   "Claude can finish while the project's checks fail. Unset HARNESS_KIT_EVAL and start a new session.";
+const BLAST_RADIUS =
+  "harness-kit: before finishing, search for every file, comment, test and document that describes behaviour you changed, " +
+  "and update each or list it in the report.";
 // The report's Summary template: each heading with what goes under it, in this order.
 const SUMMARY_HEADINGS = [
   `"Result:" one line.`,
@@ -107,6 +115,7 @@ if (input.agent_type !== REVIEWER) {
           ` Never commit the draft itself; the person commits with it.`,
       );
     }
+    lines.push(BLAST_RADIUS);
   }
   if (process.env.HARNESS_KIT_EVAL) {
     lines.push(EVAL_WARNING);

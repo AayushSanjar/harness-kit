@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Tests for upgrade.sh: move a consumer project's harness-kit pin, re-add the marketplace,
-# update the plugin, confirm the loaded version, then run the project's approval.
+# update the plugin, confirm the loaded version, install the pre-push hook, then run the
+# project's approval.
 #
 # Every case runs in a temporary git repository, with a FAKE `claude` first on PATH. It
 # appends each call to $FAKE_LOG/claude-calls and answers:
@@ -126,8 +127,8 @@ ref_of() { node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8
 
 # 1. Success: the pin moves (and nothing else in settings.json), the marketplace is re-added
 # at the tag and the plugin updated, in that order; the session is stopped as soon as its
-# init event is read (well before the fake's 30 s); the approval runs with the person's
-# answer.
+# init event is read (well before the fake's 30 s); install-hooks.sh installs the pre-push
+# hook; the approval runs with the person's answer.
 dir="$(new_project ok)"
 run_upgrade "$dir" y 0.9.0
 calls="$(cat "$dir.log/claude-calls" 2>/dev/null)"
@@ -138,12 +139,13 @@ if [ "$STATUS" -eq 0 ] && [ "$(ref_of "$dir")" = v0.9.0 ] &&
   [ "$(sed -n 2p <<<"$calls")" = "plugin update harness-kit@harness-kit --scope project" ] &&
   grep -q '^-p .*--output-format stream-json --verbose' <<<"$(sed -n 3p <<<"$calls")" &&
   [ "$(wc -l <<<"$calls" | tr -d ' ')" = 3 ] && [ "$SECONDS_TAKEN" -lt 15 ] &&
-  grep -q '4/5 a new session loads harness-kit@harness-kit 0.9.0' <<<"$ERR" &&
+  grep -q '4/6 a new session loads harness-kit@harness-kit 0.9.0' <<<"$ERR" &&
+  grep -q '5/6 installed the pre-push hook' <<<"$ERR" && grep -q '^# harness-kit pre-push hook' "$dir/.git/hooks/pre-push" &&
   [ "$(cat "$dir.log/approved" 2>/dev/null)" = y ] && grep -q 'UPGRADED' <<<"$ERR" &&
   [ -z "$(git -C "$dir" log --oneline -1 --skip 1)" ]; then
-  result "upgrade.sh: pins the tag, re-adds the marketplace, updates, confirms the loaded version, then approves" yes ""
+  result "upgrade.sh: pins the tag, re-adds the marketplace, updates, confirms the loaded version, installs the hook, then approves" yes ""
 else
-  result "upgrade.sh: pins the tag, re-adds the marketplace, updates, confirms the loaded version, then approves" no \
+  result "upgrade.sh: pins the tag, re-adds the marketplace, updates, confirms the loaded version, installs the hook, then approves" no \
     "$(describe)
 settings.json diff: $changed"
 fi
@@ -240,6 +242,21 @@ if grep -q '^2: .*"latest" is not a version like 0.9.0' <<<"$bad_version" &&
 else
   result "upgrade.sh: a bad version or a missing pin changes nothing and calls no claude" no "bad version: $bad_version
 no pin: $(describe)"
+fi
+
+# 10. A pre-push hook harness-kit did not write: install-hooks.sh leaves it as it is, and
+# upgrade.sh stops before the approval, saying what changed so far.
+dir="$(new_project foreign-hook)"
+printf '#!/bin/sh
+echo mine
+' >"$dir/.git/hooks/pre-push"
+run_upgrade "$dir" y 0.9.0
+if [ "$STATUS" -eq 1 ] && grep -q 'exists and harness-kit did not write it' <<<"$ERR" &&
+  grep -q 'STOPPED: install-hooks.sh did not install the pre-push hook' <<<"$ERR" &&
+  [ "$(sed -n 2p "$dir/.git/hooks/pre-push")" = "echo mine" ] && [ ! -e "$dir.log/approved" ]; then
+  result "upgrade.sh: a pre-push hook it did not write stops it before the approval, untouched" yes ""
+else
+  result "upgrade.sh: a pre-push hook it did not write stops it before the approval, untouched" no "$(describe)"
 fi
 
 if [ "$failures" -ne 0 ]; then

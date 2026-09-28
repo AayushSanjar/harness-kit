@@ -251,6 +251,34 @@ stderr: $over_err
 with the limit raised: $(describe)"
 fi
 
+# 6d. A check run ship.sh saved (HARNESS_KIT_CHECK_SAVED) is reused, and the input says so,
+# only when its command, HEAD and working tree are this run's; otherwise the check runs.
+dir="$(new_repo saved-check)"
+saved="$WORK/saved-check.saved"
+mkdir -p "$saved"
+printf 'echo "check: 3 passed, 0 failed"\n' >"$saved/command"
+git -C "$dir" rev-parse HEAD >"$saved/head"
+git -C "$dir" status --porcelain --untracked-files=all >"$saved/tree"
+printf '0\n' >"$saved/status"
+printf 'SAVED OUTPUT\n' >"$saved/output"
+HARNESS_KIT_CHECK_SAVED="$saved" run_review "$dir" "$PASS_JSON"
+reused="$(sed -n '/^=== CHECK COMMAND ===$/,/^=== GIT LOG ===$/p' "$dir.log/stdin" 2>/dev/null)"
+reused_err="$ERR"
+rm -f "$dir/.harness/reviews.tsv"
+git -C "$dir" rev-parse HEAD~1 >"$saved/head"
+HARNESS_KIT_CHECK_SAVED="$saved" run_review "$dir" "$PASS_JSON"
+stale="$(sed -n '/^=== CHECK COMMAND ===$/,/^=== GIT LOG ===$/p' "$dir.log/stdin" 2>/dev/null)"
+if grep -q '^reused: ship.sh ran this command' <<<"$reused" && grep -qx 'SAVED OUTPUT' <<<"$reused" &&
+  ! grep -qx 'check: 3 passed, 0 failed' <<<"$reused" && grep -q 'reusing the check output' <<<"$reused_err" &&
+  [ "$STATUS" -eq 0 ] && ! grep -q '^reused:' <<<"$stale" && grep -qx 'check: 3 passed, 0 failed' <<<"$stale"; then
+  result "review.sh: reuses ship.sh's saved check output only for the same command, HEAD and tree" yes ""
+else
+  result "review.sh: reuses ship.sh's saved check output only for the same command, HEAD and tree" no "matching: $reused
+$reused_err
+stale head: $(describe)
+$stale"
+fi
+
 # ---------------------------------------------------------------------------------------
 # check-reviewed.mjs
 # ---------------------------------------------------------------------------------------

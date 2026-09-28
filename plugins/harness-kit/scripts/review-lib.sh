@@ -71,24 +71,48 @@ review_check_reads() {
 # review_check_section H WORK: runs the project's check command from the current folder and
 # prints the body of the CHECK COMMAND section: the command, its exit status and its output.
 review_check_section() {
-  local h="$1" work="$2" check="" check_status total
+  local h="$1" work="$2" check="" check_status
   [ -f "$h/check-command" ] && check="$(head -n 1 "$h/check-command" | tr -d '\r')"
   if [ -z "$check" ]; then
     echo "none: the project has no .harness/check-command, so no check was run"
     return 0
   fi
-  echo "command: $check"
   echo "Running the check command..." >&2
   /bin/sh -c 'exec 2>&1; eval "$1"' harness-kit-review "$check" </dev/null >"$work/check.out"
   check_status=$?
-  total="$(wc -l <"$work/check.out" | tr -d ' ')"
-  echo "exit status: $check_status"
+  review_format_check "$check" "$check_status" "$work/check.out"
+}
+
+# review_saved_check H SAVED: prints the body of the CHECK COMMAND section from the check
+# run ship.sh saved in the folder SAVED (files command, status, head, tree and output, as
+# ship.sh writes them) and returns 0, when that run is this one's: the same first line of
+# H/check-command, the same HEAD, and the same `git status --porcelain` (untracked files
+# included). Otherwise it prints nothing and returns 1, and the caller runs the check.
+review_saved_check() {
+  local h="$1" saved="$2" check="" f
+  [ -n "$saved" ] || return 1
+  for f in command status head tree output; do [ -f "$saved/$f" ] || return 1; done
+  [ -f "$h/check-command" ] && check="$(head -n 1 "$h/check-command" | tr -d '\r')"
+  [ -n "$check" ] && [ "$check" = "$(cat "$saved/command")" ] || return 1
+  [ "$(git rev-parse -q --verify HEAD)" = "$(cat "$saved/head")" ] || return 1
+  [ "$(git status --porcelain --untracked-files=all)" = "$(cat "$saved/tree")" ] || return 1
+  review_format_check "$check" "$(cat "$saved/status")" "$saved/output" \
+    "reused: ship.sh ran this command just before starting the review, at this head and working tree; this is that run's output (the check was not run again)"
+}
+
+# review_format_check COMMAND STATUS OUTPUT [NOTE]: the CHECK COMMAND section's body.
+review_format_check() {
+  local total
+  echo "command: $1"
+  [ -z "${4:-}" ] || echo "$4"
+  echo "exit status: $2"
+  total="$(wc -l <"$3" | tr -d ' ')"
   if [ "$total" -gt "$REVIEW_MAX_CHECK_LINES" ]; then
     echo "output (last $REVIEW_MAX_CHECK_LINES of $total lines; $((total - REVIEW_MAX_CHECK_LINES)) earlier lines omitted):"
-    tail -n "$REVIEW_MAX_CHECK_LINES" "$work/check.out"
+    tail -n "$REVIEW_MAX_CHECK_LINES" "$3"
   else
     echo "output:"
-    cat "$work/check.out"
+    cat "$3"
   fi
 }
 

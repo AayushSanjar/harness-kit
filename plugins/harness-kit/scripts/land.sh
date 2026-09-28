@@ -19,10 +19,11 @@
 #                                   the person, so it keeps the terminal's input.
 #   4. .harness/check-command       the first line, as it is, run in the project.
 #   5. Fault replays                optional; when .harness/mutations.tsv has entries that
-#                                   the patch may have broken, replay-faults.sh
-#                                   runs those entries (and only those) on the patched
-#                                   working tree; a SURVIVED or ERROR stops here.
-#                                   Otherwise it prints "no replays needed".
+#                                   the patch may have broken, or that the patch adds or
+#                                   changes, replay-faults.sh runs those entries (and
+#                                   only those) on the patched working tree; a SURVIVED
+#                                   or ERROR stops here. Otherwise it prints "no
+#                                   replays needed".
 # It never commits and never pushes; on success it prints what to do next.
 #
 # THE EVENT LOG. Each STOPPED, with a short reason (no-check-command, no-skip-reviewed,
@@ -40,8 +41,9 @@
 # have changed), or a path check-files lists for its check (the name in its last field:
 # the check that must catch it, which the patch may have weakened). A check with no
 # check-files line starts a replay only through its entries' own files; land.sh names it
-# in a note. Replays run the whole check once per entry plus once without a fault,
-# locally, never in CI (replay-faults.sh).
+# in a note. An entry the patch adds to .harness/mutations.tsv, or changes (any field, id
+# kept), is replayed too: a new or edited entry is proved before it lands. Replays run the
+# check once per entry plus once without a fault, locally, never in CI (replay-faults.sh).
 #
 # Exit status: 0 landed and checked; 1 stopped (the message says whether the patch is
 # applied); 2 usage.
@@ -95,8 +97,12 @@ fi
 # The paths the patch changes, for step 5: new names from --numstat, old names of renames
 # from the patch's own "rename from" lines.
 changed="$(mktemp "${TMPDIR:-/tmp}/harness-kit-land.XXXXXX")" || { stopped temp-file "cannot make a temporary file. Nothing was changed."; exit 1; }
-trap 'rm -f "$changed"' EXIT
+before="$changed.mutations-before"
+trap 'rm -f "$changed" "$before"' EXIT
 { git apply --numstat -z "$patch" | tr '\0' '\n' | cut -f3-; sed -n 's/^rename from //p' "$patch"; } >"$changed"
+# .harness/mutations.tsv before the patch, so step 5 can tell which entries it adds or changes.
+: >"$before"
+[ ! -f "$H/mutations.tsv" ] || cp "$H/mutations.tsv" "$before" || { stopped temp-file "cannot copy .harness/mutations.tsv. Nothing was changed."; exit 1; }
 if ! git apply "$patch"; then
   stopped apply-failed "git apply failed after --check passed. Look at 'git status' before doing anything else."
   exit 1
@@ -129,15 +135,15 @@ fi
 if [ ! -f "$H/mutations.tsv" ]; then
   say "no replays needed: there is no .harness/mutations.tsv"
 else
-  ids="$(node "$HERE/replay-faults.mjs" select "$H/mutations.tsv" "$H/check-files" "$changed")" || {
+  ids="$(node "$HERE/replay-faults.mjs" select "$H/mutations.tsv" "$H/check-files" "$changed" "$before")" || {
     stopped mutations-unusable ".harness/mutations.tsv is unusable (above), so land.sh cannot tell which faults to replay. The patch IS applied and nothing was committed."
     say "Next: fix .harness/mutations.tsv, then run replay-faults.sh, or: git apply -R '$patch'"
     exit 1
   }
   if [ -z "$ids" ]; then
-    say "no replays needed: the patch changes no entry's file in .harness/mutations.tsv, and no file that .harness/check-files lists for their checks"
+    say "no replays needed: the patch changes no entry's file in .harness/mutations.tsv, no file that .harness/check-files lists for their checks, and no entry"
   else
-    say "the patch changes a replayed fault's file or its check's files, so replaying: $(tr '\n' ' ' <<<"$ids")"
+    say "the patch changes a replayed fault's file, its check's files or its entry, so replaying: $(tr '\n' ' ' <<<"$ids")"
     # shellcheck disable=SC2086 # the ids are words: letters, digits, ".", "_" and "-"
     bash "$HERE/replay-faults.sh" $ids </dev/null
     status=$?

@@ -14,8 +14,11 @@
 #      --skip-reviewed as a word, as land.sh requires (the branch is not reviewed yet, so the
 #      review check would fail); ship.sh never adds it. A missing flag or a failing check
 #      stops here, before any review is started (a review costs money). With no
-#      check-command there is nothing to run, as in review.sh. Then run review.sh; a verdict
-#      other than PASS stops here, and the verdict is shown.
+#      check-command there is nothing to run, as in review.sh. The check's output (stdout
+#      and stderr together) is shown and saved, with the command, HEAD and working tree it
+#      ran on, and review.sh reuses it (HARNESS_KIT_CHECK_SAVED) instead of running the
+#      check again. Then run review.sh; a verdict other than PASS stops here, and the
+#      verdict is shown.
 #   3. If .harness/reviews.tsv changed, commit it alone: "Record review of <branch>: PASS".
 #      Then check-reviewed.mjs must pass at HEAD.
 #   4. Push the branch to origin.
@@ -29,9 +32,15 @@
 #        - without it: every run listed for the commit when the first one appears. A
 #          workflow that starts later than that is not waited for.
 #   6. Check that the base can fast-forward (origin/<base> and <base> are both in the
-#      branch), switch to the base, `git merge --ff-only <branch>`, push the base, and
-#      delete the branch's report and commit draft (.reports/, report-path.sh --name).
+#      branch), switch to the base, `git merge --ff-only <branch>`, push the base with
+#      HARNESS_KIT_SHIP=1 set (the pre-push hook from install-hooks.sh refuses any other
+#      push to the base), and delete the branch's report and commit draft (.reports/,
+#      report-path.sh --name).
 # It never forces a push, never rewrites history, and never deletes the branch.
+#
+# THE NOTIFICATION. On macOS, each STOPPED and the SHIPPED also show a notification
+# (osascript `display notification`), as a ship waits minutes for CI. Refusals come at once,
+# so they do not. Not on macOS (uname -s is not Darwin), nothing is shown.
 #
 # THE EVENT LOG. Each stop and each refusal (event STOPPED; a refusal's reason starts
 # "refused-", such as refused-on-base, and a stop's is short, such as check-failed,
@@ -59,10 +68,17 @@ POLL="${SHIP_POLL_SECONDS:-10}"
 . "$HERE/events.sh"
 
 say() { echo "harness-kit ship.sh: $*" >&2; }
+# notify MESSAGE: a macOS notification (osascript), so a person who looked away while CI ran
+# sees the end. Skipped when not on macOS; a failure is ignored.
+notify() {
+  [ "$(uname -s 2>/dev/null)" = Darwin ] || return 0
+  osascript -e 'on run argv' -e 'display notification (item 2 of argv) with title (item 1 of argv)' -e 'end run' \
+    "harness-kit ship.sh" "$1" >/dev/null 2>&1 || true
+}
 # refuse REASON MESSAGE and stop REASON MESSAGE: record the stop in the event log (on the
-# branch being shipped, once known), print it, and exit 2 or 1.
+# branch being shipped, once known), print it, and exit 2 or 1. A stop also notifies.
 refuse() { harness_event ship.sh "${branch:-}" STOPPED "$1" "REFUSED: $2"; say "REFUSED: $2"; exit 2; }
-stop() { harness_event ship.sh "${branch:-}" STOPPED "$1" "$2"; say "STOPPED: $2"; exit 1; }
+stop() { harness_event ship.sh "${branch:-}" STOPPED "$1" "$2"; say "STOPPED: $2"; notify "STOPPED: $2"; exit 1; }
 
 PROJECT="$(git rev-parse --show-toplevel 2>/dev/null)" || refuse refused-not-a-repository "not inside a git repository"
 cd "$PROJECT" || exit 2
@@ -92,13 +108,15 @@ finish() {
   fi
   git merge -q --ff-only "$branch" ||
     stop base-not-fast-forward "$base cannot fast-forward to $branch. You are on $base; nothing was pushed to it. Bring $branch up to date with $base, then re-run ship.sh on $branch."
-  git push -q "$REMOTE" "$base" ||
+  # HARNESS_KIT_SHIP=1: the pre-push hook (install-hooks.sh) lets this push of the base through.
+  HARNESS_KIT_SHIP=1 git push -q "$REMOTE" "$base" ||
     stop push-base-failed "pushing $base failed (above). You are on $base, which is merged locally and not pushed. Fix the cause, then re-run ship.sh on $base to push it."
   report="$(bash "$HERE/report-path.sh" --name "$branch")" && rm -f -- "$report"
   draft="$(bash "$HERE/report-path.sh" --name "$branch" --commit)" && rm -f -- "$draft"
   rm -f -- "$STATE"
   harness_event ship.sh "$branch" SHIPPED "$base" "merged $(git rev-parse --short "$head") into $base and pushed it"
   say "SHIPPED: $branch ($(git rev-parse --short "$head")) is merged into $base and pushed; its report and commit draft were deleted. You are on $base."
+  notify "SHIPPED: $branch is merged into $base and pushed."
   exit 0
 }
 
@@ -148,13 +166,20 @@ else
       grep -qE '(^|[[:space:]])--skip-reviewed([[:space:]]|$)' <<<"$check" ||
         stop no-skip-reviewed "the first line of .harness/check-command does not pass --skip-reviewed, so it would run the review check, which cannot pass before the review. No review was started. Add the flag where the project's check reads it (for a single command: $(sed -E 's/[[:space:]]+$//' <<<"$check") --skip-reviewed), commit, then re-run ship.sh."
       say "running the check before the review: $check"
-      /bin/sh -c "$check" </dev/null
-      status=$?
+      # Its output (stdout and stderr together) is saved with what it ran on, and review.sh
+      # reuses it instead of running the check again.
+      saved="$(mktemp -d "${TMPDIR:-/tmp}/harness-kit-ship-check.XXXXXX")" || stop temp-file "cannot make a temporary folder"
+      trap 'rm -rf "$saved"' EXIT
+      printf '%s\n' "$check" >"$saved/command"
+      git rev-parse HEAD >"$saved/head"
+      git status --porcelain --untracked-files=all >"$saved/tree"
+      { /bin/sh -c "$check" </dev/null 2>&1; echo $? >"$saved/status"; } | tee "$saved/output"
+      status="$(cat "$saved/status")"
       [ "$status" -eq 0 ] ||
         stop check-failed "the check failed (exit $status, above): $check. No review was started. Fix what it reports, commit, then re-run ship.sh."
     fi
     say "no PASS review for the branch's current diff; running review.sh"
-    bash "$HERE/review.sh"
+    HARNESS_KIT_CHECK_SAVED="${saved:-}" bash "$HERE/review.sh"
     status=$?
     if [ "$status" -ne 0 ]; then
       verdict="$( [ -f "$REVIEWS" ] && awk -F'\t' -v h="$hash" 'NF == 9 && $5 == h { v = $6 " (" $7 ")" } END { print v }' "$REVIEWS")"

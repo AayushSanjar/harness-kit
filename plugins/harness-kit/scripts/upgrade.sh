@@ -19,7 +19,12 @@
 #      "plugin_errors", if any, must not name harness-kit. The session is stopped as soon as
 #      the init event is read, before the model answers, so nothing is spent; the wait is
 #      at most UPGRADE_INIT_SECONDS (default 120).
-#   5. The approval: the first line of .harness/approve-command, run in the project with the
+#   5. The local git hook: install-hooks.sh (next to this script), which installs the
+#      pre-push hook that refuses pushes to the review base branch unless ship.sh makes
+#      them. A pre-push hook harness-kit did not write, or core.hooksPath, stops here. A
+#      project that pushes its base by hand must remove the hook afterwards
+#      (install-hooks.sh, NOT FOR EVERY REPOSITORY).
+#   6. The approval: the first line of .harness/approve-command, run in the project with the
 #      terminal's input, as land.sh runs it: the person reads the diff and answers. A
 #      project with no approve-command is told to read `git diff` itself.
 # It never commits and never pushes.
@@ -28,6 +33,7 @@
 # 2 usage.
 set -u
 
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MARKETPLACE=harness-kit
 PLUGIN=harness-kit@harness-kit
 WAIT="${UPGRADE_INIT_SECONDS:-120}"
@@ -73,7 +79,7 @@ pin="$(node -e '
   console.log(`${source.repo}\t${old}`);
 ' "$SETTINGS" "$MARKETPLACE" "$tag" 2>&1)" || stop "$pin. Nothing was changed."
 IFS=$'\t' read -r repo old <<<"$pin"
-say "1/5 pinned $MARKETPLACE to $tag in $SETTINGS (was $old)"
+say "1/6 pinned $MARKETPLACE to $tag in $SETTINGS (was $old)"
 CHANGED="$SETTINGS now pins $tag (was $old); to undo: git checkout -- $SETTINGS"
 
 # ---------------------------------------------------------------------------------------
@@ -81,10 +87,10 @@ CHANGED="$SETTINGS now pins $tag (was $old); to undo: git checkout -- $SETTINGS"
 # ---------------------------------------------------------------------------------------
 claude plugin marketplace add "$repo#$tag" --scope project >&2 ||
   stop "claude plugin marketplace add $repo#$tag --scope project failed (above). Check that the tag $tag exists on github.com/$repo. $CHANGED"
-say "2/5 re-added the marketplace at $repo#$tag"
+say "2/6 re-added the marketplace at $repo#$tag"
 claude plugin update "$PLUGIN" --scope project >&2 ||
   stop "claude plugin update $PLUGIN --scope project failed (above). $CHANGED, and the marketplace is at $tag."
-say "3/5 updated $PLUGIN"
+say "3/6 updated $PLUGIN"
 
 # ---------------------------------------------------------------------------------------
 # 4. The version a new session loads, from its init event.
@@ -143,22 +149,29 @@ loaded="$(node -e '
   console.log(want);
 ' "$event" "$PLUGIN" "$version")" ||
   stop "$loaded. $CHANGED, and the plugin is updated. Run \`claude plugin list --json\` to see what is installed."
-say "4/5 a new session loads $PLUGIN $loaded"
+say "4/6 a new session loads $PLUGIN $loaded"
 
 # ---------------------------------------------------------------------------------------
-# 5. The approval.
+# 5. The local git hook.
+# ---------------------------------------------------------------------------------------
+bash "$HERE/install-hooks.sh" ||
+  stop "install-hooks.sh did not install the pre-push hook (above). $CHANGED; the plugin is updated and loads $version. Fix what it says, then run install-hooks.sh (or upgrade.sh again)."
+say "5/6 installed the pre-push hook: pushes to the review base branch go through ship.sh"
+
+# ---------------------------------------------------------------------------------------
+# 6. The approval.
 # ---------------------------------------------------------------------------------------
 approve="$( { [ -f .harness/approve-command ] && head -n 1 .harness/approve-command; } | tr -d '\r')"
 if [ -z "$approve" ]; then
-  say "5/5 no .harness/approve-command, so there is nothing to approve with; read \`git diff\` yourself."
+  say "6/6 no .harness/approve-command, so there is nothing to approve with; read \`git diff\` yourself."
 else
-  say "5/5 running the approval command: $approve"
+  say "6/6 running the approval command: $approve"
   /bin/sh -c "$approve"
   status=$?
   [ "$status" -eq 0 ] ||
     stop "the approval command failed or was declined (exit $status). $CHANGED; the plugin is updated and loads $version. Nothing was committed."
 fi
 
-say "UPGRADED: $PLUGIN $version is pinned, installed and loads. Nothing was committed."
+say "UPGRADED: $PLUGIN $version is pinned, installed and loads, and the pre-push hook is installed. Nothing was committed."
 say "Next: read 'git diff', commit it (with a reason for $SETTINGS), and run /reload-plugins in any open session."
 exit 0

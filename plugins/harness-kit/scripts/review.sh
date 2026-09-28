@@ -9,7 +9,13 @@
 #                          is no local branch of that name
 #   review-checklist.md    REQUIRED. One item per line, starting with an ID that ends in a
 #                          digit and a colon: "- R1: every new function has a test"
-#   check-command          the project's check; its real output goes to the reviewer
+#   check-command          the project's check; its real output goes to the reviewer. When
+#                          ship.sh has just run it, ship.sh passes that run's saved output
+#                          (HARNESS_KIT_CHECK_SAVED, a folder) and review.sh reuses it
+#                          instead of running the check again, if it is for the same
+#                          command, HEAD and working tree (review-lib.sh's
+#                          review_saved_check); the input's CHECK COMMAND section then
+#                          says "reused:"
 #   review-reads           optional; one project-relative path per line (# comments and
 #                          blank lines skipped), such as a spec, copied in whole
 # Limits, from the environment: REVIEW_MAX_TURNS (default 40), REVIEW_MAX_BUDGET_USD
@@ -73,7 +79,11 @@ fi
 work="$(mktemp -d "${TMPDIR:-/tmp}/harness-kit-review.XXXXXX")" || die "cannot make a temporary folder"
 trap 'rm -rf "$work"' EXIT
 
-review_check_section "$H" "$work" >"$work/check-section.txt"
+if review_saved_check "$H" "${HARNESS_KIT_CHECK_SAVED:-}" >"$work/check-section.txt"; then
+  echo "harness-kit review.sh: reusing the check output ship.sh saved at this head; not running the check again" >&2
+else
+  review_check_section "$H" "$work" >"$work/check-section.txt"
+fi
 review_build_input "$work/input.md" "$PROJECT" "$branch" "$base_ref" "$merge_base" "$head" "$CHECKLIST" \
   "$work/check-section.txt" || die "$REVIEW_ERROR"
 

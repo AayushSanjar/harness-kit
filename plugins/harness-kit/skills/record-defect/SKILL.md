@@ -69,7 +69,7 @@ No field may hold a tab or a line break.
 ## 8. Proposals for the person (in the report; do not add them)
 
 1. **A reviewer-evaluation case**: one line for `.harness/reviewer-eval/cases.tsv` in its format (`id  defect  base  head  file-regex  keyword-regex  [spec-replacement]  [na_items]  [expected_item]`), with `head` the introducing commit, `base` its parent, a file regex naming the file the bug was in, and a keyword regex with words a reviewer would use for it. If the spec now holds text that gives the fix away, say which lines a spec replacement must leave out. Running an evaluation costs money, so the person decides whether to add and run it.
-2. **A fault replay**: one line for `.harness/mutations.tsv` that puts the bug back (`id  file  find  replacement  check`: the fixed text, found exactly once in the file; the buggy text; the new test's name as the check prints it) and the matching `.harness/check-files` line (`name<TAB>test path`), so `replay-faults.sh` can prove the test keeps catching it. Give it only when the fix is a text change that a single find and replace undoes.
+2. **A fault replay**: one line for `.harness/mutations.tsv` that puts the bug back (`id  file  find  replacement  check`: the fixed text, found exactly once in the file, with no version such as 0.9.0 and no date such as 2026-09-27 in it, which `replay-faults.sh` rejects as a fragile entry; the buggy text; the new test's name as the check prints it) and the matching `.harness/check-files` line (`name<TAB>test path`), so `replay-faults.sh` can prove the test keeps catching it. Give it only when the fix is a text change that a single find and replace undoes.
 
 ## 9. Report and commit draft
 

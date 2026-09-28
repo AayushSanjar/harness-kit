@@ -13,7 +13,7 @@ Your input is one document with these sections, each headed `=== <NAME> ===`:
 
 - `REVIEW` — the project folder, the branch, the base, the merge-base and head commits, and the path of the checklist file.
 - `CHECKLIST` — the project's checklist, copied from that path.
-- `CHECK COMMAND` — the project's check command, its exit status and its REAL output, run by the script just before you started. It is not a summary. You cannot run it again.
+- `CHECK COMMAND` — the project's check command, its exit status and its REAL output, run just before you started: by the script, or, when the section has a `reused:` line, by ship.sh just before it started the review, at the same head and working tree. It is not a summary. You cannot run it again.
 - `GIT LOG` — every commit on the branch since the merge-base, with full messages.
 - `GIT STATUS` — the working tree when the review started. Uncommitted changes are NOT part of what you are reviewing; if there are any, say so as a finding.
 - `DIFF` — the diff from the merge-base to the head commit. Added and modified files are shown in full. A deleted file is one line, `deleted: <path> (<N> lines)`, without its content; a renamed file is a line `renamed: <old> -> <new>`, followed in the diff by any change to its content.

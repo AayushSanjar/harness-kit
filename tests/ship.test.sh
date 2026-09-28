@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Tests for the person's own steps: report-path.sh, the report, commit draft and warning
-# lines of session-start.mjs, check-reports.mjs, land.sh and ship.sh.
+# Tests for the person's own steps: report-path.sh, the report, commit draft, warning and
+# blast-radius lines of session-start.mjs, check-reports.mjs, land.sh, ship.sh and
+# install-hooks.sh's pre-push hook.
 #
 # Every case runs in a temporary git repository. Its "origin" is a local bare repository,
 # and ship.sh finds a FAKE `gh` first on PATH, which records its arguments and prints
@@ -16,6 +17,7 @@ SESSION_START="$SCRIPTS/session-start.mjs"
 CHECK_REPORTS="$SCRIPTS/check-reports.mjs"
 LAND="$SCRIPTS/land.sh"
 SHIP="$SCRIPTS/ship.sh"
+INSTALL_HOOKS="$SCRIPTS/install-hooks.sh"
 VERSION="$(node -p 'require(process.argv[1]).version' "$ROOT/plugins/harness-kit/.claude-plugin/plugin.json")"
 # The real path: git prints resolved paths, and macOS's temp folder is behind a symlink.
 WORK="$(cd "$(mktemp -d)" && pwd -P)"
@@ -49,13 +51,27 @@ describe() { printf 'exit %s\nstdout: %s\nstderr: %s' "$STATUS" "$OUT" "$ERR"; }
 # ---------------------------------------------------------------------------------------
 mkdir -p "$WORK/bin"
 
-# The fake claude: records how it was called, then prints $FAKE_JSON.
+# The fake claude: records how it was called and its input, then prints $FAKE_JSON.
 cat >"$WORK/bin/claude" <<'FAKE'
 #!/bin/sh
 printf '%s\n' "$@" >"$FAKE_LOG/claude-args"
-cat >/dev/null
+cat >"$FAKE_LOG/claude-stdin"
 cat "$FAKE_JSON"
 FAKE
+
+# The fake osascript: appends its arguments to $FAKE_LOG/osascript-calls, one call per line,
+# so no case shows a real notification. The fake uname prints $FAKE_UNAME when set (ship.sh
+# notifies only on Darwin), and is the real uname otherwise.
+cat >"$WORK/bin/osascript" <<'FAKE'
+#!/bin/sh
+printf '%s ' "$@" >>"$FAKE_LOG/osascript-calls"
+echo >>"$FAKE_LOG/osascript-calls"
+FAKE
+cat >"$WORK/bin/uname" <<'FAKE'
+#!/bin/sh
+if [ -n "${FAKE_UNAME:-}" ]; then echo "$FAKE_UNAME"; else exec /usr/bin/uname "$@"; fi
+FAKE
+chmod +x "$WORK/bin/osascript" "$WORK/bin/uname"
 
 # The fake gh: appends each call to $FAKE_LOG/gh-calls. Its runs are the lines of
 # $FAKE_LOG/runs, "<id> <workflow> <conclusion> <from>": the run is listed from the
@@ -146,7 +162,7 @@ run_in() {
 # run_ship DIR JSON CONCLUSION: run ship.sh in DIR; a fresh fake log each time (a runs
 # file, if a case wrote one, is kept).
 run_ship() {
-  rm -f "$1.log/claude-args" "$1.log/gh-calls" "$1.log/list-calls"
+  rm -f "$1.log/claude-args" "$1.log/claude-stdin" "$1.log/gh-calls" "$1.log/list-calls" "$1.log/osascript-calls"
   printf '%s\n' "$3" >"$1.log/conclusion"
   FAKE_JSON="$2" run_in "$1" bash "$SHIP"
 }
@@ -228,6 +244,7 @@ run_session "$dir"
 left="$(cd "$dir/.reports" && ls | tr '\n' ' ')"
 line2="$(sed -n 2p <<<"$OUT")"
 line3="$(sed -n 3p <<<"$OUT")"
+line4="$(sed -n 4p <<<"$OUT")"
 if [ "$STATUS" -eq 0 ] &&
   [ "$left" = "feature.commit.txt feature.md latest.commit.txt latest.md pinned.commit.txt pinned.md team-live.md " ] &&
   [ "$(readlink "$dir/.reports/latest.md")" = feature.md ] &&
@@ -235,7 +252,7 @@ if [ "$STATUS" -eq 0 ] &&
   grep -qF "write your final report to $dir/.reports/feature.md" <<<"$line2" &&
   grep -qF '"## Summary"' <<<"$line2" && grep -q 'at most 15 lines' <<<"$line2" &&
   grep -q 'Never commit it' <<<"$line2" &&
-  [ "$(wc -l <<<"$OUT" | tr -d ' ')" = 3 ] &&
+  [ "$(wc -l <<<"$OUT" | tr -d ' ')" = 4 ] &&
   grep -q 'removed the stale report .reports/gone.md' <<<"$ERR" &&
   grep -q 'removed the stale report .reports/old.md' <<<"$ERR" &&
   grep -q 'removed the stale commit draft .reports/gone.commit.txt' <<<"$ERR" &&
@@ -261,6 +278,14 @@ else
   result "session-start: the commit draft line names .reports/<branch>.commit.txt and the Told:, Breaks:, Decision: and protected-file rules" no \
     "latest.commit.txt -> $(readlink "$dir/.reports/latest.commit.txt")
 line 3: $line3"
+fi
+
+# 2d. The blast-radius line: before finishing, update or list everything that describes
+# the changed behaviour.
+if [ "$line4" = "harness-kit: before finishing, search for every file, comment, test and document that describes behaviour you changed, and update each or list it in the report." ]; then
+  result "session-start: tells Claude to update or list every file, comment, test and document describing changed behaviour" yes ""
+else
+  result "session-start: tells Claude to update or list every file, comment, test and document describing changed behaviour" no "line 4: $line4"
 fi
 
 # 2b. The Summary template: the report line names all five headings, in this order.
@@ -677,6 +702,107 @@ else
   result "ship.sh: each stop, with its reason, and each SHIPPED is a line in .git/harness-kit/events.tsv" no \
     "$(for d in ship-main ship-dirty ship-fix ship-check-red ship-red ship-green ship-resume; do
       printf '%s:\n%s\n' "$d" "$(cat "$WORK/$d/.git/harness-kit/events.tsv" 2>/dev/null)"; done)"
+fi
+
+# 24. The check runs once: ship.sh saves its output before the review, and review.sh reuses
+# it (the reviewer's input says so, with the same output) instead of running it again.
+dir="$(new_repo ship-check-once)"
+printf 'echo run >>"$CHECK_RUNS"\necho "check: 1 passed"\n' >"$dir/.harness/check.sh"
+git -C "$dir" commit -q -am "feature: count check runs"
+CHECK_RUNS="$dir.log/check-runs" run_ship "$dir" "$PASS_JSON" success
+input="$(cat "$dir.log/claude-stdin" 2>/dev/null)"
+section="$(sed -n '/^=== CHECK COMMAND ===$/,/^=== GIT LOG ===$/p' <<<"$input")"
+if [ "$STATUS" -eq 0 ] && [ "$(wc -l <"$dir.log/check-runs" | tr -d ' ')" = 1 ] &&
+  grep -q '^check: 1 passed$' <<<"$OUT" && grep -q 'reusing the check output ship.sh saved' <<<"$ERR" &&
+  grep -q '^reused: ship.sh ran this command just before starting the review' <<<"$section" &&
+  grep -qx 'exit status: 0' <<<"$section" && grep -qx 'check: 1 passed' <<<"$section" &&
+  [ -z "$(find "${TMPDIR:-/tmp}" -maxdepth 1 -name 'harness-kit-ship-check.*' -newer "$dir.log/check-runs" -print 2>/dev/null)" ]; then
+  result "ship.sh: the check runs once; review.sh reuses ship.sh's saved output and says so" yes ""
+else
+  result "ship.sh: the check runs once; review.sh reuses ship.sh's saved output and says so" no "$(describe)
+check runs: $(cat "$dir.log/check-runs" 2>/dev/null)
+CHECK COMMAND section: $section"
+fi
+
+# 25. A macOS notification on STOPPED and on SHIPPED (uname says Darwin), none elsewhere.
+dir="$(new_repo ship-notify)"
+FAKE_UNAME=Darwin run_ship "$dir" "$PASS_JSON" failure
+stopped_calls="$(cat "$dir.log/osascript-calls" 2>/dev/null)"
+FAKE_UNAME=Darwin run_ship "$dir" "$PASS_JSON" success
+shipped_calls="$(cat "$dir.log/osascript-calls" 2>/dev/null)"
+dir2="$(new_repo ship-no-notify)"
+FAKE_UNAME=Linux run_ship "$dir2" "$PASS_JSON" failure
+linux_status="$STATUS"
+if [ "$STATUS" -eq 1 ] && [ ! -e "$dir2.log/osascript-calls" ] &&
+  [ "$(wc -l <<<"$stopped_calls" | tr -d ' ')" = 1 ] && grep -q 'display notification.* harness-kit ship.sh STOPPED: CI run 4242 finished with conclusion "failure"' <<<"$stopped_calls" &&
+  [ "$(wc -l <<<"$shipped_calls" | tr -d ' ')" = 1 ] && grep -q 'harness-kit ship.sh SHIPPED: feature is merged into main and pushed.' <<<"$shipped_calls"; then
+  result "ship.sh: a macOS notification on STOPPED and SHIPPED; none when not on macOS" yes ""
+else
+  result "ship.sh: a macOS notification on STOPPED and SHIPPED; none when not on macOS" no "on STOPPED: $stopped_calls
+on SHIPPED: $shipped_calls
+not macOS: exit $linux_status, calls: $(cat "$dir2.log/osascript-calls" 2>/dev/null)"
+fi
+
+# ---------------------------------------------------------------------------------------
+# install-hooks.sh and the pre-push hook
+# ---------------------------------------------------------------------------------------
+
+# 22. The hook refuses a push to the review base (main, then develop from
+# .harness/review-base), saying "push through ship.sh", and lets through other branches
+# and a push with HARNESS_KIT_SHIP=1. Installing again replaces its own hook; a hook it did
+# not write, or core.hooksPath, is left alone (exit 1).
+dir="$(new_repo hook)"
+run_in "$dir" bash "$INSTALL_HOOKS"
+installed="$STATUS: $ERR"
+run_in "$dir" bash "$INSTALL_HOOKS"
+again="$STATUS"
+git -C "$dir" checkout -q main
+printf 'direct\n' >>"$dir/app.txt" && git -C "$dir" commit -q -am "main: direct"
+run_in "$dir" git push -q origin main
+refused="$STATUS: $ERR"
+remote_main_after_refusal="$(remote_rev "$dir" main)"
+run_in "$dir" git push -q origin main:other
+other="$STATUS"
+HARNESS_KIT_SHIP=1 run_in "$dir" git push -q origin main
+shipped="$STATUS"
+git -C "$dir" checkout -q -b develop
+printf 'develop\n' >"$dir/.harness/review-base"
+run_in "$dir" git push -q origin develop
+develop="$STATUS: $ERR"
+printf '#!/bin/sh\nexit 0\n' >"$dir/.git/hooks/pre-push"
+run_in "$dir" bash "$INSTALL_HOOKS"
+foreign="$STATUS: $ERR"
+rm -f "$dir/.git/hooks/pre-push"
+git -C "$dir" config core.hooksPath .githooks
+run_in "$dir" bash "$INSTALL_HOOKS"
+hooks_path="$STATUS: $ERR"
+if grep -q '^0: .*installed .*/.git/hooks/pre-push' <<<"$installed" && [ "$again" -eq 0 ] &&
+  grep -q '^1: .*harness-kit pre-push: refusing to push to main: push through ship.sh' <<<"$refused" &&
+  [ "$remote_main_after_refusal" != "$(rev "$dir" main)" ] && [ "$other" -eq 0 ] && [ "$shipped" -eq 0 ] &&
+  [ "$(remote_rev "$dir" main)" = "$(rev "$dir" main)" ] &&
+  grep -q '^1: .*refusing to push to develop: push through ship.sh' <<<"$develop" &&
+  grep -q '^1: .*exists and harness-kit did not write it' <<<"$foreign" &&
+  grep -q '^1: .*core.hooksPath is set (.githooks)' <<<"$hooks_path" && [ ! -e "$dir/.git/hooks/pre-push" ]; then
+  result "install-hooks: the pre-push hook refuses pushes to the review base unless HARNESS_KIT_SHIP=1" yes ""
+else
+  result "install-hooks: the pre-push hook refuses pushes to the review base unless HARNESS_KIT_SHIP=1" no \
+    "install: $installed
+again: $again
+push main: $refused
+push other: $other; with HARNESS_KIT_SHIP=1: $shipped
+push develop: $develop
+foreign hook: $foreign
+core.hooksPath: $hooks_path"
+fi
+
+# 23. ship.sh ships through the hook: it sets HARNESS_KIT_SHIP=1 for its own push of main.
+dir="$(new_repo ship-hook)"
+run_in "$dir" bash "$INSTALL_HOOKS"
+run_ship "$dir" "$PASS_JSON" success
+if [ "$STATUS" -eq 0 ] && grep -q 'SHIPPED: feature' <<<"$ERR" && [ "$(remote_rev "$dir" main)" = "$(rev "$dir" feature)" ]; then
+  result "ship.sh: pushes main through the pre-push hook" yes ""
+else
+  result "ship.sh: pushes main through the pre-push hook" no "$(describe)"
 fi
 
 if [ "$failures" -ne 0 ]; then

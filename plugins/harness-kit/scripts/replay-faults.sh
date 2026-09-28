@@ -6,14 +6,18 @@
 #                                every entry of .harness/mutations.tsv, or only those IDs
 #
 # LOCAL ONLY. It runs the project's whole check once per entry (plus once without any
-# fault), so it is for the person's terminal and for land.sh. Do not add it to a consumer
+# fault), or one check per entry with .harness/check-only (below), so it is for the
+# person's terminal and for land.sh. Do not add it to a consumer
 # project's CI: a private repository pays for its Actions minutes.
 #
 # THE ENTRIES, in .harness/mutations.tsv: one per line, tab-separated, # comments and
 # blank lines skipped. No field can hold a tab or a line break.
 #   id           letters, digits, ".", "_" or "-"; unique
 #   file         the file to change, relative to the project root
-#   find         text that must be in the file EXACTLY ONCE, as written (no escapes)
+#   find         text that must be in the file EXACTLY ONCE, as written (no escapes), and
+#                hold no version (v?digits.digits.digits) and no date (YYYY-MM-DD): an
+#                entry whose text does is an ERROR, "fragile entry", and is not replayed,
+#                as a release or a new date would change the text and break the replay
 #   replacement  the text put in its place (may be empty: the text is deleted)
 #   check        the name of the check that must FAIL with the fault in place, as the check
 #                command prints it after PASS or FAIL
@@ -26,20 +30,33 @@
 # ends the line or is followed by whitespace, ":" or "(" (so "FAIL  lint  (exit 1)" is a
 # FAIL of lint, and "FAIL lint-extra" is not).
 #
+# ONE CHECK PER ENTRY (optional). When the project has a file .harness/check-only (its
+# content is not read), each entry's run is the check command with --only and the entry's
+# check name added at the end, as one word: `<check command> --only '<check>'`, so only
+# the check that must catch the fault runs. The baseline still runs the whole command, as
+# it must show a PASS line for every entry's check. The project's check (the last command
+# on the line, for a compound one) must then take --only NAME and run just that check,
+# printing its PASS or FAIL line as the whole run does. The verdicts are read the same way.
+# Without the file, each entry runs the whole command, as the baseline does.
+#
 # HOW, once per run:
 #   1. The copy's content is the working tree AS IT IS: committed or not, untracked files
 #      included, ignored files left out. It is a commit made from a temporary index (the
 #      project's index, branch and files are not touched), so the replays judge what the
-#      person has now, such as a patch land.sh has just applied.
+#      person has now, such as a patch land.sh has just applied. Its message starts
+#      "harness-kit replay-faults:", and every check run below gets HARNESS_KIT_REPLAY=1,
+#      so check-commits.mjs exempts that commit (and only in a replay).
 #   2. The baseline: in a fresh worktree of that commit, the check runs with no fault. An
 #      entry whose check already FAILS there, or has no PASS line there (a wrong name), is
 #      an ERROR: a failure with the fault would prove nothing.
 # Then per entry, in a fresh worktree of the same commit (detached, git hooks off, with a
 # symlink to each of the main checkout's node_modules folders, as eval-reviewer.sh does;
 # other ignored files, such as build output, are not there):
-#   3. The replacement is made. The text missing, or found more than once: ERROR.
-#   4. The check runs. KILLED when its output has a FAIL line for the entry's check and the
-#      check command exited non-zero; SURVIVED otherwise (the check did not catch it).
+#   3. The replacement is made. A fragile entry (above), or the text missing or found more
+#      than once: ERROR.
+#   4. The check runs (only the entry's check, with .harness/check-only). KILLED when its
+#      output has a FAIL line for the entry's check and the check command exited non-zero;
+#      SURVIVED otherwise (the check did not catch it).
 #   5. The worktree is removed, also on failure or interruption (Ctrl-C, kill).
 # Each result is one line on stdout: KILLED, SURVIVED or ERROR, the id, and what happened.
 # Then a totals line: "replay-faults: N replayed: K KILLED, S SURVIVED, E ERROR". Each
@@ -120,11 +137,21 @@ new_worktree() {
   done <<<"$NODE_MODULES"
 }
 
-# run_check LOG: the check in WORKTREE; sets STATUS.
+# run_check LOG [NAME]: the check in WORKTREE, with --only NAME when NAME is given, and
+# HARNESS_KIT_REPLAY=1 (check-commits.mjs then exempts the snapshot commit); sets STATUS.
 run_check() {
-  (cd "$WORKTREE" && /bin/sh -c "$check") </dev/null >"$1" 2>&1
+  if [ -n "${2:-}" ]; then
+    (cd "$WORKTREE" && HARNESS_KIT_REPLAY=1 /bin/sh -c "$check"' --only "$1"' harness-kit-replay "$2") </dev/null >"$1" 2>&1
+  else
+    (cd "$WORKTREE" && HARNESS_KIT_REPLAY=1 /bin/sh -c "$check") </dev/null >"$1" 2>&1
+  fi
   STATUS=$?
 }
+ONLY=no
+if [ -f "$PROJECT/.harness/check-only" ]; then
+  ONLY=yes
+  say "each entry runs only its own check (.harness/check-only): $check --only <check>"
+fi
 
 killed=0 survived=0 errors=0 total=0
 report() {
@@ -144,6 +171,10 @@ count="$(wc -l <<<"$entries" | tr -d ' ')"
 n=0
 while IFS=$'\t' read -r id file name; do
   n=$((n + 1))
+  if ! why="$(node "$HERE/replay-faults.mjs" fragile "$MUTATIONS" "$id")"; then
+    report ERROR "$id" "$why"
+    continue
+  fi
   if ! why="$(node "$HERE/replay-faults.mjs" baseline "$name" "$RESULTS/baseline.log" "$BASELINE_STATUS")"; then
     report ERROR "$id" "$why"
     continue
@@ -159,7 +190,7 @@ while IFS=$'\t' read -r id file name; do
     remove_worktree
     continue
   fi
-  run_check "$RESULTS/$id.log"
+  if [ "$ONLY" = yes ]; then run_check "$RESULTS/$id.log" "$name"; else run_check "$RESULTS/$id.log"; fi
   remove_worktree
   verdict="$(node "$HERE/replay-faults.mjs" verdict "$name" "$RESULTS/$id.log" "$STATUS")"
   if [ "$verdict" = KILLED ]; then
