@@ -25,6 +25,12 @@
 #                                   Otherwise it prints "no replays needed".
 # It never commits and never pushes; on success it prints what to do next.
 #
+# THE EVENT LOG. Each STOPPED, with a short reason (no-check-command, no-skip-reviewed,
+# patch-does-not-apply, temp-file, apply-failed, approval-failed, check-failed,
+# mutations-unusable, replay-failed) and its message, and each LANDED, is appended to the
+# local event log, .git/harness-kit/events.tsv (events.sh has the format). Usage errors
+# (exit 2) are not recorded.
+#
 # WHICH REPLAYS (step 5). The files the patch changes (git apply --numstat, before it is
 # applied, plus the old name of each renamed file) are compared with .harness/check-files,
 # which maps a check to its files: one "name<TAB>path" per line, # comments and blank lines
@@ -42,7 +48,14 @@
 set -u
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=events.sh
+. "$HERE/events.sh"
 say() { echo "harness-kit land.sh: $*" >&2; }
+# stopped REASON MESSAGE: record the stop in the event log, then print it.
+stopped() {
+  harness_event land.sh "" STOPPED "$1" "$2"
+  say "STOPPED: $2"
+}
 
 if [ $# -ne 1 ]; then
   echo "usage: land.sh <patch>" >&2
@@ -61,12 +74,12 @@ first_line() { [ -f "$1" ] && head -n 1 "$1" | tr -d '\r'; }
 # 0. The check must skip the review check; nothing is applied until it does.
 check="$(first_line "$H/check-command")"
 if [ -z "$check" ]; then
-  say "STOPPED: no .harness/check-command (or its first line is empty), so there is nothing to check the patch with. Nothing was changed."
+  stopped no-check-command "no .harness/check-command (or its first line is empty), so there is nothing to check the patch with. Nothing was changed."
   say "Next: put the project's check on the first line of .harness/check-command, with --skip-reviewed, then run land.sh again."
   exit 1
 fi
 if ! grep -qE '(^|[[:space:]])--skip-reviewed([[:space:]]|$)' <<<"$check"; then
-  say "STOPPED: .harness/check-command does not pass --skip-reviewed, so it would run the review check, which belongs to ship.sh (nothing is committed yet). Nothing was changed."
+  stopped no-skip-reviewed ".harness/check-command does not pass --skip-reviewed, so it would run the review check, which belongs to ship.sh (nothing is committed yet). Nothing was changed."
   say "Next: add the flag where the project's check reads it, and make the check skip check-reviewed.mjs when given it. For a single command, the first line becomes:"
   say "    $(sed -E 's/[[:space:]]+$//' <<<"$check") --skip-reviewed"
   say "Then run land.sh again. CI still runs the whole check, without the flag."
@@ -75,17 +88,17 @@ fi
 
 # 1-2. The patch.
 if ! git apply --check "$patch"; then
-  say "STOPPED: the patch does not apply cleanly (git apply --check failed, above). Nothing was changed."
+  stopped patch-does-not-apply "the patch does not apply cleanly (git apply --check failed, above). Nothing was changed."
   say "Next: update the branch or regenerate the patch, then run land.sh again."
   exit 1
 fi
 # The paths the patch changes, for step 5: new names from --numstat, old names of renames
 # from the patch's own "rename from" lines.
-changed="$(mktemp "${TMPDIR:-/tmp}/harness-kit-land.XXXXXX")" || { say "cannot make a temporary file. Nothing was changed."; exit 1; }
+changed="$(mktemp "${TMPDIR:-/tmp}/harness-kit-land.XXXXXX")" || { stopped temp-file "cannot make a temporary file. Nothing was changed."; exit 1; }
 trap 'rm -f "$changed"' EXIT
 { git apply --numstat -z "$patch" | tr '\0' '\n' | cut -f3-; sed -n 's/^rename from //p' "$patch"; } >"$changed"
 if ! git apply "$patch"; then
-  say "STOPPED: git apply failed after --check passed. Look at 'git status' before doing anything else."
+  stopped apply-failed "git apply failed after --check passed. Look at 'git status' before doing anything else."
   exit 1
 fi
 say "applied $patch"
@@ -97,7 +110,7 @@ if [ -n "$approve" ]; then
   /bin/sh -c "$approve"
   status=$?
   if [ "$status" -ne 0 ]; then
-    say "STOPPED: the approval command failed or was declined (exit $status). The patch IS applied and nothing was committed. $UNDO"
+    stopped approval-failed "the approval command failed or was declined (exit $status). The patch IS applied and nothing was committed. $UNDO"
     exit 1
   fi
 fi
@@ -107,7 +120,7 @@ say "running the check: $check"
 /bin/sh -c "$check" </dev/null
 status=$?
 if [ "$status" -ne 0 ]; then
-  say "STOPPED: the check failed (exit $status): $check. The patch IS applied and nothing was committed."
+  stopped check-failed "the check failed (exit $status): $check. The patch IS applied and nothing was committed."
   say "Next: fix what the check reports and run it again, or: git apply -R '$patch'"
   exit 1
 fi
@@ -117,7 +130,7 @@ if [ ! -f "$H/mutations.tsv" ]; then
   say "no replays needed: there is no .harness/mutations.tsv"
 else
   ids="$(node "$HERE/replay-faults.mjs" select "$H/mutations.tsv" "$H/check-files" "$changed")" || {
-    say "STOPPED: .harness/mutations.tsv is unusable (above), so land.sh cannot tell which faults to replay. The patch IS applied and nothing was committed."
+    stopped mutations-unusable ".harness/mutations.tsv is unusable (above), so land.sh cannot tell which faults to replay. The patch IS applied and nothing was committed."
     say "Next: fix .harness/mutations.tsv, then run replay-faults.sh, or: git apply -R '$patch'"
     exit 1
   }
@@ -129,13 +142,14 @@ else
     bash "$HERE/replay-faults.sh" $ids </dev/null
     status=$?
     if [ "$status" -ne 0 ]; then
-      say "STOPPED: a fault replay did not pass (replay-faults.sh exit $status, above): a check no longer catches a fault it caught before, or the replay could not run (its text to find may have changed). The patch IS applied and nothing was committed."
+      stopped replay-failed "a fault replay did not pass (replay-faults.sh exit $status, above): a check no longer catches a fault it caught before, or the replay could not run (its text to find may have changed). The patch IS applied and nothing was committed."
       say "Next: make the check catch the fault again (SURVIVED) or fix the entry (ERROR), then run replay-faults.sh with those ids, or: git apply -R '$patch'"
       exit 1
     fi
   fi
 fi
 
+harness_event land.sh "" LANDED - "$patch"
 say "LANDED: the patch applied, the check passed and any replays needed were KILLED. Nothing was committed or pushed."
 say "Next: read 'git diff', commit it on this branch, then run ship.sh to review, push, wait for CI and merge."
 exit 0

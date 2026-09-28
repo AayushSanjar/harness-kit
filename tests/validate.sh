@@ -48,7 +48,7 @@ check "claude plugin validate --strict (plugin: plugins/harness-kit)" "$out" $?
 # empty folder outside any git repository, so there is no report line and no .reports/
 # folder is made here, and without HARNESS_KIT_EVAL, so there is no warning (tests/ship.test.sh
 # covers both).
-expected="harness-kit 0.10.0 loaded"
+expected="harness-kit 0.11.0 loaded"
 empty="$(mktemp -d)"
 out="$(cd "$empty" && env -u HARNESS_KIT_EVAL -u CLAUDE_PROJECT_DIR GIT_CEILING_DIRECTORIES="$(dirname "$empty")" \
   node "$PLUGIN/scripts/session-start.mjs" </dev/null 2>&1)"
@@ -147,6 +147,10 @@ check "tests/replay-faults.test.sh (all cases)" "" $?
 # (q) check-defects.mjs's cases, one per line.
 bash "$ROOT/tests/check-defects.test.sh"
 check "tests/check-defects.test.sh (all cases)" "" $?
+
+# (s) harness-metrics.mjs's cases (a fake gh; nothing touches GitHub), one per line.
+bash "$ROOT/tests/harness-metrics.test.sh"
+check "tests/harness-metrics.test.sh (all cases)" "" $?
 
 # (r) The record-defect skill is started only by the person: its frontmatter turns off
 # model invocation.

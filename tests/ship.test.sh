@@ -166,6 +166,10 @@ run_session() {
 }
 
 rev() { git -C "$1" rev-parse "$2" 2>/dev/null; }
+# events DIR: DIR's local event log as "tool branch event what" lines, tab-separated.
+events() { cut -f2,3,5,6 "$1/.git/harness-kit/events.tsv" 2>/dev/null; }
+# event_detail DIR N: the detail of the Nth line of DIR's event log.
+event_detail() { sed -n "${2}p" "$1/.git/harness-kit/events.tsv" 2>/dev/null | cut -f7; }
 remote_rev() { git --git-dir="$1.git" rev-parse -q --verify "refs/heads/$2" 2>/dev/null; }
 
 # ---------------------------------------------------------------------------------------
@@ -436,6 +440,41 @@ else
   result "land.sh: no check command stops before applying" no "$(describe)"
 fi
 
+# 11b. The event log: each stop above, with its reason and message, and the LANDED, one line
+# each in .git/harness-kit/events.tsv (never in the working tree: the cases above found
+# git status unchanged), with the date and HEAD.
+line="$(sed -n 1p "$WORK/land-red/.git/harness-kit/events.tsv" 2>/dev/null)"
+if [ "$(events "$WORK/land-bad")" = "$(printf 'land.sh\tfeature\tSTOPPED\tpatch-does-not-apply')" ] &&
+  [ "$(events "$WORK/land-red")" = "$(printf 'land.sh\tfeature\tSTOPPED\tcheck-failed')" ] &&
+  grep -q '^the check failed (exit 1): sh scripts/check.sh --skip-reviewed\. The patch IS applied' <<<"$(event_detail "$WORK/land-red" 1)" &&
+  [ "$(events "$WORK/land-no-flag")" = "$(printf 'land.sh\tfeature\tSTOPPED\tno-skip-reviewed')" ] &&
+  [ "$(events "$WORK/land-no-check")" = "$(printf 'land.sh\tfeature\tSTOPPED\tno-check-command')" ] &&
+  [ "$(events "$WORK/land-green")" = "$(printf 'land.sh\tfeature\tLANDED\t-')" ] &&
+  [ "$(event_detail "$WORK/land-green" 1)" = "$WORK/land-green.patch" ] &&
+  grep -qE "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z	land.sh	feature	$(rev "$WORK/land-red" HEAD)	" <<<"$line"; then
+  result "land.sh: each stop, with its reason, and each LANDED is a line in .git/harness-kit/events.tsv" yes ""
+else
+  result "land.sh: each stop, with its reason, and each LANDED is a line in .git/harness-kit/events.tsv" no \
+    "land-bad: $(events "$WORK/land-bad")
+land-red: $(cat "$WORK/land-red/.git/harness-kit/events.tsv" 2>/dev/null)
+land-no-flag: $(events "$WORK/land-no-flag")
+land-no-check: $(events "$WORK/land-no-check")
+land-green: $(cat "$WORK/land-green/.git/harness-kit/events.tsv" 2>/dev/null)"
+fi
+
+# 11c. A log that cannot be written (.git/harness-kit is a file) changes nothing: land.sh
+# still lands, exit 0, with one note.
+dir="$(new_land land-no-log 0)"
+: >"$dir/.git/harness-kit"
+OUT="$(cd "$dir" && bash "$LAND" "$WORK/land-no-log.patch" <<<"yes" 2>&1)"
+STATUS=$? ERR=""
+if [ "$STATUS" -eq 0 ] && grep -q 'LANDED' <<<"$OUT" &&
+  grep -q "^harness-kit land.sh: note: could not append to $dir/.git/harness-kit/events.tsv$" <<<"$OUT"; then
+  result "land.sh: an event log that cannot be written changes nothing but a note" yes ""
+else
+  result "land.sh: an event log that cannot be written changes nothing but a note" no "$(describe)"
+fi
+
 # ---------------------------------------------------------------------------------------
 # ship.sh
 # ---------------------------------------------------------------------------------------
@@ -619,6 +658,25 @@ if [ "$STATUS" -eq 0 ] && grep -q 'waiting for a run of the workflow "validate" 
 else
   result "ship.sh: with .harness/ci-workflow, waits for that workflow's run only, then merges" no "$(describe)
 gh calls: $(cat "$dir.log/gh-calls" 2>/dev/null)"
+fi
+
+# 21. The event log: each stop and refusal (with its reason and message) and each SHIPPED,
+# on the branch being shipped, also when SHIPPED is written from main (ship-resume).
+if [ "$(events "$WORK/ship-main")" = "$(printf 'ship.sh\tmain\tSTOPPED\trefused-on-base')" ] &&
+  grep -q '^REFUSED: you are on main; check out the branch to ship$' <<<"$(event_detail "$WORK/ship-main" 1)" &&
+  [ "$(events "$WORK/ship-dirty")" = "$(printf 'ship.sh\tfeature\tSTOPPED\trefused-uncommitted')" ] &&
+  [ "$(events "$WORK/ship-fix")" = "$(printf 'ship.sh\tfeature\tSTOPPED\treview-not-pass')" ] &&
+  grep -q "^the review's verdict is FIX-FIRST (R1=F), not PASS" <<<"$(event_detail "$WORK/ship-fix" 1)" &&
+  [ "$(events "$WORK/ship-check-red")" = "$(printf 'ship.sh\tfeature\tSTOPPED\tcheck-failed')" ] &&
+  [ "$(events "$WORK/ship-red")" = "$(printf 'ship.sh\tfeature\tSTOPPED\tci-not-green\nship.sh\tfeature\tSHIPPED\tmain')" ] &&
+  [ "$(events "$WORK/ship-green")" = "$(printf 'ship.sh\tfeature\tSHIPPED\tmain')" ] &&
+  grep -q '^merged [0-9a-f]* into main and pushed it$' <<<"$(event_detail "$WORK/ship-green" 1)" &&
+  [ "$(events "$WORK/ship-resume")" = "$(printf 'ship.sh\tfeature\tSTOPPED\tpush-base-failed\nship.sh\tfeature\tSHIPPED\tmain')" ]; then
+  result "ship.sh: each stop, with its reason, and each SHIPPED is a line in .git/harness-kit/events.tsv" yes ""
+else
+  result "ship.sh: each stop, with its reason, and each SHIPPED is a line in .git/harness-kit/events.tsv" no \
+    "$(for d in ship-main ship-dirty ship-fix ship-check-red ship-red ship-green ship-resume; do
+      printf '%s:\n%s\n' "$d" "$(cat "$WORK/$d/.git/harness-kit/events.tsv" 2>/dev/null)"; done)"
 fi
 
 if [ "$failures" -ne 0 ]; then

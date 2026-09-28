@@ -193,6 +193,29 @@ else
 3: exit $s3 $out3"
 fi
 
+# 7b. The event log: each run that reached its totals line (cases 1-5) left one REPLAYED
+# line with its counts and the ids asked for; the interrupted run and the refusals left
+# none. A run of every entry says "all".
+run_in "$dir" bash "$REPLAY"
+got="$(cut -f2,5-7 "$dir/.git/harness-kit/events.tsv" 2>/dev/null)"
+want="$(printf '%s\tREPLAYED\t%s\t%s\n' \
+  replay-faults.sh killed=1,survived=0,error=0 "ids: m-killed" \
+  replay-faults.sh killed=0,survived=1,error=0 "ids: m-survived" \
+  replay-faults.sh killed=1,survived=0,error=2 "ids: m-error m-twice m-killed" \
+  replay-faults.sh killed=0,survived=0,error=2 "ids: m-wrong m-other" \
+  replay-faults.sh killed=0,survived=1,error=0 "ids: m-killed" \
+  replay-faults.sh killed=3,survived=1,error=3 all)"
+if [ "$STATUS" -eq 1 ] && grep -qx 'replay-faults: 7 replayed: 3 KILLED, 1 SURVIVED, 3 ERROR' <<<"$OUT" && [ "$got" = "$want" ] &&
+  [ -z "$(git -C "$dir" status --porcelain)" ] && clean "$dir"; then
+  result "replay-faults: each finished run's counts go to .git/harness-kit/events.tsv; refused and interrupted runs add none" yes ""
+else
+  result "replay-faults: each finished run's counts go to .git/harness-kit/events.tsv; refused and interrupted runs add none" no "$(describe)
+log:
+$got
+wanted:
+$want"
+fi
+
 # ---------------------------------------------------------------------------------------
 # land.sh
 # ---------------------------------------------------------------------------------------

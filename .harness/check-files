@@ -7,3 +7,4 @@ check-reviewed: an edited old line fails (append-only)	tests/review.test.sh
 ship.sh: stops on red CI with the run's URL; main untouched	tests/ship.test.sh
 check-defects: an edited line fails	tests/check-defects.test.sh
 replay-faults: a SURVIVED fault exits non-zero	tests/replay-faults.test.sh
+harness-metrics: no defects.tsv: escaped defects are NOT FOUND, not 0	tests/harness-metrics.test.sh

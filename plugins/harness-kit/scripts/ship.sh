@@ -33,6 +33,12 @@
 #      delete the branch's report and commit draft (.reports/, report-path.sh --name).
 # It never forces a push, never rewrites history, and never deletes the branch.
 #
+# THE EVENT LOG. Each stop and each refusal (event STOPPED; a refusal's reason starts
+# "refused-", such as refused-on-base, and a stop's is short, such as check-failed,
+# review-not-pass or ci-not-green), with its message, and each SHIPPED, is appended to the
+# local event log, .git/harness-kit/events.tsv (events.sh has the format), on the branch
+# being shipped. Outside a git repository nothing is recorded.
+#
 # RESUMABLE. Re-running after a stop continues where it stopped. Steps 1-5 are worked out
 # from git and GitHub again each time and cost nothing when already done: a recorded PASS
 # is not reviewed again, pushing a pushed branch does nothing, and a finished CI run is
@@ -49,11 +55,16 @@ REMOTE=origin
 APPEAR="${SHIP_CI_APPEAR_SECONDS:-180}"
 POLL="${SHIP_POLL_SECONDS:-10}"
 
-say() { echo "harness-kit ship.sh: $*" >&2; }
-refuse() { say "REFUSED: $*"; exit 2; }
-stop() { say "STOPPED: $*"; exit 1; }
+# shellcheck source=events.sh
+. "$HERE/events.sh"
 
-PROJECT="$(git rev-parse --show-toplevel 2>/dev/null)" || refuse "not inside a git repository"
+say() { echo "harness-kit ship.sh: $*" >&2; }
+# refuse REASON MESSAGE and stop REASON MESSAGE: record the stop in the event log (on the
+# branch being shipped, once known), print it, and exit 2 or 1.
+refuse() { harness_event ship.sh "${branch:-}" STOPPED "$1" "REFUSED: $2"; say "REFUSED: $2"; exit 2; }
+stop() { harness_event ship.sh "${branch:-}" STOPPED "$1" "$2"; say "STOPPED: $2"; exit 1; }
+
+PROJECT="$(git rev-parse --show-toplevel 2>/dev/null)" || refuse refused-not-a-repository "not inside a git repository"
 cd "$PROJECT" || exit 2
 STATE="$(git rev-parse --path-format=absolute --git-path harness-kit-ship)"
 REVIEWS=.harness/reviews.tsv
@@ -75,17 +86,18 @@ json_field() {
 # Step 6. Uses $branch and $head.
 finish() {
   local report draft
-  printf '%s\t%s\n' "$branch" "$head" >"$STATE" || stop "cannot write $STATE"
+  printf '%s\t%s\n' "$branch" "$head" >"$STATE" || stop state-file "cannot write $STATE"
   if [ "$(git symbolic-ref --short -q HEAD)" != "$base" ]; then
-    git checkout -q "$base" || stop "could not switch to $base. Fix what git says, then re-run ship.sh (on $base or $branch)."
+    git checkout -q "$base" || stop checkout-failed "could not switch to $base. Fix what git says, then re-run ship.sh (on $base or $branch)."
   fi
   git merge -q --ff-only "$branch" ||
-    stop "$base cannot fast-forward to $branch. You are on $base; nothing was pushed to it. Bring $branch up to date with $base, then re-run ship.sh on $branch."
+    stop base-not-fast-forward "$base cannot fast-forward to $branch. You are on $base; nothing was pushed to it. Bring $branch up to date with $base, then re-run ship.sh on $branch."
   git push -q "$REMOTE" "$base" ||
-    stop "pushing $base failed (above). You are on $base, which is merged locally and not pushed. Fix the cause, then re-run ship.sh on $base to push it."
+    stop push-base-failed "pushing $base failed (above). You are on $base, which is merged locally and not pushed. Fix the cause, then re-run ship.sh on $base to push it."
   report="$(bash "$HERE/report-path.sh" --name "$branch")" && rm -f -- "$report"
   draft="$(bash "$HERE/report-path.sh" --name "$branch" --commit)" && rm -f -- "$draft"
   rm -f -- "$STATE"
+  harness_event ship.sh "$branch" SHIPPED "$base" "merged $(git rev-parse --short "$head") into $base and pushed it"
   say "SHIPPED: $branch ($(git rev-parse --short "$head")) is merged into $base and pushed; its report and commit draft were deleted. You are on $base."
   exit 0
 }
@@ -93,18 +105,18 @@ finish() {
 # ---------------------------------------------------------------------------------------
 # A ship that stopped after leaving its branch.
 # ---------------------------------------------------------------------------------------
-current="$(git symbolic-ref --short -q HEAD)" || refuse "HEAD is detached; check out the branch to ship"
+current="$(git symbolic-ref --short -q HEAD)" || refuse refused-detached "HEAD is detached; check out the branch to ship"
 if [ -f "$STATE" ]; then
   IFS=$'\t' read -r branch head <"$STATE"
   if [ "$(git rev-parse -q --verify "refs/heads/$branch")" != "$head" ]; then
     say "an earlier ship of $branch stopped, but $branch has moved since; starting again"
     rm -f -- "$STATE"
   elif [ "$current" = "$base" ] || [ "$current" = "$branch" ]; then
-    [ -z "$(dirty)" ] || refuse "there are uncommitted changes (git status); commit or stash them first"
+    [ -z "$(dirty)" ] || refuse refused-uncommitted "there are uncommitted changes (git status); commit or stash them first"
     say "continuing the ship of $branch: CI passed for $(git rev-parse --short "$head"); merging into $base"
     finish
   else
-    refuse "a ship of $branch is in progress (it stopped while merging into $base). Run ship.sh on $base to finish it, or delete $STATE to abandon it."
+    refuse refused-ship-in-progress "a ship of $branch is in progress (it stopped while merging into $base). Run ship.sh on $base to finish it, or delete $STATE to abandon it."
   fi
 fi
 
@@ -112,8 +124,8 @@ fi
 # 1. Where we are.
 # ---------------------------------------------------------------------------------------
 branch="$current"
-[ "$branch" != "$base" ] || refuse "you are on $base; check out the branch to ship"
-[ -z "$(dirty)" ] || refuse "there are uncommitted changes (git status); commit or stash them first"
+[ "$branch" != "$base" ] || refuse refused-on-base "you are on $base; check out the branch to ship"
+[ -z "$(dirty)" ] || refuse refused-uncommitted "there are uncommitted changes (git status); commit or stash them first"
 
 # ---------------------------------------------------------------------------------------
 # 2-3. The review.
@@ -123,7 +135,7 @@ if node "$HERE/check-reviewed.mjs" >/dev/null 2>&1; then
   [ -z "$(git status --porcelain --untracked-files=all -- "$REVIEWS")" ] ||
     say "note: $REVIEWS has uncommitted lines that this ship does not need; they are left as they are"
 else
-  state="$(node "$HERE/check-reviewed.mjs" --hash)" || stop "could not work out the branch's diff: $state"
+  state="$(node "$HERE/check-reviewed.mjs" --hash)" || stop diff-failed "could not work out the branch's diff: $state"
   hash="$(cut -f3 <<<"$state")"
   pending="$( [ -f "$REVIEWS" ] && awk -F'\t' -v h="$hash" 'NF == 9 && $5 == h { v = $6 } END { print v }' "$REVIEWS")"
   if [ "$pending" = PASS ]; then
@@ -134,12 +146,12 @@ else
       say "no .harness/check-command, so there is no check to run before the review"
     else
       grep -qE '(^|[[:space:]])--skip-reviewed([[:space:]]|$)' <<<"$check" ||
-        stop "the first line of .harness/check-command does not pass --skip-reviewed, so it would run the review check, which cannot pass before the review. No review was started. Add the flag where the project's check reads it (for a single command: $(sed -E 's/[[:space:]]+$//' <<<"$check") --skip-reviewed), commit, then re-run ship.sh."
+        stop no-skip-reviewed "the first line of .harness/check-command does not pass --skip-reviewed, so it would run the review check, which cannot pass before the review. No review was started. Add the flag where the project's check reads it (for a single command: $(sed -E 's/[[:space:]]+$//' <<<"$check") --skip-reviewed), commit, then re-run ship.sh."
       say "running the check before the review: $check"
       /bin/sh -c "$check" </dev/null
       status=$?
       [ "$status" -eq 0 ] ||
-        stop "the check failed (exit $status, above): $check. No review was started. Fix what it reports, commit, then re-run ship.sh."
+        stop check-failed "the check failed (exit $status, above): $check. No review was started. Fix what it reports, commit, then re-run ship.sh."
     fi
     say "no PASS review for the branch's current diff; running review.sh"
     bash "$HERE/review.sh"
@@ -147,24 +159,24 @@ else
     if [ "$status" -ne 0 ]; then
       verdict="$( [ -f "$REVIEWS" ] && awk -F'\t' -v h="$hash" 'NF == 9 && $5 == h { v = $6 " (" $7 ")" } END { print v }' "$REVIEWS")"
       if [ -n "$verdict" ]; then
-        stop "the review's verdict is $verdict, not PASS (the review is above; its line is in $REVIEWS, uncommitted). Fix what it reports, commit, then re-run ship.sh."
+        stop review-not-pass "the review's verdict is $verdict, not PASS (the review is above; its line is in $REVIEWS, uncommitted). Fix what it reports, commit, then re-run ship.sh."
       fi
-      stop "the review did not complete (review.sh exit $status, above), so there is no verdict. Fix the cause, then re-run ship.sh."
+      stop review-failed "the review did not complete (review.sh exit $status, above), so there is no verdict. Fix the cause, then re-run ship.sh."
     fi
   fi
   if [ -n "$(git status --porcelain --untracked-files=all -- "$REVIEWS")" ]; then
     git add -- "$REVIEWS" && git commit -q -m "Record review of $branch: PASS" -- "$REVIEWS" ||
-      stop "could not commit $REVIEWS (above). Commit it yourself, then re-run ship.sh."
+      stop commit-review-failed "could not commit $REVIEWS (above). Commit it yourself, then re-run ship.sh."
     say "committed $REVIEWS: Record review of $branch: PASS"
   fi
-  out="$(node "$HERE/check-reviewed.mjs" 2>&1)" || stop "check-reviewed still fails at HEAD: $out"
+  out="$(node "$HERE/check-reviewed.mjs" 2>&1)" || stop check-reviewed-failed "check-reviewed still fails at HEAD: $out"
 fi
 head="$(git rev-parse HEAD)"
 
 # ---------------------------------------------------------------------------------------
 # 4. Push the branch.
 # ---------------------------------------------------------------------------------------
-git push -q -u "$REMOTE" "$branch" || stop "pushing $branch to $REMOTE failed (above). Fix the cause, then re-run ship.sh."
+git push -q -u "$REMOTE" "$branch" || stop push-branch-failed "pushing $branch to $REMOTE failed (above). Fix the cause, then re-run ship.sh."
 say "pushed $branch ($(git rev-parse --short "$head")) to $REMOTE"
 
 # ---------------------------------------------------------------------------------------
@@ -184,12 +196,12 @@ waited=0
 while :; do
   # ${filter[@]+...}: an empty array is "unbound" under set -u in bash 3.2 (macOS).
   runs="$(gh run list --commit "$head" ${filter[@]+"${filter[@]}"} --json "$fields" --limit 50)" ||
-    stop "gh run list failed (above). Fix gh (gh auth status), then re-run ship.sh."
+    stop gh-failed "gh run list failed (above). Fix gh (gh auth status), then re-run ship.sh."
   ids="$(node -e 'for (const r of JSON.parse(require("fs").readFileSync(0, "utf8"))) console.log(r.databaseId)' <<<"$runs")" ||
-    stop "gh run list did not print the expected JSON: $runs"
+    stop gh-failed "gh run list did not print the expected JSON: $runs"
   [ -z "$ids" ] || break
   [ "$waited" -lt "$APPEAR" ] ||
-    stop "no $what for $(git rev-parse --short "$head") appeared within ${APPEAR}s. Check that it runs on pushes to $branch, then re-run ship.sh to keep waiting."
+    stop no-ci-run "no $what for $(git rev-parse --short "$head") appeared within ${APPEAR}s. Check that it runs on pushes to $branch, then re-run ship.sh to keep waiting."
   say "waiting for a $what to start for $(git rev-parse --short "$head")..."
   sleep "$POLL"
   waited=$((waited + POLL))
@@ -197,24 +209,24 @@ done
 for id in $ids; do
   say "waiting for CI run $id to finish..."
   gh run watch "$id" --exit-status --compact --interval "$POLL" >&2
-  run="$(gh run view "$id" --json status,conclusion,url)" || stop "gh run view $id failed (above). Re-run ship.sh to check the run again."
+  run="$(gh run view "$id" --json status,conclusion,url)" || stop gh-failed "gh run view $id failed (above). Re-run ship.sh to check the run again."
   status="$(json_field status <<<"$run")"
   conclusion="$(json_field conclusion <<<"$run")"
   url="$(json_field url <<<"$run")"
   [ "$status" = completed ] ||
-    stop "CI run $id is $status, not finished: $url. Re-run ship.sh to keep waiting."
+    stop ci-not-finished "CI run $id is $status, not finished: $url. Re-run ship.sh to keep waiting."
   [ "$conclusion" = success ] ||
-    stop "CI run $id finished with conclusion \"$conclusion\", not success: $url. Fix the branch (or re-run the job if it was not the branch's fault), then re-run ship.sh."
+    stop ci-not-green "CI run $id finished with conclusion \"$conclusion\", not success: $url. Fix the branch (or re-run the job if it was not the branch's fault), then re-run ship.sh."
   say "CI run $id passed: $url"
 done
 
 # ---------------------------------------------------------------------------------------
 # 6. Merge into the base, push it, delete the report and the commit draft.
 # ---------------------------------------------------------------------------------------
-git fetch -q "$REMOTE" "$base" || stop "could not fetch $base from $REMOTE (above). Re-run ship.sh."
+git fetch -q "$REMOTE" "$base" || stop fetch-failed "could not fetch $base from $REMOTE (above). Re-run ship.sh."
 for ref in "refs/remotes/$REMOTE/$base" "refs/heads/$base"; do
   if git rev-parse -q --verify "$ref" >/dev/null && ! git merge-base --is-ancestor "$ref" "$head"; then
-    stop "${ref#refs/*/} has commits that $branch does not, so $base cannot fast-forward. Bring $branch up to date with $base (it will need a new review and CI), then re-run ship.sh."
+    stop base-not-fast-forward "${ref#refs/*/} has commits that $branch does not, so $base cannot fast-forward. Bring $branch up to date with $base (it will need a new review and CI), then re-run ship.sh."
   fi
 done
 finish

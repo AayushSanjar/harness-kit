@@ -45,11 +45,18 @@
 # Then a totals line: "replay-faults: N replayed: K KILLED, S SURVIVED, E ERROR". Each
 # run's output is kept in a folder under the OS temp folder, printed at the end.
 #
+# THE EVENT LOG. Each run that reaches its totals line appends one REPLAYED line, with the
+# KILLED, SURVIVED and ERROR counts and "all" or the ids asked for, to the local event log,
+# .git/harness-kit/events.tsv (events.sh has the format). A refused or interrupted run
+# appends nothing.
+#
 # Exit status: 0 every entry KILLED; 1 any SURVIVED or ERROR; 2 nothing was replayed (usage,
 # no or unusable mutations.tsv, an unknown ID, no usable check command).
 set -u
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=events.sh
+. "$HERE/events.sh"
 NAME="replay-faults.sh"
 say() { echo "harness-kit $NAME: $*" >&2; }
 refuse() { say "$*. Nothing was replayed."; exit 2; }
@@ -163,5 +170,7 @@ while IFS=$'\t' read -r id file name; do
 done <<<"$entries"
 
 echo "replay-faults: $total replayed: $killed KILLED, $survived SURVIVED, $errors ERROR"
+if [ "$#" -eq 0 ]; then asked=all; else asked="ids: $*"; fi
+harness_event "$NAME" "" REPLAYED "killed=$killed,survived=$survived,error=$errors" "$asked"
 say "each run's output is in $RESULTS (baseline.log and <id>.log)"
 [ "$survived" -eq 0 ] && [ "$errors" -eq 0 ]
