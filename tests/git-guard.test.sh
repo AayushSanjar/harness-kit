@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Tests for git-guard.mjs, the PreToolUse hook on Bash that denies git push, destructive git
 # (including git checkout . and -f, git stash drop and clear, and git rebase) and the
-# person's scripts outside scratch copies under the OS temp folder.
+# person's scripts (approve-brief.sh among them) outside scratch copies under the OS temp
+# folder.
 #
 # Each command is given to the hook as Claude Code gives it (JSON on stdin, with a cwd);
 # nothing is run. The "real working tree" is a path outside the temp folder that need not
@@ -83,14 +84,15 @@ expect "git-guard: the same are allowed in a scratch copy" allow "$REAL" \
   "cd $WORK && git checkout . && git stash drop && git rebase main"
 
 # 3. The person's scripts in the real working tree, by path or through a shell.
-expect "git-guard: land.sh, ship.sh, release.sh, upgrade.sh and approve-protected.sh are denied in the real working tree" deny "$REAL" \
+expect "git-guard: land.sh, ship.sh, release.sh, upgrade.sh, approve-protected.sh and approve-brief.sh are denied in the real working tree" deny "$REAL" \
   'bash plugins/harness-kit/scripts/ship.sh' 'bash "$PLUGIN/scripts/land.sh" fix.patch' './upgrade.sh 0.13.0' \
-  'sh /x/release.sh v1.0.0' 'scripts/approve-protected.sh' '. ./ship.sh' 'nohup bash ship.sh'
+  'sh /x/release.sh v1.0.0' 'scripts/approve-protected.sh' '. ./ship.sh' 'nohup bash ship.sh' \
+  'plugins/harness-kit/scripts/approve-brief.sh' 'echo y | bash "$PLUGIN/scripts/approve-brief.sh"'
 
 # 4. The same commands inside a scratch copy under the temp folder: the cwd there, a cd
 # that must have happened (&&, inside its subshell), git -C, a mktemp folder.
 expect "git-guard: the same commands are allowed in a scratch copy under the temp folder" allow "$REAL" \
-  "cd $WORK && git push" "git -C $WORK/clone push --force" "(cd $WORK && git reset --hard)" \
+  "cd $WORK && git push" "cd $WORK/clone && bash /x/approve-brief.sh" "git -C $WORK/clone push --force" "(cd $WORK && git reset --hard)" \
   'W=$(mktemp -d) && cd "$W" && git push' 'W="$(mktemp -d)"; cd "$W" && bash /x/ship.sh' \
   'cd "${TMPDIR:-/tmp}/scratch" && git clean -fdx' "cd /tmp/scratch && bash upgrade.sh 0.1.0"
 expect "git-guard: every command is allowed when Claude's shell is already in a scratch copy" allow "$WORK/clone" \

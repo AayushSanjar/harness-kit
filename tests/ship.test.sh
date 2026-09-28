@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Tests for the person's own steps: report-path.sh, the report, commit draft, commit,
 # warning and blast-radius lines of session-start.mjs, check-reports.mjs, land.sh, ship.sh
-# (its review commit and its index refresh) and install-hooks.sh's pre-push and commit-msg
-# hooks.
+# (its brief gate, its review commit and its index refresh), approve-brief.sh and
+# install-hooks.sh's pre-push and commit-msg hooks.
 #
 # Every case runs in a temporary git repository. Its "origin" is a local bare repository,
 # and ship.sh finds a FAKE `gh` first on PATH, which records its arguments and prints
@@ -18,6 +18,7 @@ SESSION_START="$SCRIPTS/session-start.mjs"
 CHECK_REPORTS="$SCRIPTS/check-reports.mjs"
 LAND="$SCRIPTS/land.sh"
 SHIP="$SCRIPTS/ship.sh"
+APPROVE_BRIEF="$SCRIPTS/approve-brief.sh"
 INSTALL_HOOKS="$SCRIPTS/install-hooks.sh"
 VERSION="$(node -p 'require(process.argv[1]).version' "$ROOT/plugins/harness-kit/.claude-plugin/plugin.json")"
 # The real path: git prints resolved paths, and macOS's temp folder is behind a symlink.
@@ -160,12 +161,52 @@ run_in() {
   ERR="$(cat "$WORK/stderr")"
 }
 
-# run_ship DIR JSON CONCLUSION: run ship.sh in DIR; a fresh fake log each time (a runs
-# file, if a case wrote one, is kept).
+# sha256_of FILE: FILE's sha256, lowercase hex, computed here without brief-lib.sh.
+sha256_of() { node -e 'process.stdout.write(require("crypto").createHash("sha256").update(require("fs").readFileSync(process.argv[1])).digest("hex"))' "$1"; }
+
+# brief_for DIR [approved|unapproved]: write the current branch's brief,
+# .reports/<branch>.brief.md, unless there is one; approved (the default) also writes its
+# approval, .reports/<branch>.brief.approved, holding its sha256, as approve-brief.sh does.
+brief_for() {
+  local name brief
+  name="$(git -C "$1" symbolic-ref --short -q HEAD)" || return 0
+  brief="$1/.reports/${name//\//-}.brief.md"
+  [ -f "$brief" ] && return 0
+  mkdir -p "$1/.reports"
+  printf '# Brief: add world\n\n## Goal\nThe app says world too.\n' >"$brief"
+  [ "${2:-approved}" = approved ] && sha256_of "$brief" >"${brief%.md}.approved"
+  return 0
+}
+
+# run_ship DIR JSON CONCLUSION: run ship.sh in DIR, with an approved brief for the current
+# branch when it has none (the brief cases run ship.sh themselves); a fresh fake log each
+# time (a runs file, if a case wrote one, is kept).
 run_ship() {
   rm -f "$1.log/claude-args" "$1.log/claude-stdin" "$1.log/gh-calls" "$1.log/list-calls" "$1.log/osascript-calls"
   printf '%s\n' "$3" >"$1.log/conclusion"
+  brief_for "$1"
   FAKE_JSON="$2" run_in "$1" bash "$SHIP"
+}
+
+# ship_as_is DIR JSON: run ship.sh in DIR with green CI, leaving the brief as the case made it.
+ship_as_is() {
+  rm -f "$1.log/claude-args" "$1.log/claude-stdin" "$1.log/gh-calls" "$1.log/list-calls" "$1.log/osascript-calls"
+  printf 'success\n' >"$1.log/conclusion"
+  FAKE_JSON="$2" run_in "$1" bash "$SHIP"
+}
+
+# in_terminal DIR CMD...: run CMD in DIR with a pseudo-terminal as its stdin, stdout and
+# stderr (python3's pty module), typing this function's stdin into it; sets OUT (everything
+# the terminal showed) and STATUS.
+in_terminal() {
+  local dir="$1"
+  shift
+  OUT="$(cd "$dir" && python3 -c '
+import os, pty, sys
+sys.exit(os.waitstatus_to_exitcode(pty.spawn(sys.argv[1:])))
+' "$@" 2>&1)"
+  STATUS=$?
+  ERR=""
 }
 
 # run_session DIR [AGENT_TYPE]: run the SessionStart hook for a session in DIR.
@@ -238,6 +279,7 @@ git -C "$dir" branch team/live
 mkdir -p "$dir/.reports"
 for f in feature old team-live gone pinned; do printf '# %s\n' "$f" >"$dir/.reports/$f.md"; done
 for f in feature old gone pinned; do printf 'draft %s\n' "$f" >"$dir/.reports/$f.commit.txt"; done
+for f in feature gone; do printf '# Brief: %s\n' "$f" >"$dir/.reports/$f.brief.md" && printf 'x\n' >"$dir/.reports/$f.brief.approved"; done
 ln -s pinned.md "$dir/.reports/latest.md"
 ln -s pinned.commit.txt "$dir/.reports/latest.commit.txt"
 git -C "$dir" branch -q -D old
@@ -248,7 +290,7 @@ line3="$(sed -n 3p <<<"$OUT")"
 line4="$(sed -n 4p <<<"$OUT")"
 line5="$(sed -n 5p <<<"$OUT")"
 if [ "$STATUS" -eq 0 ] &&
-  [ "$left" = "feature.commit.txt feature.md latest.commit.txt latest.md pinned.commit.txt pinned.md team-live.md " ] &&
+  [ "$left" = "feature.brief.approved feature.brief.md feature.commit.txt feature.md latest.commit.txt latest.md pinned.commit.txt pinned.md team-live.md " ] &&
   [ "$(readlink "$dir/.reports/latest.md")" = feature.md ] &&
   [ "$(sed -n 1p <<<"$OUT")" = "harness-kit $VERSION loaded" ] &&
   grep -qF "write your final report to $dir/.reports/feature.md" <<<"$line2" &&
@@ -258,10 +300,13 @@ if [ "$STATUS" -eq 0 ] &&
   grep -q 'removed the stale report .reports/gone.md' <<<"$ERR" &&
   grep -q 'removed the stale report .reports/old.md' <<<"$ERR" &&
   grep -q 'removed the stale commit draft .reports/gone.commit.txt' <<<"$ERR" &&
-  grep -q 'removed the stale commit draft .reports/old.commit.txt' <<<"$ERR"; then
-  result "session-start: stale reports and commit drafts removed; the current, live and latest's kept" yes ""
+  grep -q 'removed the stale commit draft .reports/old.commit.txt' <<<"$ERR" &&
+  grep -q 'removed the stale brief .reports/gone.brief.md' <<<"$ERR" &&
+  grep -q 'removed the stale brief approval .reports/gone.brief.approved' <<<"$ERR" &&
+  ! grep -q 'feature.brief' <<<"$ERR"; then
+  result "session-start: stale reports, commit drafts, briefs and approvals removed; the current, live and latest's kept" yes ""
 else
-  result "session-start: stale reports and commit drafts removed; the current, live and latest's kept" no \
+  result "session-start: stale reports, commit drafts, briefs and approvals removed; the current, live and latest's kept" no \
     "$(describe)
 left: $left"
 fi
@@ -307,10 +352,11 @@ fi
 # 2b. The Summary template: the report line names all five headings, in this order.
 headings="$(grep -oE '"(Result|Evidence|Deviations|Decide|Your commands):"' <<<"$line2" | tr '\n' ' ')"
 want='"Result:" "Evidence:" "Deviations:" "Decide:" "Your commands:" '
-if [ "$headings" = "$want" ] && grep -qF '"Decide:" what the person must decide; "none" if none.' <<<"$line2"; then
-  result "session-start: the Summary template has Result, Evidence, Deviations, Decide, Your commands, in that order" yes ""
+if [ "$headings" = "$want" ] && grep -qF '"Decide:" what the person must decide; "none" if none.' <<<"$line2" &&
+  grep -qF "\"Deviations:\" anything done differently from, or beyond, the brief ($dir/.reports/feature.brief.md, the plan skill's brief as the person approved it, when there is one; otherwise what the person asked for)" <<<"$line2"; then
+  result "session-start: the Summary template has Result, Evidence, Deviations (against the branch's brief), Decide, Your commands, in that order" yes ""
 else
-  result "session-start: the Summary template has Result, Evidence, Deviations, Decide, Your commands, in that order" no \
+  result "session-start: the Summary template has Result, Evidence, Deviations (against the branch's brief), Decide, Your commands, in that order" no \
     "headings found, in order: $headings
 line 2: $line2"
 fi
@@ -553,7 +599,7 @@ if [ "$STATUS" -eq 1 ] && [ -e "$dir.log/claude-args" ] &&
   grep -q '^R1 — FAIL' <<<"$OUT" && [ "$(rev "$dir" HEAD~1)" = "$head_before" ] &&
   [ "$(git -C "$dir" log -1 --format=%s)" = "Record review of feature: FIX-FIRST" ] &&
   git -C "$dir" log -1 --format=%b | grep -q '^.harness/reviews.tsv: the line review.sh appended for this branch.s current diff, verdict FIX-FIRST' &&
-  [ "$(git -C "$dir" diff --name-only HEAD~1 HEAD)" = .harness/reviews.tsv ] && [ -z "$(git -C "$dir" status --porcelain)" ] &&
+  [ "$(git -C "$dir" diff --name-only HEAD~1 HEAD)" = .harness/reviews.tsv ] && [ -z "$(git -C "$dir" status --porcelain --untracked-files=no)" ] &&
   [ ! -e "$dir.log/gh-calls" ] && [ -z "$(remote_rev "$dir" feature)" ] &&
   [ "$(rev "$dir" main)" = "$(remote_rev "$dir" main)" ]; then
   result "ship.sh: a non-PASS review: commits its line with the standard message, stops and shows the verdict" yes ""
@@ -626,15 +672,19 @@ mkdir -p "$dir/.reports" && printf '# report\n' >"$dir/.reports/feature.md"
 printf 'draft\n' >"$dir/.reports/feature.commit.txt"
 run_ship "$dir" "$PASS_JSON" success
 green_head="$(rev "$dir" feature)"
+green_input="$(cat "$dir.log/claude-stdin" 2>/dev/null)"
 if [ "$STATUS" -eq 0 ] && grep -q 'SHIPPED: feature' <<<"$ERR" &&
   [ "$(git -C "$dir" log -1 --format=%s feature)" = "Record review of feature: PASS" ] &&
   [ "$(remote_rev "$dir" feature)" = "$green_head" ] && [ "$(rev "$dir" main)" = "$green_head" ] &&
   [ "$(remote_rev "$dir" main)" = "$green_head" ] && [ "$(git -C "$dir" symbolic-ref --short HEAD)" = main ] &&
   [ ! -e "$dir/.reports/feature.md" ] && [ ! -e "$dir/.reports/feature.commit.txt" ] && [ ! -e "$dir/.git/harness-kit-ship" ] &&
+  [ ! -e "$dir/.reports/feature.brief.md" ] && [ ! -e "$dir/.reports/feature.brief.approved" ] &&
+  grep -q 'the brief is approved as it is: .reports/feature.brief.md' <<<"$ERR" &&
+  grep -qx 'approval: MATCHES: .reports/feature.brief.approved holds this brief.s sha256 ([0-9a-f]*); the person approved the brief as it is below' <<<"$green_input" &&
   grep -q -- "run watch 4242 --exit-status" "$dir.log/gh-calls"; then
-  result "ship.sh: green CI: fast-forwards main, pushes it, deletes the report and the commit draft" yes ""
+  result "ship.sh: green CI: fast-forwards main, pushes it, deletes the report, the commit draft, the brief and its approval" yes ""
 else
-  result "ship.sh: green CI: fast-forwards main, pushes it, deletes the report and the commit draft" no "$(describe)"
+  result "ship.sh: green CI: fast-forwards main, pushes it, deletes the report, the commit draft, the brief and its approval" no "$(describe)"
 fi
 
 # 18. Resume after leaving the branch: the remote refuses main once (a pre-receive hook),
@@ -940,6 +990,165 @@ else
   result "ship.sh: an up-to-date index commits nothing; a failing index command stops before the review" no "fresh: $fresh
 fresh subjects: $fresh_subjects
 failing: $(describe)"
+fi
+
+
+# ---------------------------------------------------------------------------------------
+# The brief: ship.sh's gate and approve-brief.sh
+# ---------------------------------------------------------------------------------------
+
+# 29. ship.sh stops before the review (before the index, the check and claude) when the
+# branch has no brief, when its brief has no approval, and when the brief changed after it
+# was approved; each stop prints the exact fix, with approve-brief.sh's full path. A
+# brief-optional that is committed but not protected is not honoured, and the stop says so.
+# Nothing is committed, pushed or asked of gh.
+dir="$(new_repo ship-no-brief)"
+head_before="$(rev "$dir" HEAD)"
+ship_as_is "$dir" "$PASS_JSON"
+none="$(describe)"
+none_ok=no
+if [ "$STATUS" -eq 1 ] &&
+  grep -qF "STOPPED: there is no brief for feature (.reports/feature.brief.md), so no review was started. Fix: in Claude, run /plan <goal> to write it; read it, then approve it in your terminal: $SCRIPTS/approve-brief.sh; then re-run ship.sh." <<<"$ERR" &&
+  ! grep -q 'check: 1 passed' <<<"$OUT" && [ ! -e "$dir.log/claude-args" ] && [ ! -e "$dir.log/gh-calls" ] &&
+  [ "$(rev "$dir" HEAD)" = "$head_before" ] && [ -z "$(remote_rev "$dir" feature)" ]; then
+  none_ok=yes
+fi
+brief_for "$dir" unapproved
+ship_as_is "$dir" "$PASS_JSON"
+unapproved="$(describe)"
+unapproved_ok=no
+if [ "$STATUS" -eq 1 ] &&
+  grep -qF "STOPPED: the brief .reports/feature.brief.md has no approval (.reports/feature.brief.approved), so no review was started. Fix: read it, then approve it in your terminal: $SCRIPTS/approve-brief.sh; then re-run ship.sh." <<<"$ERR" &&
+  [ ! -e "$dir.log/claude-args" ] && [ ! -e "$dir.log/gh-calls" ]; then
+  unapproved_ok=yes
+fi
+sha256_of "$dir/.reports/feature.brief.md" >"$dir/.reports/feature.brief.approved"
+approved_sha="$(cat "$dir/.reports/feature.brief.approved")"
+printf 'Out of scope: nothing else.\n' >>"$dir/.reports/feature.brief.md"
+changed_sha="$(sha256_of "$dir/.reports/feature.brief.md")"
+ship_as_is "$dir" "$PASS_JSON"
+changed="$(describe)"
+changed_ok=no
+if [ "$STATUS" -eq 1 ] &&
+  grep -qF "STOPPED: the brief .reports/feature.brief.md changed after it was approved (its sha256 is $changed_sha; .reports/feature.brief.approved holds $approved_sha), so no review was started. Fix: read it again, then approve it in your terminal: $SCRIPTS/approve-brief.sh; then re-run ship.sh." <<<"$ERR" &&
+  [ ! -e "$dir.log/claude-args" ] && [ ! -e "$dir.log/gh-calls" ] && [ "$(rev "$dir" HEAD)" = "$head_before" ]; then
+  changed_ok=yes
+fi
+dir2="$(new_repo ship-brief-unprotected)"
+printf 'This project does not use briefs.\n' >"$dir2/.harness/brief-optional"
+git -C "$dir2" add -A && git -C "$dir2" commit -q -m "briefs optional, unprotected"
+ship_as_is "$dir2" "$PASS_JSON"
+unprotected="$(describe)"
+if [ "$none_ok$unapproved_ok$changed_ok" = yesyesyes ] && [ "$STATUS" -eq 1 ] &&
+  grep -qF 'STOPPED: there is no brief for feature' <<<"$ERR" &&
+  grep -qF '(Note: .harness/brief-optional is committed but .harness/protected-paths does not list it, so it is not honoured' <<<"$ERR" &&
+  [ ! -e "$dir2.log/claude-args" ] &&
+  [ "$(events "$dir")" = "$(printf 'ship.sh\tfeature\tSTOPPED\tno-brief\nship.sh\tfeature\tSTOPPED\tbrief-not-approved\nship.sh\tfeature\tSTOPPED\tbrief-changed')" ]; then
+  result "ship.sh: no brief, or an approval that does not match, stops before the review with the exact fix" yes ""
+else
+  result "ship.sh: no brief, or an approval that does not match, stops before the review with the exact fix" no "no brief ($none_ok): $none
+unapproved ($unapproved_ok): $unapproved
+changed ($changed_ok): $changed
+brief-optional not protected: $unprotected
+events: $(events "$dir")"
+fi
+
+# 30. The opt-out is the person's, per project: a committed .harness/brief-optional that
+# .harness/protected-paths lists lets a branch with no brief go on to the review and ship,
+# and the reviewer's input says so. A brief that is there must still match its approval.
+dir="$(new_repo ship-brief-optional)"
+printf 'This project does not use briefs.\n' >"$dir/.harness/brief-optional"
+printf '.harness/\n' >"$dir/.harness/protected-paths"
+git -C "$dir" add -A && git -C "$dir" commit -q -m "briefs optional, protected"
+ship_as_is "$dir" "$PASS_JSON"
+optional="$(describe)"
+optional_input="$(cat "$dir.log/claude-stdin" 2>/dev/null)"
+optional_ok=no
+if [ "$STATUS" -eq 0 ] && grep -q 'SHIPPED: feature' <<<"$ERR" &&
+  grep -qF 'no brief (.reports/feature.brief.md); this project makes briefs optional (.harness/brief-optional, protected)' <<<"$ERR" &&
+  grep -qx 'none: this branch has no brief (.reports/feature.brief.md); the project makes briefs optional (.harness/brief-optional, protected)' <<<"$optional_input"; then
+  optional_ok=yes
+fi
+dir2="$(new_repo ship-brief-optional-changed)"
+printf 'This project does not use briefs.\n' >"$dir2/.harness/brief-optional"
+printf '.harness/brief-optional\n' >"$dir2/.harness/protected-paths"
+git -C "$dir2" add -A && git -C "$dir2" commit -q -m "briefs optional, protected"
+brief_for "$dir2"
+printf 'changed\n' >>"$dir2/.reports/feature.brief.md"
+ship_as_is "$dir2" "$PASS_JSON"
+if [ "$optional_ok" = yes ] && [ "$STATUS" -eq 1 ] && grep -qF 'STOPPED: the brief .reports/feature.brief.md changed after it was approved' <<<"$ERR" &&
+  [ ! -e "$dir2.log/claude-args" ]; then
+  result "ship.sh: a committed, protected .harness/brief-optional lets a branch with no brief ship; a brief that is there must match" yes ""
+else
+  result "ship.sh: a committed, protected .harness/brief-optional lets a branch with no brief ship; a brief that is there must match" no "optional ($optional_ok): $optional
+brief there, changed: $(describe)"
+fi
+
+# 31. approve-brief.sh refuses without a terminal (stdin a pipe, even one saying y) and
+# writes nothing; with no brief it says to run /plan; on a detached HEAD it refuses.
+dir="$(new_repo approve-refused)"
+OUT="$(cd "$dir" && bash "$APPROVE_BRIEF" <<<"y" 2>&1)"
+STATUS=$? ERR=""
+no_brief="$(describe)"
+no_brief_ok=no
+[ "$STATUS" -eq 1 ] && grep -qF 'there is no brief for feature (.reports/feature.brief.md). In Claude, run /plan <goal> to write it' <<<"$OUT" && no_brief_ok=yes
+brief_for "$dir" unapproved
+OUT="$(cd "$dir" && printf 'y\n' | bash "$APPROVE_BRIEF" 2>&1)"
+STATUS=$? ERR=""
+piped="$(describe)"
+piped_status="$STATUS"
+OUT="$(cd "$dir" && bash "$APPROVE_BRIEF" </dev/null 2>&1)"
+STATUS=$? ERR=""
+if [ "$no_brief_ok" = yes ] && [ "$piped_status" -eq 2 ] && [ "$STATUS" -eq 2 ] &&
+  grep -qF 'REFUSED: stdin is not a terminal, so the answer could not come from you reading the brief.' <<<"$piped" &&
+  grep -qF "Run it yourself, in your own terminal: $SCRIPTS/approve-brief.sh. Nothing was written." <<<"$piped" &&
+  ! grep -q 'Approve this brief' <<<"$piped" && [ ! -e "$dir/.reports/feature.brief.approved" ]; then
+  result "approve-brief.sh: refuses without a terminal and writes nothing; with no brief it says to run /plan" yes ""
+else
+  result "approve-brief.sh: refuses without a terminal and writes nothing; with no brief it says to run /plan" no "no brief ($no_brief_ok): $no_brief
+piped y: $piped
+/dev/null: $(describe)
+approval: $(cat "$dir/.reports/feature.brief.approved" 2>/dev/null)"
+fi
+
+# 32. In a terminal: approve-brief.sh shows the brief and asks; "n" (or just Enter) writes
+# nothing; "y" writes .reports/<branch>.brief.approved holding the brief's sha256, which
+# ship.sh then accepts. A later "n" leaves that approval as it was.
+dir="$(new_repo approve-terminal)"
+git -C "$dir" checkout -q -b team/login
+brief_for "$dir" unapproved
+brief_sha="$(sha256_of "$dir/.reports/team-login.brief.md")"
+in_terminal "$dir" bash "$APPROVE_BRIEF" <<<"n"
+declined="$(describe)"
+declined_status="$STATUS"
+declined_file="$(cat "$dir/.reports/team-login.brief.approved" 2>/dev/null)"
+in_terminal "$dir" bash "$APPROVE_BRIEF" <<<""
+enter_status="$STATUS"
+in_terminal "$dir" bash "$APPROVE_BRIEF" <<<"y"
+approved="$(describe)"
+approved_status="$STATUS"
+recorded="$(cat "$dir/.reports/team-login.brief.approved" 2>/dev/null)"
+recorded_lines="$(wc -l <"$dir/.reports/team-login.brief.approved" | tr -d ' ')"
+in_terminal "$dir" bash "$APPROVE_BRIEF" <<<"no"
+after_no="$(cat "$dir/.reports/team-login.brief.approved" 2>/dev/null)"
+ship_as_is "$dir" "$PASS_JSON"
+if [ "$declined_status" -eq 1 ] && grep -qF 'Approve this brief? [y/N]' <<<"$declined" &&
+  grep -qF "=== .reports/team-login.brief.md (sha256 $brief_sha) ===" <<<"$declined" && grep -qF '## Goal' <<<"$declined" &&
+  grep -qF 'not approved (answer "n"). Nothing was written.' <<<"$declined" && [ -z "$declined_file" ] && [ "$enter_status" -eq 1 ] &&
+  [ "$approved_status" -eq 0 ] && grep -qF "APPROVED: .reports/team-login.brief.approved holds the brief's sha256 ($brief_sha)" <<<"$approved" &&
+  [ "$recorded" = "$brief_sha" ] && [ "$recorded_lines" = 1 ] &&
+  [ "$after_no" = "$brief_sha" ] &&
+  [ "$STATUS" -eq 0 ] && grep -q 'the brief is approved as it is: .reports/team-login.brief.md' <<<"$ERR"; then
+  result "approve-brief.sh: in a terminal, y writes the brief's sha256 (ship.sh accepts it); anything else writes nothing" yes ""
+else
+  result "approve-brief.sh: in a terminal, y writes the brief's sha256 (ship.sh accepts it); anything else writes nothing" no "n: $declined
+file after n: $declined_file
+Enter: exit $enter_status
+y: $approved
+recorded: $recorded (brief $brief_sha)
+after a later no: $after_no
+ship: exit $STATUS
+$ERR"
 fi
 
 if [ "$failures" -ne 0 ]; then

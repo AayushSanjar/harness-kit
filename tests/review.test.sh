@@ -279,6 +279,50 @@ stale head: $(describe)
 $stale"
 fi
 
+# 6e. The brief: the input's BRIEF section, between the CHECKLIST and the CHECK COMMAND,
+# holds the branch's brief (.reports/<branch>.brief.md) and whether its approval matches:
+# none (one line), NONE (no approval), MATCHES (the approval holds the brief's sha256) and
+# DOES NOT MATCH (the brief changed since). review.sh never stops for it.
+brief_section() { sed -n '/^=== BRIEF ===$/,/^=== CHECK COMMAND ===$/p' "$1.log/stdin" 2>/dev/null; }
+sha256_of() { node -e 'process.stdout.write(require("crypto").createHash("sha256").update(require("fs").readFileSync(process.argv[1])).digest("hex"))' "$1"; }
+dir="$(new_repo brief)"
+run_review "$dir" "$PASS_JSON"
+none="$(brief_section "$dir")"
+order="$(grep -E '^=== (CHECKLIST|BRIEF|CHECK COMMAND) ===$' "$dir.log/stdin" 2>/dev/null | tr '\n' '|')"
+mkdir -p "$dir/.reports"
+printf '# Brief: add world\n\n## Scope\napp.txt gains a line.\n' >"$dir/.reports/feature.brief.md"
+rm -f "$dir/.harness/reviews.tsv"
+run_review "$dir" "$PASS_JSON"
+unapproved="$(brief_section "$dir")"
+sha="$(sha256_of "$dir/.reports/feature.brief.md")"
+printf '%s\n' "$sha" >"$dir/.reports/feature.brief.approved"
+rm -f "$dir/.harness/reviews.tsv"
+run_review "$dir" "$PASS_JSON"
+matches="$(brief_section "$dir")"
+matches_status="$STATUS"
+printf 'Out of scope: the README.\n' >>"$dir/.reports/feature.brief.md"
+rm -f "$dir/.harness/reviews.tsv"
+run_review "$dir" "$PASS_JSON"
+changed="$(brief_section "$dir")"
+now="$(sha256_of "$dir/.reports/feature.brief.md")"
+if [ "$none" = $'=== BRIEF ===\nnone: this branch has no brief (.reports/feature.brief.md)\n\n=== CHECK COMMAND ===' ] &&
+  [ "$order" = "=== CHECKLIST ===|=== BRIEF ===|=== CHECK COMMAND ===|" ] &&
+  grep -qx 'approval: NONE: there is no .reports/feature.brief.approved; the person has not approved this brief' <<<"$unapproved" &&
+  grep -qx 'brief: .reports/feature.brief.md' <<<"$matches" && grep -qx 'app.txt gains a line.' <<<"$matches" &&
+  grep -qx "approval: MATCHES: .reports/feature.brief.approved holds this brief's sha256 ($sha); the person approved the brief as it is below" <<<"$matches" &&
+  [ "$matches_status" -eq 0 ] &&
+  grep -qx "approval: DOES NOT MATCH: .reports/feature.brief.approved holds $sha, but this brief's sha256 is $now: the brief changed after the person approved it" <<<"$changed" &&
+  grep -qx 'Out of scope: the README.' <<<"$changed" && [ "$STATUS" -eq 0 ]; then
+  result "review.sh: the input holds the brief and whether its approval matches" yes ""
+else
+  result "review.sh: the input holds the brief and whether its approval matches" no "no brief: $none
+order: $order
+unapproved: $unapproved
+matching (exit $matches_status): $matches
+changed: $changed
+$(describe)"
+fi
+
 # ---------------------------------------------------------------------------------------
 # check-reviewed.mjs
 # ---------------------------------------------------------------------------------------

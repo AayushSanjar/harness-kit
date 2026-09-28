@@ -10,7 +10,19 @@
 #      excepted: review.sh writes it). Untracked files, such as .reports/, do not count.
 #   2. If check-reviewed.mjs does not pass for the branch's current diff, and the working
 #      tree's .harness/reviews.tsv has no PASS for it yet:
-#      a. THE INDEX. With .harness/index-command (optional; its first line, run as it is in
+#      a. THE BRIEF (brief-lib.sh). The branch's brief, .reports/<branch>.brief.md (written
+#         by the plan skill, /plan <goal>), must exist, and its approval,
+#         .reports/<branch>.brief.approved (written by approve-brief.sh when the person
+#         answers y), must hold the brief's sha256 as it is now. Otherwise ship.sh stops
+#         here, before the index, the check and the review, printing the exact fix: no
+#         brief (run /plan, then approve-brief.sh), no approval (run approve-brief.sh), or
+#         a brief changed since its approval (read it again and run approve-brief.sh). The
+#         one opt-out is the person's, per project: a committed .harness/brief-optional
+#         that HEAD's .harness/protected-paths lists (brief_optional). With it, a branch
+#         with no brief goes on; a brief that is there must still be approved as it is.
+#         A brief-optional that is not committed or not protected is not honoured, and the
+#         stop says why.
+#      b. THE INDEX. With .harness/index-command (optional; its first line, run as it is in
 #         the project root), run it: it regenerates the project's index (such as a
 #         decisions index built from the commits' Decision: lines) and must change nothing
 #         when the index is up to date. If it changed or added files, the index was stale:
@@ -21,7 +33,7 @@
 #         tracked file, or a new one: a change to a file that was already untracked is not
 #         seen. It runs only before a review, never for a diff already reviewed, so an
 #         index that also lists ship.sh's own commits cannot start a review loop.
-#      b. Run the project's check:
+#      c. Run the project's check:
 #      the first line of .harness/check-command, as it is. That line must carry
 #      --skip-reviewed as a word, as land.sh requires (the branch is not reviewed yet, so the
 #      review check would fail); ship.sh never adds it. A missing flag or a failing check
@@ -30,11 +42,12 @@
 #      and stderr together) is shown and saved, with the command, HEAD and working tree it
 #      ran on, and review.sh reuses it (HARNESS_KIT_CHECK_SAVED) instead of running the
 #      check again.
-#      c. Run review.sh. When it records a verdict, whatever it is, ship.sh commits
-#         .harness/reviews.tsv alone, with the message "Record review of <branch>:
-#         <verdict>" and a body naming .harness/reviews.tsv with its reason (so the
-#         commit-msg hook passes it, and nobody commits the line by hand). A verdict other
-#         than PASS then stops here, and the verdict is shown.
+#      d. Run review.sh (its input holds the brief and whether its approval matches). When
+#         it records a verdict, whatever it is, ship.sh commits .harness/reviews.tsv alone,
+#         with the message "Record review of <branch>: <verdict>" and a body naming
+#         .harness/reviews.tsv with its reason (so the commit-msg hook passes it, and
+#         nobody commits the line by hand). A verdict other than PASS then stops here, and
+#         the verdict is shown.
 #   3. If .harness/reviews.tsv still has an uncommitted PASS for the diff (an earlier run
 #      recorded it), commit it the same way. Then check-reviewed.mjs must pass at HEAD.
 #   4. Push the branch to origin.
@@ -46,8 +59,8 @@
 #   6. Check that the base can fast-forward (origin/<base> and <base> are both in the
 #      branch), switch to the base, `git merge --ff-only <branch>`, push the base with
 #      HARNESS_KIT_SHIP=1 set (the pre-push hook from install-hooks.sh refuses any other
-#      push to the base), and delete the branch's report and commit draft (.reports/,
-#      report-path.sh --name).
+#      push to the base), and delete the branch's report, commit draft, brief and brief
+#      approval (.reports/, report-path.sh --name).
 # It never forces a push, never rewrites history, and never deletes the branch. Its own
 # commits (the index, the review line) go through the commit-msg hook like any other.
 #
@@ -63,8 +76,8 @@
 #
 # RESUMABLE. Re-running after a stop continues where it stopped. Steps 1-5 are worked out
 # from git and GitHub again each time and cost nothing when already done: a recorded PASS
-# is not reviewed again, pushing a pushed branch does nothing, and a finished CI run is
-# read, not re-run. Step 6 leaves the branch, so before switching ship.sh writes the
+# is not reviewed again (nor is its brief checked again), pushing a pushed branch does
+# nothing, and a finished CI run is read, not re-run. Step 6 leaves the branch, so before switching ship.sh writes the
 # branch and its head to <git dir>/harness-kit-ship; run on the base branch with that
 # file present, ship.sh finishes step 6 for that branch. The file is removed when the ship
 # is done, or ignored and removed if the branch has moved since.
@@ -81,6 +94,8 @@ POLL="${SHIP_POLL_SECONDS:-10}"
 . "$HERE/events.sh"
 # shellcheck source=ci-lib.sh
 . "$HERE/ci-lib.sh"
+# shellcheck source=brief-lib.sh
+. "$HERE/brief-lib.sh"
 CI_TOOL=ship.sh CI_APPEAR="$APPEAR" CI_POLL="$POLL"
 
 say() { echo "harness-kit ship.sh: $*" >&2; }
@@ -124,7 +139,32 @@ commit_review() {
   say "committed $REVIEWS: Record review of $branch: $1"
 }
 
-# refresh_index: step 2a. Commits the files .harness/index-command changed or added.
+# brief_gate BRANCH: step 2a. Returns when the review may start; stops otherwise, with the fix.
+brief_gate() {
+  local approve="$HERE/approve-brief.sh" optional_note=""
+  brief_load "$PROJECT" "$1" || stop brief-name "$BRIEF_ERROR"
+  case "$BRIEF_STATE" in
+    approved)
+      say "the brief is approved as it is: $BRIEF"
+      ;;
+    missing)
+      if brief_optional "$PROJECT"; then
+        say "no brief ($BRIEF); this project makes briefs optional (.harness/brief-optional, protected)"
+        return 0
+      fi
+      [ -z "$BRIEF_OPTIONAL_WHY" ] || optional_note=" (Note: $BRIEF_OPTIONAL_WHY.)"
+      stop no-brief "there is no brief for $1 ($BRIEF), so no review was started. Fix: in Claude, run /plan <goal> to write it; read it, then approve it in your terminal: $approve; then re-run ship.sh.$optional_note"
+      ;;
+    unapproved)
+      stop brief-not-approved "the brief $BRIEF has no approval ($BRIEF_APPROVAL), so no review was started. Fix: read it, then approve it in your terminal: $approve; then re-run ship.sh."
+      ;;
+    *)
+      stop brief-changed "the brief $BRIEF changed after it was approved (its sha256 is $BRIEF_SHA; $BRIEF_APPROVAL holds $BRIEF_RECORDED), so no review was started. Fix: read it again, then approve it in your terminal: $approve; then re-run ship.sh."
+      ;;
+  esac
+}
+
+# refresh_index: step 2b. Commits the files .harness/index-command changed or added.
 refresh_index() {
   local cmd before after changed body path paths status
   cmd="$( { [ -f .harness/index-command ] && head -n 1 .harness/index-command; } | tr -d '\r')"
@@ -154,7 +194,7 @@ refresh_index() {
 
 # Step 6. Uses $branch and $head.
 finish() {
-  local report draft
+  local report draft brief
   printf '%s\t%s\n' "$branch" "$head" >"$STATE" || stop state-file "cannot write $STATE"
   if [ "$(git symbolic-ref --short -q HEAD)" != "$base" ]; then
     git checkout -q "$base" || stop checkout-failed "could not switch to $base. Fix what git says, then re-run ship.sh (on $base or $branch)."
@@ -166,9 +206,10 @@ finish() {
     stop push-base-failed "pushing $base failed (above). You are on $base, which is merged locally and not pushed. Fix the cause, then re-run ship.sh on $base to push it."
   report="$(bash "$HERE/report-path.sh" --name "$branch")" && rm -f -- "$report"
   draft="$(bash "$HERE/report-path.sh" --name "$branch" --commit)" && rm -f -- "$draft"
+  brief="$(bash "$HERE/report-path.sh" --name "$branch" --brief)" && rm -f -- "$brief" "${brief%.md}.approved"
   rm -f -- "$STATE"
   harness_event ship.sh "$branch" SHIPPED "$base" "merged $(git rev-parse --short "$head") into $base and pushed it"
-  say "SHIPPED: $branch ($(git rev-parse --short "$head")) is merged into $base and pushed; its report and commit draft were deleted. You are on $base."
+  say "SHIPPED: $branch ($(git rev-parse --short "$head")) is merged into $base and pushed; its report, commit draft, brief and brief approval were deleted. You are on $base."
   notify "SHIPPED: $branch is merged into $base and pushed."
   exit 0
 }
@@ -212,6 +253,7 @@ else
   if [ "$pending" = PASS ]; then
     say "$REVIEWS already has an uncommitted PASS for this diff; not reviewing again"
   else
+    brief_gate "$branch"
     refresh_index
     state="$(node "$HERE/check-reviewed.mjs" --hash)" || stop diff-failed "could not work out the branch's diff: $state"
     hash="$(cut -f3 <<<"$state")"
@@ -268,7 +310,7 @@ say "pushed $branch ($(git rev-parse --short "$head")) to $REMOTE"
 ci_wait "$head" "$branch"
 
 # ---------------------------------------------------------------------------------------
-# 6. Merge into the base, push it, delete the report and the commit draft.
+# 6. Merge into the base, push it, delete the report, the commit draft and the brief.
 # ---------------------------------------------------------------------------------------
 git fetch -q "$REMOTE" "$base" || stop fetch-failed "could not fetch $base from $REMOTE (above). Re-run ship.sh."
 for ref in "refs/remotes/$REMOTE/$base" "refs/heads/$base"; do

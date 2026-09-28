@@ -15,9 +15,13 @@
 //     additionalContext, "String added to Claude's context at the start of the
 //     conversation". Stdout that "Starts with `{` and ends with `}`" is parsed as JSON.
 //
-// THE REPORT LINE. report-path.sh --prune, run in the project, deletes stale reports and
-// prints the report path for the current branch; this hook tells Claude to write there.
-// Outside a git repository there is no report line.
+// THE REPORT LINE. report-path.sh --prune, run in the project, deletes stale reports (and
+// stale briefs and approvals) and prints the report path for the current branch; this hook
+// tells Claude to write there, starting with the Summary template (summaryHeadings). Its
+// "Deviations:" heading measures the work against the branch's brief, named by its path
+// (the report path ending .brief.md, as report-path.sh --brief names it): the plan skill
+// writes it and the person approves it with approve-brief.sh. Outside a git repository
+// there is no report line.
 //
 // THE COMMIT DRAFT LINE. report-path.sh --commit prints .reports/<branch>.commit.txt and
 // points .reports/latest.commit.txt at it. Whenever Claude changes files it writes the
@@ -59,10 +63,11 @@ const BLAST_RADIUS =
   "harness-kit: before finishing, search for every file, comment, test and document that describes behaviour you changed, " +
   "and update each or list it in the report.";
 // The report's Summary template: each heading with what goes under it, in this order.
-const SUMMARY_HEADINGS = [
+// BRIEF is the path of the branch's brief.
+const summaryHeadings = (brief) => [
   `"Result:" one line.`,
   `"Evidence:" output lines quoted exactly (the final line of each test or check run, and the key FAIL line of each deliberate break), never paraphrased.`,
-  `"Deviations:" anything done differently from, or beyond, the brief (including any git command run); "none" if none.`,
+  `"Deviations:" anything done differently from, or beyond, the brief (${brief}, the plan skill's brief as the person approved it, when there is one; otherwise what the person asked for), including any git command run; "none" if none.`,
   `"Decide:" what the person must decide; "none" if none.`,
   `"Your commands:" the exact commands the person runs next, in order.`,
 ];
@@ -107,7 +112,7 @@ if (input.agent_type !== REVIEWER) {
     lines.push(
       `harness-kit: write your final report to ${path} (replace what is there). ` +
         `Start it with a section "## Summary" of at most 15 lines, under exactly these headings, in this order: ` +
-        SUMMARY_HEADINGS.join(" ") +
+        summaryHeadings(path.replace(/\.md$/, ".brief.md")).join(" ") +
         ` Never commit it: .reports/ is for the person, not for git.`,
     );
     const draft = reportPath("--commit");

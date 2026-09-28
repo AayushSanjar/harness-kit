@@ -18,6 +18,9 @@
 #                          says "reused:"
 #   review-reads           optional; one project-relative path per line (# comments and
 #                          blank lines skipped), such as a spec, copied in whole
+#   brief-optional         optional, and honoured only when committed and listed in
+#                          protected-paths (brief-lib.sh's brief_optional); the BRIEF
+#                          section says so when the branch has no brief
 # Limits, from the environment: REVIEW_MAX_TURNS (default 40), REVIEW_MAX_BUDGET_USD
 # (default 3.00) and REVIEW_MAX_INPUT_BYTES (default 250000, the most the reviewer's input
 # may hold; review-lib.sh's review_build_input says where the default comes from).
@@ -28,6 +31,15 @@
 # input a deleted file is one line, "deleted: <path> (<N> lines)", and a renamed file is
 # "renamed: <old> -> <new>" plus any change to its content; added and modified files are
 # shown in full.
+#
+# THE BRIEF. The input's BRIEF section, after the CHECKLIST, holds the branch's brief
+# (.reports/<branch>.brief.md, written by the plan skill) and whether its approval matches
+# it (brief-lib.sh's brief_review_section): "approval: MATCHES" when
+# .reports/<branch>.brief.approved holds the brief's sha256 (approve-brief.sh writes it),
+# "approval: DOES NOT MATCH" when the brief changed after it was approved, "approval: NONE"
+# when it was never approved, or one "none:" line when there is no brief. The reviewer
+# judges the diff's scope against an approved brief. review.sh itself never stops for the
+# brief; ship.sh does, before starting the review.
 #
 # THE RECORD. On a completed review it prints the full review, then appends ONE line to
 # .harness/reviews.tsv, tab-separated:
@@ -50,6 +62,8 @@ set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=review-lib.sh
 . "$HERE/review-lib.sh"
+# shellcheck source=brief-lib.sh
+. "$HERE/brief-lib.sh"
 
 die() {
   echo "harness-kit review.sh: $*; nothing was appended to .harness/reviews.tsv" >&2
@@ -85,6 +99,8 @@ if review_saved_check "$H" "${HARNESS_KIT_CHECK_SAVED:-}" >"$work/check-section.
 else
   review_check_section "$H" "$work" >"$work/check-section.txt"
 fi
+brief_review_section "$PROJECT" "$branch" >"$work/brief-section.txt"
+REVIEW_BRIEF_SECTION="$work/brief-section.txt"
 review_build_input "$work/input.md" "$PROJECT" "$branch" "$base_ref" "$merge_base" "$head" "$CHECKLIST" \
   "$work/check-section.txt" || die "$REVIEW_ERROR"
 

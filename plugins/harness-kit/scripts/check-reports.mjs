@@ -4,8 +4,8 @@
 //   node check-reports.mjs     one PASS or FAIL line, exit 0 or 1
 //
 // Run from anywhere inside the project's git repository. .reports/ holds Claude's final
-// report for each branch (report-path.sh); it is for the person to read and must never be
-// committed. "Tracked" means in the index (staged, or committed and not removed) or in
+// report, commit draft and brief for each branch, and the person's approval of the brief
+// (report-path.sh); it is for the person to read and must never be committed. "Tracked" means in the index (staged, or committed and not removed) or in
 // HEAD's tree, so a report that was committed and then only `git rm --cached` still fails
 // until that removal is committed.
 import { spawnSync } from "node:child_process";

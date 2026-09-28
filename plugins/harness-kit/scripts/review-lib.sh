@@ -18,6 +18,9 @@ REVIEW_ERROR=""
 REVIEW_ID_LIST=""
 REVIEW_READS=()
 REVIEW_READ_SOURCES=()
+# A file holding the body of the BRIEF section (review.sh sets it, from brief-lib.sh's
+# brief_review_section); empty, as in eval-reviewer.sh, means the input has no BRIEF section.
+REVIEW_BRIEF_SECTION=""
 
 review_fail() {
   REVIEW_ERROR="$*"
@@ -121,7 +124,9 @@ review_format_check() {
 # holding the body of the CHECK COMMAND section. The checklist is copied from CHECKLIST;
 # the input names it as CHECKLIST_SHOWN (default CHECKLIST), the copy the reviewer can
 # Read. Uses REVIEW_ID_LIST, REVIEW_READS and REVIEW_READ_SOURCES (an empty source, left
-# by review_check_reads --missing-ok, is shown as not present).
+# by review_check_reads --missing-ok, is shown as not present), and REVIEW_BRIEF_SECTION:
+# when set, a BRIEF section (the branch's brief and whether its approval matches) follows
+# the CHECKLIST.
 #
 # THE SIZE GUARD. The built input must be at most REVIEW_MAX_INPUT bytes, or this fails
 # naming the largest parts, before any claude call. The default, 250000 bytes, comes from
@@ -150,6 +155,11 @@ review_build_input() {
     echo "=== CHECKLIST ==="
     cat "$checklist"
     echo
+    if [ -n "$REVIEW_BRIEF_SECTION" ]; then
+      echo "=== BRIEF ==="
+      cat "$REVIEW_BRIEF_SECTION"
+      echo
+    fi
     echo "=== CHECK COMMAND ==="
     cat "$check_section"
     echo
@@ -205,7 +215,7 @@ review_diff() {
 # section by its name.
 review_largest() {
   LC_ALL=C awk '
-    /^=== (REVIEW|CHECKLIST|CHECK COMMAND|GIT LOG|GIT STATUS) ===$/ && !inread { key = "the " substr($0, 5, length($0) - 8) " section"; next }
+    /^=== (REVIEW|CHECKLIST|BRIEF|CHECK COMMAND|GIT LOG|GIT STATUS) ===$/ && !inread { key = "the " substr($0, 5, length($0) - 8) " section"; next }
     /^=== DIFF ===$/ && !inread { key = "the deleted and renamed lines"; diff = 1; next }
     /^=== READ: .* ===$/ { key = "READ: " substr($0, 11, length($0) - 14); inread = 1; diff = 0; next }
     diff && /^diff --git / { key = $0; sub(/.* b\//, "", key) }

@@ -48,7 +48,7 @@ check "claude plugin validate --strict (plugin: plugins/harness-kit)" "$out" $?
 # empty folder outside any git repository, so there is no report line and no .reports/
 # folder is made here, and without HARNESS_KIT_EVAL, so there is no warning (tests/ship.test.sh
 # covers both).
-expected="harness-kit 0.13.0 loaded"
+expected="harness-kit 0.14.0 loaded"
 empty="$(mktemp -d)"
 out="$(cd "$empty" && env -u HARNESS_KIT_EVAL -u CLAUDE_PROJECT_DIR GIT_CEILING_DIRECTORIES="$(dirname "$empty")" \
   node "$PLUGIN/scripts/session-start.mjs" </dev/null 2>&1)"
@@ -114,8 +114,8 @@ check "guard-secrets.mjs --scan on this repository: no findings" "$out" $?
 bash "$ROOT/tests/predeploy-gate.test.sh"
 check "tests/predeploy-gate.test.sh (all cases)" "" $?
 
-# (j) The reviewer's cases: review.sh (with a fake claude, no API calls),
-# check-reviewed.mjs and the reviewer guard hook, one per line.
+# (j) The reviewer's cases: review.sh (with a fake claude, no API calls; its input's BRIEF
+# section too), check-reviewed.mjs and the reviewer guard hook, one per line.
 bash "$ROOT/tests/review.test.sh"
 check "tests/review.test.sh (all cases)" "" $?
 
@@ -125,11 +125,12 @@ bash "$ROOT/tests/eval-reviewer.test.sh"
 check "tests/eval-reviewer.test.sh (all cases)" "" $?
 
 # (l) The person's own steps: report-path.sh, session-start.mjs's report, commit draft,
-# commit and blast-radius lines, stale reports and drafts, the HARNESS_KIT_EVAL warning,
-# check-reports.mjs, land.sh, ship.sh (its saved check output, its notifications, the
-# review line it commits and the index it refreshes) and install-hooks.sh's pre-push and
-# commit-msg hooks (with a fake gh, a fake osascript and a local bare repository as the
-# remote, nothing touches GitHub), one per line.
+# commit and blast-radius lines, stale reports, drafts and briefs, the HARNESS_KIT_EVAL
+# warning, check-reports.mjs, land.sh, ship.sh (its brief gate, its saved check output, its
+# notifications, the review line it commits and the index it refreshes), approve-brief.sh
+# (in a pseudo-terminal from python3's pty module, and without one) and install-hooks.sh's
+# pre-push and commit-msg hooks (with a fake gh, a fake osascript and a local bare
+# repository as the remote, nothing touches GitHub), one per line.
 bash "$ROOT/tests/ship.test.sh"
 check "tests/ship.test.sh (all cases)" "" $?
 
@@ -171,11 +172,23 @@ check "tests/release.test.sh (all cases)" "" $?
 bash "$ROOT/tests/git-guard.test.sh"
 check "tests/git-guard.test.sh (all cases)" "" $?
 
-# (r) The record-defect skill is started only by the person: its frontmatter turns off
-# model invocation.
-skill="$PLUGIN/skills/record-defect/SKILL.md"
-out="$(awk 'NR == 1 && $0 != "---" { exit 1 } NR > 1 && $0 == "---" { exit found ? 0 : 1 } /^disable-model-invocation: true$/ { found = 1 } END { if (!found) exit 1 }' "$skill" 2>&1)"
-check "skills/record-defect/SKILL.md has disable-model-invocation: true" "${out:-no \"disable-model-invocation: true\" line in its frontmatter}" $?
+# (r) The record-defect and plan skills are started only by the person: their frontmatter
+# turns off model invocation.
+for name in record-defect plan; do
+  skill="$PLUGIN/skills/$name/SKILL.md"
+  out="$(awk 'NR == 1 && $0 != "---" { exit 1 } NR > 1 && $0 == "---" { exit found ? 0 : 1 } /^disable-model-invocation: true$/ { found = 1 } END { if (!found) exit 1 }' "$skill" 2>&1)"
+  check "skills/$name/SKILL.md has disable-model-invocation: true" "${out:-no \"disable-model-invocation: true\" line in its frontmatter}" $?
+done
+
+# (v) The plan skill's brief has the fixed sections, in this order, and the skill raises
+# OPEN spec rules before planning and never approves its own brief.
+skill="$PLUGIN/skills/plan/SKILL.md"
+got="$(sed -n '/^# Brief: /,/^```$/p' "$skill" | grep '^## ' | tr '\n' '|')"
+want="## Goal|## Scope|## Spec rules touched|## Acceptance tests|## Blast radius|## New thresholds|## Protected files expected|"
+out="sections in the brief template: $got"
+[ "$got" = "$want" ] && grep -q 'stop before planning further' "$skill" && grep -q '\.harness/review-reads' "$skill" &&
+  grep -q 'Never write `.reports/<branch>.brief.approved`, and never run `approve-brief.sh`' "$skill"
+check "skills/plan/SKILL.md: the brief's seven sections in order; OPEN rules raised first; never approves itself" "$out" $?
 
 # (m) No report is tracked in this repository.
 out="$(cd "$ROOT" && node "$PLUGIN/scripts/check-reports.mjs" 2>&1)"

@@ -11,8 +11,10 @@
 //     git clean with -f or --force (alone or in a cluster such as -fd), git branch -D (or
 //     --delete/-d with --force/-f), git stash drop, git stash clear, and git rebase (any
 //     form: it rewrites history, and an interactive one cannot run in Claude's shell);
-//   - running land.sh, ship.sh, release.sh, upgrade.sh or approve-protected.sh (by path,
-//     or through bash, sh, zsh, dash, ksh, source or "."): they are the person's steps.
+//   - running land.sh, ship.sh, release.sh, upgrade.sh, approve-protected.sh or
+//     approve-brief.sh (by path, or through bash, sh, zsh, dash, ksh, source or "."): they
+//     are the person's steps (approve-brief.sh is the person approving the plan skill's
+//     brief; it also refuses without a terminal).
 // Everything else is left alone: nothing is printed, so the normal permission flow
 // decides. `git commit` is allowed.
 //
@@ -45,7 +47,7 @@ import { readFileSync, realpathSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 
-const SCRIPTS = new Set(["land.sh", "ship.sh", "release.sh", "upgrade.sh", "approve-protected.sh"]);
+const SCRIPTS = new Set(["land.sh", "ship.sh", "release.sh", "upgrade.sh", "approve-protected.sh", "approve-brief.sh"]);
 const SHELLS = new Set(["bash", "sh", "zsh", "dash", "ksh"]);
 const RESERVED = new Set(["!", "{", "}", "if", "then", "elif", "else", "fi", "do", "done", "while", "until", "time"]);
 const SKIPPED = new Set(["for", "case", "esac", "select", "function", "in"]);

@@ -34,7 +34,8 @@
 # builds the reviewer's input exactly as review.sh does, with the project's CURRENT checklist
 # and review-reads list (the reviewer setup being measured) over the files at head, except
 # that the check command is not run: its section says "EVAL MODE: historical case, no check
-# output; mark the checks item NA" (and the na_items line, if any). Once the input is built
+# output; mark the checks item NA" (and the na_items line, if any); and that there is no
+# BRIEF section, as a historical case has no brief (.reports/ is never committed). Once the input is built
 # (so its GIT STATUS shows head as it was), the worktree gets:
 #   - the CURRENT checklist, copied to .harness/review-checklist.md, the path the input
 #     names, and the spec replacement copied over the first review-reads file: the reviewer

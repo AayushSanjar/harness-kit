@@ -13,3 +13,6 @@ ship.sh: a non-PASS review: commits its line with the standard message, stops an
 ship.sh: a stale index is regenerated and committed before the review, through the commit-msg hook	tests/ship.test.sh
 upgrade.sh: writes the pin commit draft (Breaks kept, Decision relabelled Upstream, numbers on Told) and it passes the commit-msg hook	tests/upgrade.test.sh
 git-guard: git push in the real working tree is denied, however it is written	tests/git-guard.test.sh
+approve-brief.sh: refuses without a terminal and writes nothing; with no brief it says to run /plan	tests/ship.test.sh
+review.sh: the input holds the brief and whether its approval matches	tests/review.test.sh
+ship.sh: no brief, or an approval that does not match, stops before the review with the exact fix	tests/ship.test.sh

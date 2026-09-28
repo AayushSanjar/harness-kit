@@ -13,9 +13,9 @@
 #   head    HEAD's commit when the event was written ("none" before the first commit)
 #   event   land.sh: LANDED or STOPPED; ship.sh: SHIPPED or STOPPED; release.sh: RELEASED or
 #           STOPPED; replay-faults.sh: REPLAYED
-#   what    STOPPED: a short reason, such as check-failed (ship.sh's and release.sh's
-#           refusals start "refused-"); REPLAYED: "killed=K,survived=S,error=E"; LANDED: "-";
-#           SHIPPED: the base; RELEASED: the tag
+#   what    STOPPED: a short reason, such as check-failed or no-brief (ship.sh's and
+#           release.sh's refusals start "refused-"); REPLAYED: "killed=K,survived=S,error=E";
+#           LANDED: "-"; SHIPPED: the base; RELEASED: the tag
 #   detail  STOPPED: the message printed after "STOPPED:" or "REFUSED:"; REPLAYED: "all", or
 #           "ids:" and the ids asked for; LANDED: the patch's path; SHIPPED and RELEASED: what
 #           was merged
