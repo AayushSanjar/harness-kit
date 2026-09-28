@@ -33,8 +33,9 @@
 # .harness/reviews.tsv, tab-separated:
 #   date  branch  base-sha  head-sha  diff-hash  verdict  items  cost-usd  duration-s
 # base-sha is the merge-base. diff-hash comes from check-reviewed.mjs --hash, the same
-# function CI runs, so the two cannot disagree. Commit the line; CI's check-reviewed.mjs
-# passes only if the latest line for the branch's current diff hash says PASS.
+# function CI runs, so the two cannot disagree. Commit the line (ship.sh, which runs
+# review.sh, commits it itself, whatever the verdict); CI's check-reviewed.mjs passes only
+# if the latest line for the branch's current diff hash says PASS.
 #
 # IT FAILS CLOSED. No checklist, no item IDs in it, a missing review-reads file, an input
 # over REVIEW_MAX_INPUT_BYTES (the message names the largest parts; claude is not started),

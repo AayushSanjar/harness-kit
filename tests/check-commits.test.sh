@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Tests for check-commits.mjs: protected files need a reason in a commit body, numbers in
 # a commit body need the diff or a "Told:" line (which continues onto the lines after it),
-# replay snapshot commits are exempt in a replay (HARNESS_KIT_REPLAY=1) only, and commit
-# references (7 or more digits) and "v" versions are not unsourced numbers.
+# replay snapshot commits are exempt in a replay (HARNESS_KIT_REPLAY=1) only, commit
+# references (7 or more digits) and "v" versions are not unsourced numbers, a "Decision:"
+# line must not name a path in .harness/removed-paths, and --message (the commit-msg
+# hook's check) judges one new message against the staged changes and the branch so far.
 #
 # Every case runs in a temporary git repository with main and a branch "feature". Prints
 # one PASS or FAIL line per case and exits non-zero if any fail.
@@ -276,6 +278,74 @@ if [ "$STATUS" -eq 1 ] && grep -q '^FAIL check-commits: 1 finding(s)' <<<"$OUT" 
   result "check-commits: a version matches with or without a leading v" yes ""
 else
   result "check-commits: a version matches with or without a leading v" no "$(describe)"
+fi
+
+# 12. A "Decision:" line (with the lines it continues onto) that names a path in
+# .harness/removed-paths fails, naming the commit and the path: in full, or under a removed
+# folder, also on a line the Decision: continues onto. The same words on an "Upstream:"
+# line, a Decision: naming only the file name, or the path on a line before it pass.
+dir="$(new_repo decisions)"
+printf 'old/\nlib/gone.js\n' >"$dir/.harness/removed-paths"
+commit "$dir" $'Remove the old tools\n\n.harness/removed-paths lists them now.\nDecision: keep lib/gone.js out.'
+git -C "$dir" commit -q --allow-empty -m $'Notes\n\nlib/gone.js is mentioned here.\nUpstream: old/tool.sh stays upstream.\nDecision: gone.js is not coming back.'
+git -C "$dir" commit -q --allow-empty -m $'More\n\nDecision: the migration\n  moves old/ away.'
+run "$dir"
+if [ "$STATUS" -eq 1 ] && grep -q '^FAIL check-commits: 2 finding(s)' <<<"$OUT" &&
+  grep -qF '(c) '"$(git -C "$dir" rev-parse --short=12 HEAD~2)"' "Remove the old tools": a "Decision:" line names lib/gone.js, which .harness/removed-paths lists, so it is not this project'"'"'s decision. Fix: reword that commit, relabelling the line "Upstream:"' <<<"$OUT" &&
+  grep -qF '(c) '"$(git -C "$dir" rev-parse --short=12 HEAD)"' "More": a "Decision:" line names old/' <<<"$OUT"; then
+  result "check-commits: a Decision: line naming a path in .harness/removed-paths fails; Upstream: passes" yes ""
+else
+  result "check-commits: a Decision: line naming a path in .harness/removed-paths fails; Upstream: passes" no "$(describe)"
+fi
+
+# The message mode: check_message DIR MESSAGE: MESSAGE, in a file, checked as the next commit.
+check_message() {
+  printf '%s\n' "$2" >"$WORK/message.txt"
+  run "$1" --message "$WORK/message.txt"
+}
+
+# 13. --message judges only what the new commit adds: a protected file in the STAGED
+# changes must be named (in the new body or any body on the branch); a number in the new
+# body must be in the branch's diff including the staged changes, or on a Told: line
+# (the new body's or the branch's); a Decision: line in the new body must not name a
+# removed path. An earlier commit's own findings are not the new message's.
+dir="$(new_repo message)"
+printf 'old/\n' >"$dir/.harness/removed-paths"
+printf 'hello\nretries = 7\n' >"$dir/app.txt"
+commit "$dir" $'Earlier\n\nIt took 99 tries; nothing sources that here.'
+printf 'echo "check: 2 passed"\n' >"$dir/scripts/check.sh"
+git -C "$dir" add scripts/check.sh
+check_message "$dir" $'Count two checks\n\nRetries are 7; it took 12 runs.\nDecision: old/x.sh stays out.'
+bad="$(describe)"
+bad_ok=no
+if [ "$STATUS" -eq 1 ] && grep -q '^FAIL check-commits: 3 finding(s) in the message in ' <<<"$OUT" &&
+  grep -qF "(a) scripts/check.sh is protected (.harness/protected-paths) and changed in this commit, but neither this message's body nor any commit body on the branch names it. Fix: add a line to this message's body with the full path and the reason it changed." <<<"$OUT" &&
+  grep -qF '(b) this message: the number 12 is in the body but not in the branch'"'"'s diff and not on a "Told:" line. Fix: put it on a line "Told: 12 <what it is>, <where it came from>" in this message'"'"'s body, or take it out.' <<<"$OUT" &&
+  grep -qF '(c) this message: a "Decision:" line names old/' <<<"$OUT" && ! grep -q 'number 99\|number 7 ' <<<"$OUT"; then
+  bad_ok=yes
+fi
+check_message "$dir" $'Count two checks\n\nscripts/check.sh: prints the new count. Retries are 7; it took 12 runs.\nTold: 12 runs, counted by hand.\nUpstream: old/x.sh stays out.'
+if [ "$bad_ok" = yes ] && [ "$STATUS" -eq 0 ] && grep -q '^PASS check-commits: the message in .*message.txt, against the staged changes and the branch so far' <<<"$OUT" &&
+  [ -z "$(git -C "$dir" log --format=%s -1 --skip 1 | grep Count)" ]; then
+  result "check-commits: --message judges the staged changes and the new body only, against the branch so far" yes ""
+else
+  result "check-commits: --message judges the staged changes and the new body only, against the branch so far" no "unfixed message: $bad
+fixed message: $(describe)"
+fi
+
+# 14. --message reads the message as git leaves it for the hook: comment lines and the
+# scissors line (and what follows) are dropped, so a number there is not checked; the
+# subject is the first paragraph. In a repository with no base branch, the staged changes
+# alone are the branch.
+dir="$WORK/fresh"
+mkdir -p "$dir" && git -C "$dir" init -q -b main
+printf 'x = 5\n' >"$dir/app.txt"
+git -C "$dir" add app.txt
+check_message "$dir" $'First commit\nstill the subject 77\n\nSets x to 5.\n# Please enter the commit message; 42 lines.\n# ------------------------ >8 ------------------------\n+ 31 in a diff'
+if [ "$STATUS" -eq 0 ] && grep -q '^PASS check-commits: the message in .*, against the staged changes and no branch so far (base branch "main" not found' <<<"$OUT"; then
+  result "check-commits: --message drops comment and scissors lines, and works with no base branch" yes ""
+else
+  result "check-commits: --message drops comment and scissors lines, and works with no base branch" no "$(describe)"
 fi
 
 if [ "$failures" -ne 0 ]; then

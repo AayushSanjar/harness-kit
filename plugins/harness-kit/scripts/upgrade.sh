@@ -7,6 +7,8 @@
 # For people, in their own terminal: it changes the project's settings, the user's plugin
 # registry and the installed plugin, and ends with the project's approval, which asks the
 # person. In order, stopping at the first failure with a message saying what to do:
+#   0. The working tree: uncommitted changes to tracked files stop here, before anything is
+#      changed, as the commit draft (step 7) covers every change upgrade.sh leaves.
 #   1. The pin. In .claude/settings.json, extraKnownMarketplaces["harness-kit"].source.ref
 #      becomes v<version>; .repo (the GitHub repository) must be there already. Nothing
 #      else in the file changes.
@@ -19,14 +21,25 @@
 #      "plugin_errors", if any, must not name harness-kit. The session is stopped as soon as
 #      the init event is read, before the model answers, so nothing is spent; the wait is
 #      at most UPGRADE_INIT_SECONDS (default 120).
-#   5. The local git hook: install-hooks.sh (next to this script), which installs the
+#   5. The local git hooks: install-hooks.sh (next to this script), which installs the
 #      pre-push hook that refuses pushes to the review base branch unless ship.sh makes
-#      them. A pre-push hook harness-kit did not write, or core.hooksPath, stops here. A
-#      project that pushes its base by hand must remove the hook afterwards
-#      (install-hooks.sh, NOT FOR EVERY REPOSITORY).
+#      them, and the commit-msg hook that checks each commit message. A hook of either name
+#      that harness-kit did not write, or core.hooksPath, stops here. A project that
+#      pushes its base by hand must remove the pre-push hook afterwards (install-hooks.sh).
 #   6. The approval: the first line of .harness/approve-command, run in the project with the
 #      terminal's input, as land.sh runs it: the person reads the diff and answers. A
 #      project with no approve-command is told to read `git diff` itself.
+#   7. The commit draft. harness-kit's own commits from the old tag to the new one are
+#      fetched (git fetch of both tags from github.com/<repo>, or from
+#      UPGRADE_UPSTREAM_URL when set, into a temporary repository) and upgrade-draft.mjs
+#      writes the pin's commit message to .reports/<branch>.commit.txt (report-path.sh
+#      --commit, replacing what is there): each changed file named with its reason
+#      (.claude/settings.json, .harness/protected.lock when the approval re-recorded it),
+#      harness-kit's Breaks: lines kept, each of its Decision: lines relabelled
+#      "Upstream:", and every number from its messages on a Told: line. The draft is then
+#      proved: check-commits.mjs --message, the commit-msg hook's check, against a
+#      temporary index holding exactly the changed files, must pass. The person commits
+#      with the command printed at the end.
 # It never commits and never pushes.
 #
 # Exit status: 0 upgraded and approved; 1 stopped (the message says what changed so far);
@@ -57,6 +70,10 @@ PROJECT="$(git rev-parse --show-toplevel 2>/dev/null)" || { say "not inside a gi
 cd "$PROJECT" || exit 2
 SETTINGS=.claude/settings.json
 [ -f "$SETTINGS" ] || stop "there is no $SETTINGS, so there is no harness-kit pin to move. Nothing was changed."
+[ -z "$(git status --porcelain --untracked-files=no)" ] ||
+  stop "there are uncommitted changes (git status); commit or stash them first, so that the commit draft upgrade.sh writes covers only the upgrade. Nothing was changed."
+# Untracked files now, so that step 7 names only the files the upgrade adds.
+untracked_before="$(git ls-files --others --exclude-standard)"
 
 # ---------------------------------------------------------------------------------------
 # 1. The pin. Prints the repository and the old ref, tab-separated.
@@ -79,7 +96,7 @@ pin="$(node -e '
   console.log(`${source.repo}\t${old}`);
 ' "$SETTINGS" "$MARKETPLACE" "$tag" 2>&1)" || stop "$pin. Nothing was changed."
 IFS=$'\t' read -r repo old <<<"$pin"
-say "1/6 pinned $MARKETPLACE to $tag in $SETTINGS (was $old)"
+say "1/7 pinned $MARKETPLACE to $tag in $SETTINGS (was $old)"
 CHANGED="$SETTINGS now pins $tag (was $old); to undo: git checkout -- $SETTINGS"
 
 # ---------------------------------------------------------------------------------------
@@ -87,10 +104,10 @@ CHANGED="$SETTINGS now pins $tag (was $old); to undo: git checkout -- $SETTINGS"
 # ---------------------------------------------------------------------------------------
 claude plugin marketplace add "$repo#$tag" --scope project >&2 ||
   stop "claude plugin marketplace add $repo#$tag --scope project failed (above). Check that the tag $tag exists on github.com/$repo. $CHANGED"
-say "2/6 re-added the marketplace at $repo#$tag"
+say "2/7 re-added the marketplace at $repo#$tag"
 claude plugin update "$PLUGIN" --scope project >&2 ||
   stop "claude plugin update $PLUGIN --scope project failed (above). $CHANGED, and the marketplace is at $tag."
-say "3/6 updated $PLUGIN"
+say "3/7 updated $PLUGIN"
 
 # ---------------------------------------------------------------------------------------
 # 4. The version a new session loads, from its init event.
@@ -149,29 +166,56 @@ loaded="$(node -e '
   console.log(want);
 ' "$event" "$PLUGIN" "$version")" ||
   stop "$loaded. $CHANGED, and the plugin is updated. Run \`claude plugin list --json\` to see what is installed."
-say "4/6 a new session loads $PLUGIN $loaded"
+say "4/7 a new session loads $PLUGIN $loaded"
 
 # ---------------------------------------------------------------------------------------
 # 5. The local git hook.
 # ---------------------------------------------------------------------------------------
 bash "$HERE/install-hooks.sh" ||
-  stop "install-hooks.sh did not install the pre-push hook (above). $CHANGED; the plugin is updated and loads $version. Fix what it says, then run install-hooks.sh (or upgrade.sh again)."
-say "5/6 installed the pre-push hook: pushes to the review base branch go through ship.sh"
+  stop "install-hooks.sh did not install the hooks (above). $CHANGED; the plugin is updated and loads $version. Fix what it says, then run install-hooks.sh (or upgrade.sh again)."
+say "5/7 installed the pre-push and commit-msg hooks: pushes to the review base branch go through ship.sh, and each commit message is checked"
 
 # ---------------------------------------------------------------------------------------
 # 6. The approval.
 # ---------------------------------------------------------------------------------------
 approve="$( { [ -f .harness/approve-command ] && head -n 1 .harness/approve-command; } | tr -d '\r')"
 if [ -z "$approve" ]; then
-  say "6/6 no .harness/approve-command, so there is nothing to approve with; read \`git diff\` yourself."
+  say "6/7 no .harness/approve-command, so there is nothing to approve with; read \`git diff\` yourself."
 else
-  say "6/6 running the approval command: $approve"
+  say "6/7 running the approval command: $approve"
   /bin/sh -c "$approve"
   status=$?
   [ "$status" -eq 0 ] ||
     stop "the approval command failed or was declined (exit $status). $CHANGED; the plugin is updated and loads $version. Nothing was committed."
 fi
 
-say "UPGRADED: $PLUGIN $version is pinned, installed and loads, and the pre-push hook is installed. Nothing was committed."
-say "Next: read 'git diff', commit it (with a reason for $SETTINGS), and run /reload-plugins in any open session."
+# ---------------------------------------------------------------------------------------
+# 7. The commit draft, from harness-kit's own commits between the two tags, proved.
+# ---------------------------------------------------------------------------------------
+APPROVED="$CHANGED; the plugin is updated and loads $version; the hooks are installed and the approval passed"
+url="${UPGRADE_UPSTREAM_URL:-https://github.com/$repo.git}"
+git init -q --bare "$work/upstream" &&
+  git -C "$work/upstream" fetch -q --no-tags "$url" "+refs/tags/$old:refs/tags/$old" "+refs/tags/$tag:refs/tags/$tag" >&2 ||
+  stop "could not fetch the tags $old and $tag from $url (above), so the commit draft was not written. $APPROVED. Nothing was committed; run upgrade.sh $version again when $url can be reached."
+git -C "$work/upstream" log --reverse --format=%H%x1f%s%x1f%b%x1e "refs/tags/$old..refs/tags/$tag" >"$work/upstream.log" ||
+  stop "could not list harness-kit's commits from $old to $tag (above), so the commit draft was not written. $APPROVED. Nothing was committed."
+changed=()
+while IFS= read -r path; do [ -n "$path" ] && changed+=("$path"); done < <(
+  git diff --name-only HEAD
+  git ls-files --others --exclude-standard | grep -vxF -f <(printf '%s\n' "$untracked_before") | grep -v '^\.reports/'
+)
+draft="$(bash "$HERE/report-path.sh" --commit)" ||
+  stop "report-path.sh --commit failed (above), so the commit draft was not written. $APPROVED. Nothing was committed."
+node "$HERE/upgrade-draft.mjs" "$old" "$tag" "$repo" "$work/upstream.log" ${changed[@]+"${changed[@]}"} >"$draft" ||
+  stop "upgrade-draft.mjs failed (above), so the commit draft was not written. $APPROVED. Nothing was committed."
+proof="$(
+  export GIT_INDEX_FILE="$work/index"
+  git read-tree HEAD && git add -A -- ${changed[@]+"${changed[@]}"} && node "$HERE/check-commits.mjs" --message "$draft" 2>&1
+)" || stop "the commit draft $draft does not pass the commit-msg hook's check (below), which is a harness-kit bug: report it. $APPROVED. Nothing was committed.
+$proof"
+say "7/7 wrote the commit draft $draft; the commit-msg hook's check passes it: ${proof%%$'\n'*}"
+
+say "UPGRADED: $PLUGIN $version is pinned, installed and loads, the hooks are installed, and the commit draft is written. Nothing was committed."
+say "Next: read 'git diff', then commit with the draft, and run /reload-plugins in any open session:"
+say "    git add --$(printf ' %q' ${changed[@]+"${changed[@]}"}) && git commit -F $draft"
 exit 0

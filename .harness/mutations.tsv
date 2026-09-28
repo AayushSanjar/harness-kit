@@ -7,7 +7,12 @@ stop-gate-no-block	plugins/harness-kit/scripts/stop-gate.mjs	process.stdout.writ
 stop-gate-no-budget	plugins/harness-kit/scripts/stop-gate.mjs	if (previous >= MAX_BLOCKS) {	if (false) {	4 failures in a row: 4th allows the stop and prints the budget line
 guard-secrets-no-jwt	plugins/harness-kit/scripts/guard-secrets.mjs	{ name: "a JWT (JSON Web Token)", re: /\beyJ	{ name: "a JWT (JSON Web Token)", re: /\bNEVER-eyJ	Write a JWT: denied, value not echoed
 check-reviewed-not-append-only	plugins/harness-kit/scripts/check-reviewed.mjs	if (now[i] !== before[i]) {	if (false) {	check-reviewed: an edited old line fails (append-only)
-ship-red-ci-passes	plugins/harness-kit/scripts/ship.sh	[ "$conclusion" = success ] ||	true ||	ship.sh: stops on red CI with the run's URL; main untouched
+ship-red-ci-passes	plugins/harness-kit/scripts/ci-lib.sh	[ "$conclusion" = success ] ||	true ||	ship.sh: stops on red CI with the run's URL; main untouched
 check-defects-edits-allowed	plugins/harness-kit/scripts/check-defects.mjs	if (now[i] === before[i]) continue;	continue;	check-defects: an edited line fails
 replay-survived-passes	plugins/harness-kit/scripts/replay-faults.sh	[ "$survived" -eq 0 ] && [ "$errors" -eq 0 ]	[ "$errors" -eq 0 ]	replay-faults: a SURVIVED fault exits non-zero
 harness-metrics-missing-is-zero	plugins/harness-kit/scripts/harness-metrics.mjs	if (text === null) return notFound(`${DEFECTS} did not exist${src.where}`);	if (text === null) return escapedDefects({ where: src.where, read: () => "" }, when);	harness-metrics: no defects.tsv: escaped defects are NOT FOUND, not 0
+commit-msg-hook-passes	plugins/harness-kit/scripts/install-hooks.sh	[ "\$status" -eq 0 ] && exit 0	exit 0	install-hooks: the commit-msg hook refuses a message check-commits would fail, with the fix; --no-verify commits
+ship-review-line-uncommitted	plugins/harness-kit/scripts/ship.sh	commit_review "$verdict"	:	ship.sh: a non-PASS review: commits its line with the standard message, stops and shows the verdict
+ship-index-not-refreshed	plugins/harness-kit/scripts/ship.sh	[ -n "$cmd" ] || return 0	return 0	ship.sh: a stale index is regenerated and committed before the review, through the commit-msg hook
+upgrade-draft-keeps-decision	plugins/harness-kit/scripts/upgrade-draft.mjs	kept.push(line.replace(DECISION, "$1Upstream:").trim());	kept.push(line.trim());	upgrade.sh: writes the pin commit draft (Breaks kept, Decision relabelled Upstream, numbers on Told) and it passes the commit-msg hook
+git-guard-push-allowed	plugins/harness-kit/scripts/git-guard.mjs	if (sub === "push") return { rule: "push", what: "git push" };	if (false) return { rule: "push", what: "git push" };	git-guard: git push in the real working tree is denied, however it is written

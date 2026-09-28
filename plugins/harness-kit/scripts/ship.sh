@@ -9,7 +9,19 @@
 #      detached HEAD, or with uncommitted changes to tracked files (.harness/reviews.tsv
 #      excepted: review.sh writes it). Untracked files, such as .reports/, do not count.
 #   2. If check-reviewed.mjs does not pass for the branch's current diff, and the working
-#      tree's .harness/reviews.tsv has no PASS for it yet, first run the project's check:
+#      tree's .harness/reviews.tsv has no PASS for it yet:
+#      a. THE INDEX. With .harness/index-command (optional; its first line, run as it is in
+#         the project root), run it: it regenerates the project's index (such as a
+#         decisions index built from the commits' Decision: lines) and must change nothing
+#         when the index is up to date. If it changed or added files, the index was stale:
+#         ship.sh commits exactly those files (.harness/reviews.tsv never), with the
+#         message "Refresh the index (.harness/index-command)" and a body naming each file
+#         with its reason, so the commit-msg hook passes it and the review sees the index.
+#         A failing command, or a commit the hook refuses, stops here. The index must be a
+#         tracked file, or a new one: a change to a file that was already untracked is not
+#         seen. It runs only before a review, never for a diff already reviewed, so an
+#         index that also lists ship.sh's own commits cannot start a review loop.
+#      b. Run the project's check:
 #      the first line of .harness/check-command, as it is. That line must carry
 #      --skip-reviewed as a word, as land.sh requires (the branch is not reviewed yet, so the
 #      review check would fail); ship.sh never adds it. A missing flag or a failing check
@@ -17,26 +29,27 @@
 #      check-command there is nothing to run, as in review.sh. The check's output (stdout
 #      and stderr together) is shown and saved, with the command, HEAD and working tree it
 #      ran on, and review.sh reuses it (HARNESS_KIT_CHECK_SAVED) instead of running the
-#      check again. Then run review.sh; a verdict other than PASS stops here, and the
-#      verdict is shown.
-#   3. If .harness/reviews.tsv changed, commit it alone: "Record review of <branch>: PASS".
-#      Then check-reviewed.mjs must pass at HEAD.
+#      check again.
+#      c. Run review.sh. When it records a verdict, whatever it is, ship.sh commits
+#         .harness/reviews.tsv alone, with the message "Record review of <branch>:
+#         <verdict>" and a body naming .harness/reviews.tsv with its reason (so the
+#         commit-msg hook passes it, and nobody commits the line by hand). A verdict other
+#         than PASS then stops here, and the verdict is shown.
+#   3. If .harness/reviews.tsv still has an uncommitted PASS for the diff (an earlier run
+#      recorded it), commit it the same way. Then check-reviewed.mjs must pass at HEAD.
 #   4. Push the branch to origin.
-#   5. Find the CI runs for the pushed head commit (gh run list --commit), waiting up to
-#      SHIP_CI_APPEAR_SECONDS (default 180) for the first to appear; wait for each to
-#      finish (gh run watch), then read its conclusion (gh run view). Anything but
-#      "success" stops, printing the run's URL. Which runs:
-#        - with .harness/ci-workflow (optional; first line, the workflow as
-#          `gh run list --workflow` takes it): that workflow's runs only, waiting for one to
-#          appear even when other workflows' runs appeared first;
-#        - without it: every run listed for the commit when the first one appears. A
-#          workflow that starts later than that is not waited for.
+#   5. Wait for CI (ci-lib.sh's ci_wait): the runs for the pushed head commit, waiting up
+#      to SHIP_CI_APPEAR_SECONDS (default 180) for the first to appear, each until it
+#      finishes; anything but "success" stops, printing the run's URL. With
+#      .harness/ci-workflow (optional; first line, the workflow as `gh run list
+#      --workflow` takes it), only that workflow's runs.
 #   6. Check that the base can fast-forward (origin/<base> and <base> are both in the
 #      branch), switch to the base, `git merge --ff-only <branch>`, push the base with
 #      HARNESS_KIT_SHIP=1 set (the pre-push hook from install-hooks.sh refuses any other
 #      push to the base), and delete the branch's report and commit draft (.reports/,
 #      report-path.sh --name).
-# It never forces a push, never rewrites history, and never deletes the branch.
+# It never forces a push, never rewrites history, and never deletes the branch. Its own
+# commits (the index, the review line) go through the commit-msg hook like any other.
 #
 # THE NOTIFICATION. On macOS, each STOPPED and the SHIPPED also show a notification
 # (osascript `display notification`), as a ship waits minutes for CI. Refusals come at once,
@@ -66,15 +79,12 @@ POLL="${SHIP_POLL_SECONDS:-10}"
 
 # shellcheck source=events.sh
 . "$HERE/events.sh"
+# shellcheck source=ci-lib.sh
+. "$HERE/ci-lib.sh"
+CI_TOOL=ship.sh CI_APPEAR="$APPEAR" CI_POLL="$POLL"
 
 say() { echo "harness-kit ship.sh: $*" >&2; }
-# notify MESSAGE: a macOS notification (osascript), so a person who looked away while CI ran
-# sees the end. Skipped when not on macOS; a failure is ignored.
-notify() {
-  [ "$(uname -s 2>/dev/null)" = Darwin ] || return 0
-  osascript -e 'on run argv' -e 'display notification (item 2 of argv) with title (item 1 of argv)' -e 'end run' \
-    "harness-kit ship.sh" "$1" >/dev/null 2>&1 || true
-}
+notify() { ci_notify "$1"; }
 # refuse REASON MESSAGE and stop REASON MESSAGE: record the stop in the event log (on the
 # branch being shipped, once known), print it, and exit 2 or 1. A stop also notifies.
 refuse() { harness_event ship.sh "${branch:-}" STOPPED "$1" "REFUSED: $2"; say "REFUSED: $2"; exit 2; }
@@ -89,14 +99,57 @@ base="${base:-main}"
 
 dirty() { git status --porcelain --untracked-files=no -- . ":(exclude)$REVIEWS"; }
 
-# gh prints JSON; node reads it. FIELD of the first element of a JSON array, or of an object.
-json_field() {
-  node -e '
-    let v = JSON.parse(require("fs").readFileSync(0, "utf8"));
-    if (Array.isArray(v)) v = v[0] ?? {};
-    const x = v[process.argv[1]];
-    process.stdout.write(x === undefined || x === null ? "" : String(x));
-  ' "$1"
+# verdict_of HASH: the verdict of the latest line in the working tree's reviews.tsv for the
+# diff HASH, or nothing.
+verdict_of() { [ -f "$REVIEWS" ] && awk -F'\t' -v h="$1" 'NF == 9 && $5 == h { v = $6 } END { print v }' "$REVIEWS"; }
+
+# commit_with SUBJECT BODY PATH...: commit only PATHs (staged first) with that message,
+# through the commit-msg hook like any commit. Returns git's status.
+commit_with() {
+  local subject="$1" body="$2" msg status
+  shift 2
+  msg="$(mktemp "${TMPDIR:-/tmp}/harness-kit-ship-msg.XXXXXX")" || return 1
+  printf '%s\n\n%s\n' "$subject" "$body" >"$msg"
+  git add -A -- "$@" && git commit -q -F "$msg" -- "$@"
+  status=$?
+  rm -f "$msg"
+  return "$status"
+}
+
+# commit_review VERDICT: commit .harness/reviews.tsv alone, with the standard message.
+commit_review() {
+  commit_with "Record review of $branch: $1" \
+    "$REVIEWS: the line review.sh appended for this branch's current diff, verdict $1. ship.sh commits it; the file is append-only." \
+    "$REVIEWS" || stop commit-review-failed "could not commit $REVIEWS (above). Commit it yourself, then re-run ship.sh."
+  say "committed $REVIEWS: Record review of $branch: $1"
+}
+
+# refresh_index: step 2a. Commits the files .harness/index-command changed or added.
+refresh_index() {
+  local cmd before after changed body path paths status
+  cmd="$( { [ -f .harness/index-command ] && head -n 1 .harness/index-command; } | tr -d '\r')"
+  [ -n "$cmd" ] || return 0
+  say "refreshing the index before the review: $cmd"
+  before="$(git status --porcelain --untracked-files=all -- . ":(exclude)$REVIEWS")"
+  /bin/sh -c "$cmd" </dev/null >&2
+  status=$?
+  [ "$status" -eq 0 ] ||
+    stop index-failed "the index command failed (exit $status, above): $cmd. Nothing was committed and no review was started. Fix it, then re-run ship.sh."
+  after="$(git status --porcelain --untracked-files=all -- . ":(exclude)$REVIEWS")"
+  changed="$(grep -vxF -f <(printf '%s\n' "$before") <<<"$after" | cut -c4-)"
+  if [ -z "$changed" ]; then
+    say "the index is up to date: $cmd changed nothing"
+    return 0
+  fi
+  body=""
+  paths=()
+  while IFS= read -r path; do
+    paths+=("$path")
+    body="$body$path: regenerated by the first line of .harness/index-command, which ship.sh ran before the review because the index was stale."$'\n'
+  done <<<"$changed"
+  commit_with "Refresh the index (.harness/index-command)" "${body%$'\n'}" "${paths[@]}" ||
+    stop commit-index-failed "could not commit the refreshed index (above); it is in the working tree, uncommitted. Commit it yourself, then re-run ship.sh."
+  say "committed the refreshed index: $(tr '\n' ' ' <<<"$changed")"
 }
 
 # Step 6. Uses $branch and $head.
@@ -159,6 +212,9 @@ else
   if [ "$pending" = PASS ]; then
     say "$REVIEWS already has an uncommitted PASS for this diff; not reviewing again"
   else
+    refresh_index
+    state="$(node "$HERE/check-reviewed.mjs" --hash)" || stop diff-failed "could not work out the branch's diff: $state"
+    hash="$(cut -f3 <<<"$state")"
     check="$( { [ -f .harness/check-command ] && head -n 1 .harness/check-command; } | tr -d '\r')"
     if [ -z "$check" ]; then
       say "no .harness/check-command, so there is no check to run before the review"
@@ -181,18 +237,20 @@ else
     say "no PASS review for the branch's current diff; running review.sh"
     HARNESS_KIT_CHECK_SAVED="${saved:-}" bash "$HERE/review.sh"
     status=$?
+    verdict="$(verdict_of "$hash")"
+    if [ -n "$verdict" ] && [ -n "$(git status --porcelain --untracked-files=all -- "$REVIEWS")" ]; then
+      commit_review "$verdict"
+    fi
     if [ "$status" -ne 0 ]; then
-      verdict="$( [ -f "$REVIEWS" ] && awk -F'\t' -v h="$hash" 'NF == 9 && $5 == h { v = $6 " (" $7 ")" } END { print v }' "$REVIEWS")"
       if [ -n "$verdict" ]; then
-        stop review-not-pass "the review's verdict is $verdict, not PASS (the review is above; its line is in $REVIEWS, uncommitted). Fix what it reports, commit, then re-run ship.sh."
+        items="$(awk -F'\t' -v h="$hash" 'NF == 9 && $5 == h { v = $7 } END { print v }' "$REVIEWS")"
+        stop review-not-pass "the review's verdict is $verdict ($items), not PASS (the review is above; its line is committed: Record review of $branch: $verdict). Fix what it reports, commit, then re-run ship.sh."
       fi
       stop review-failed "the review did not complete (review.sh exit $status, above), so there is no verdict. Fix the cause, then re-run ship.sh."
     fi
   fi
   if [ -n "$(git status --porcelain --untracked-files=all -- "$REVIEWS")" ]; then
-    git add -- "$REVIEWS" && git commit -q -m "Record review of $branch: PASS" -- "$REVIEWS" ||
-      stop commit-review-failed "could not commit $REVIEWS (above). Commit it yourself, then re-run ship.sh."
-    say "committed $REVIEWS: Record review of $branch: PASS"
+    commit_review PASS
   fi
   out="$(node "$HERE/check-reviewed.mjs" 2>&1)" || stop check-reviewed-failed "check-reviewed still fails at HEAD: $out"
 fi
@@ -207,43 +265,7 @@ say "pushed $branch ($(git rev-parse --short "$head")) to $REMOTE"
 # ---------------------------------------------------------------------------------------
 # 5. CI for the pushed head.
 # ---------------------------------------------------------------------------------------
-fields=databaseId,status,conclusion,url,workflowName
-workflow="$( { [ -f .harness/ci-workflow ] && head -n 1 .harness/ci-workflow; } | tr -d '\r')"
-workflow="${workflow#"${workflow%%[![:space:]]*}"}"
-workflow="${workflow%"${workflow##*[![:space:]]}"}"
-filter=()
-what="CI run"
-if [ -n "$workflow" ]; then
-  filter=(--workflow "$workflow")
-  what="run of the workflow \"$workflow\" (.harness/ci-workflow)"
-fi
-waited=0
-while :; do
-  # ${filter[@]+...}: an empty array is "unbound" under set -u in bash 3.2 (macOS).
-  runs="$(gh run list --commit "$head" ${filter[@]+"${filter[@]}"} --json "$fields" --limit 50)" ||
-    stop gh-failed "gh run list failed (above). Fix gh (gh auth status), then re-run ship.sh."
-  ids="$(node -e 'for (const r of JSON.parse(require("fs").readFileSync(0, "utf8"))) console.log(r.databaseId)' <<<"$runs")" ||
-    stop gh-failed "gh run list did not print the expected JSON: $runs"
-  [ -z "$ids" ] || break
-  [ "$waited" -lt "$APPEAR" ] ||
-    stop no-ci-run "no $what for $(git rev-parse --short "$head") appeared within ${APPEAR}s. Check that it runs on pushes to $branch, then re-run ship.sh to keep waiting."
-  say "waiting for a $what to start for $(git rev-parse --short "$head")..."
-  sleep "$POLL"
-  waited=$((waited + POLL))
-done
-for id in $ids; do
-  say "waiting for CI run $id to finish..."
-  gh run watch "$id" --exit-status --compact --interval "$POLL" >&2
-  run="$(gh run view "$id" --json status,conclusion,url)" || stop gh-failed "gh run view $id failed (above). Re-run ship.sh to check the run again."
-  status="$(json_field status <<<"$run")"
-  conclusion="$(json_field conclusion <<<"$run")"
-  url="$(json_field url <<<"$run")"
-  [ "$status" = completed ] ||
-    stop ci-not-finished "CI run $id is $status, not finished: $url. Re-run ship.sh to keep waiting."
-  [ "$conclusion" = success ] ||
-    stop ci-not-green "CI run $id finished with conclusion \"$conclusion\", not success: $url. Fix the branch (or re-run the job if it was not the branch's fault), then re-run ship.sh."
-  say "CI run $id passed: $url"
-done
+ci_wait "$head" "$branch"
 
 # ---------------------------------------------------------------------------------------
 # 6. Merge into the base, push it, delete the report and the commit draft.

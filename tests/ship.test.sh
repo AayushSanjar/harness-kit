@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Tests for the person's own steps: report-path.sh, the report, commit draft, warning and
-# blast-radius lines of session-start.mjs, check-reports.mjs, land.sh, ship.sh and
-# install-hooks.sh's pre-push hook.
+# Tests for the person's own steps: report-path.sh, the report, commit draft, commit,
+# warning and blast-radius lines of session-start.mjs, check-reports.mjs, land.sh, ship.sh
+# (its review commit and its index refresh) and install-hooks.sh's pre-push and commit-msg
+# hooks.
 #
 # Every case runs in a temporary git repository. Its "origin" is a local bare repository,
 # and ship.sh finds a FAKE `gh` first on PATH, which records its arguments and prints
@@ -245,6 +246,7 @@ left="$(cd "$dir/.reports" && ls | tr '\n' ' ')"
 line2="$(sed -n 2p <<<"$OUT")"
 line3="$(sed -n 3p <<<"$OUT")"
 line4="$(sed -n 4p <<<"$OUT")"
+line5="$(sed -n 5p <<<"$OUT")"
 if [ "$STATUS" -eq 0 ] &&
   [ "$left" = "feature.commit.txt feature.md latest.commit.txt latest.md pinned.commit.txt pinned.md team-live.md " ] &&
   [ "$(readlink "$dir/.reports/latest.md")" = feature.md ] &&
@@ -252,7 +254,7 @@ if [ "$STATUS" -eq 0 ] &&
   grep -qF "write your final report to $dir/.reports/feature.md" <<<"$line2" &&
   grep -qF '"## Summary"' <<<"$line2" && grep -q 'at most 15 lines' <<<"$line2" &&
   grep -q 'Never commit it' <<<"$line2" &&
-  [ "$(wc -l <<<"$OUT" | tr -d ' ')" = 4 ] &&
+  [ "$(wc -l <<<"$OUT" | tr -d ' ')" = 5 ] &&
   grep -q 'removed the stale report .reports/gone.md' <<<"$ERR" &&
   grep -q 'removed the stale report .reports/old.md' <<<"$ERR" &&
   grep -q 'removed the stale commit draft .reports/gone.commit.txt' <<<"$ERR" &&
@@ -282,10 +284,24 @@ fi
 
 # 2d. The blast-radius line: before finishing, update or list everything that describes
 # the changed behaviour.
-if [ "$line4" = "harness-kit: before finishing, search for every file, comment, test and document that describes behaviour you changed, and update each or list it in the report." ]; then
+if [ "$line5" = "harness-kit: before finishing, search for every file, comment, test and document that describes behaviour you changed, and update each or list it in the report." ]; then
   result "session-start: tells Claude to update or list every file, comment, test and document describing changed behaviour" yes ""
 else
-  result "session-start: tells Claude to update or list every file, comment, test and document describing changed behaviour" no "line 4: $line4"
+  result "session-start: tells Claude to update or list every file, comment, test and document describing changed behaviour" no "line 5: $line5"
+fi
+
+# 2e. The commit line: Claude may commit its own work locally with the draft, never a
+# protected file (a patch for land.sh instead) and never a push; the draft line no longer
+# says only the person commits.
+if grep -qF "harness-kit: you may commit your own work locally with that draft (git commit -F $dir/.reports/feature.commit.txt) once the project's check passes" <<<"$line4" &&
+  grep -qF 'the commit-msg hook checks the message' <<<"$line4" &&
+  grep -qF 'Never commit a change to a file that .harness/protected-paths lists' <<<"$line4" &&
+  grep -qF '"land.sh .reports/<name>.patch"' <<<"$line4" && grep -qF 'Never push' <<<"$line4" &&
+  grep -qF 'Never commit the draft file itself.' <<<"$line3" && ! grep -qF 'the person commits with it' <<<"$line3"; then
+  result "session-start: Claude may commit its own work with the draft, never protected files, never push" yes ""
+else
+  result "session-start: Claude may commit its own work with the draft, never protected files, never push" no "line 3: $line3
+line 4: $line4"
 fi
 
 # 2b. The Summary template: the report line names all five headings, in this order.
@@ -526,18 +542,24 @@ else
   result "ship.sh: refuses with uncommitted changes" no "$(describe)"
 fi
 
-# 14. A FIX-FIRST review: stops showing the verdict; nothing committed, pushed or merged.
+# 14. A FIX-FIRST review: stops showing the verdict, after committing the review's line
+# itself (the file alone, with the standard message naming it), so nobody commits it by
+# hand; nothing else committed, nothing pushed or merged.
 dir="$(new_repo ship-fix)"
 head_before="$(rev "$dir" HEAD)"
 run_ship "$dir" "$FIX_JSON" success
 if [ "$STATUS" -eq 1 ] && [ -e "$dir.log/claude-args" ] &&
-  grep -q "STOPPED: the review's verdict is FIX-FIRST (R1=F), not PASS" <<<"$ERR" &&
-  grep -q '^R1 — FAIL' <<<"$OUT" && [ "$(rev "$dir" HEAD)" = "$head_before" ] &&
+  grep -q "STOPPED: the review's verdict is FIX-FIRST (R1=F), not PASS (the review is above; its line is committed: Record review of feature: FIX-FIRST)" <<<"$ERR" &&
+  grep -q '^R1 — FAIL' <<<"$OUT" && [ "$(rev "$dir" HEAD~1)" = "$head_before" ] &&
+  [ "$(git -C "$dir" log -1 --format=%s)" = "Record review of feature: FIX-FIRST" ] &&
+  git -C "$dir" log -1 --format=%b | grep -q '^.harness/reviews.tsv: the line review.sh appended for this branch.s current diff, verdict FIX-FIRST' &&
+  [ "$(git -C "$dir" diff --name-only HEAD~1 HEAD)" = .harness/reviews.tsv ] && [ -z "$(git -C "$dir" status --porcelain)" ] &&
   [ ! -e "$dir.log/gh-calls" ] && [ -z "$(remote_rev "$dir" feature)" ] &&
   [ "$(rev "$dir" main)" = "$(remote_rev "$dir" main)" ]; then
-  result "ship.sh: stops on a non-PASS review and shows the verdict" yes ""
+  result "ship.sh: a non-PASS review: commits its line with the standard message, stops and shows the verdict" yes ""
 else
-  result "ship.sh: stops on a non-PASS review and shows the verdict" no "$(describe)"
+  result "ship.sh: a non-PASS review: commits its line with the standard message, stops and shows the verdict" no "$(describe)
+log: $(git -C "$dir" log --format='%h %s' -3)"
 fi
 
 # 14b. A failing check: ship.sh runs it before the review, stops, and never calls claude;
@@ -776,7 +798,7 @@ rm -f "$dir/.git/hooks/pre-push"
 git -C "$dir" config core.hooksPath .githooks
 run_in "$dir" bash "$INSTALL_HOOKS"
 hooks_path="$STATUS: $ERR"
-if grep -q '^0: .*installed .*/.git/hooks/pre-push' <<<"$installed" && [ "$again" -eq 0 ] &&
+if grep -q '^0: .*installed .*/.git/hooks/pre-push .* and .*/.git/hooks/commit-msg' <<<"$installed" && [ "$again" -eq 0 ] &&
   grep -q '^1: .*harness-kit pre-push: refusing to push to main: push through ship.sh' <<<"$refused" &&
   [ "$remote_main_after_refusal" != "$(rev "$dir" main)" ] && [ "$other" -eq 0 ] && [ "$shipped" -eq 0 ] &&
   [ "$(remote_rev "$dir" main)" = "$(rev "$dir" main)" ] &&
@@ -795,14 +817,129 @@ foreign hook: $foreign
 core.hooksPath: $hooks_path"
 fi
 
-# 23. ship.sh ships through the hook: it sets HARNESS_KIT_SHIP=1 for its own push of main.
+# 23. ship.sh ships through both hooks: it sets HARNESS_KIT_SHIP=1 for its own push of
+# main, and its review commit passes the commit-msg hook with .harness/ protected.
 dir="$(new_repo ship-hook)"
+printf '.harness/\n' >"$dir/.harness/protected-paths"
+git -C "$dir" add -A && git -C "$dir" commit -q -m $'Protect .harness/\n\n.harness/protected-paths: protects the harness folder.'
 run_in "$dir" bash "$INSTALL_HOOKS"
 run_ship "$dir" "$PASS_JSON" success
-if [ "$STATUS" -eq 0 ] && grep -q 'SHIPPED: feature' <<<"$ERR" && [ "$(remote_rev "$dir" main)" = "$(rev "$dir" feature)" ]; then
-  result "ship.sh: pushes main through the pre-push hook" yes ""
+if [ "$STATUS" -eq 0 ] && grep -q 'SHIPPED: feature' <<<"$ERR" && [ "$(remote_rev "$dir" main)" = "$(rev "$dir" feature)" ] &&
+  [ "$(git -C "$dir" log -1 --format=%s feature)" = "Record review of feature: PASS" ]; then
+  result "ship.sh: pushes main through the pre-push hook; its review commit passes the commit-msg hook" yes ""
 else
-  result "ship.sh: pushes main through the pre-push hook" no "$(describe)"
+  result "ship.sh: pushes main through the pre-push hook; its review commit passes the commit-msg hook" no "$(describe)"
+fi
+
+# 26. The commit-msg hook: a message check-commits would fail is refused, with each
+# finding's fix and where git saved the message; nothing is committed. The fixed message
+# commits; git commit --no-verify commits whatever the message (the person's override). A
+# commit-msg hook harness-kit did not write stops install-hooks.sh (exit 1) with neither
+# hook installed, and is left as it is.
+dir="$(new_repo commit-msg)"
+printf 'app.txt\n' >"$dir/.harness/protected-paths"
+git -C "$dir" add -A && git -C "$dir" commit -q --no-verify -m "Protect app.txt"
+run_in "$dir" bash "$INSTALL_HOOKS"
+installed="$STATUS: $ERR"
+printf 'hello\nworld\nagain\n' >"$dir/app.txt"
+git -C "$dir" add app.txt
+head_before="$(rev "$dir" HEAD)"
+run_in "$dir" git commit -q -m $'Say it again\n\nIt took 3 tries.'
+refused="$STATUS: $ERR"
+refused_head="$(rev "$dir" HEAD)"
+run_in "$dir" git commit -q -m $'Say it again\n\napp.txt: a third line.\nTold: 3 tries, counted by hand.'
+fixed="$STATUS: $ERR"
+printf 'hello\n' >"$dir/app.txt"
+run_in "$dir" git commit -q -a --no-verify -m $'Back\n\nNo reason, 5 times.'
+override="$STATUS"
+dir2="$(new_repo commit-msg-foreign)"
+printf '#!/bin/sh\nexit 0\n' >"$dir2/.git/hooks/commit-msg"
+run_in "$dir2" bash "$INSTALL_HOOKS"
+foreign="$STATUS: $ERR"
+if grep -q '^0: ' <<<"$installed" && [ -x "$dir/.git/hooks/commit-msg" ] && [ -f "$dir/.git/hooks/harness-kit-check-commits.mjs" ] &&
+  grep -q '^1: ' <<<"$refused" && grep -qF '(a) app.txt is protected (.harness/protected-paths) and changed in this commit' <<<"$refused" &&
+  grep -qF '(b) this message: the number 3 is in the body' <<<"$refused" &&
+  grep -qF 'harness-kit commit-msg: commit REFUSED (above). Git saved your message in .git/COMMIT_EDITMSG' <<<"$refused" &&
+  grep -qF 'git commit --no-verify, your deliberate override' <<<"$refused" && [ "$refused_head" = "$head_before" ] &&
+  grep -q '^0: ' <<<"$fixed" && [ "$(git -C "$dir" log -2 --format=%s | tr '\n' '|')" = "Back|Say it again|" ] && [ "$override" -eq 0 ] &&
+  grep -q '^1: .*commit-msg exists and harness-kit did not write it' <<<"$foreign" &&
+  [ "$(sed -n 2p "$dir2/.git/hooks/commit-msg")" = "exit 0" ] && [ ! -e "$dir2/.git/hooks/pre-push" ]; then
+  result "install-hooks: the commit-msg hook refuses a message check-commits would fail, with the fix; --no-verify commits" yes ""
+else
+  result "install-hooks: the commit-msg hook refuses a message check-commits would fail, with the fix; --no-verify commits" no \
+    "install: $installed
+refused: $refused
+fixed: $fixed
+override: $override
+log: $(git -C "$dir" log --format=%s -3)
+foreign: $foreign"
+fi
+
+# 27-28. The index (.harness/index-command, here a script that writes docs/index.md from
+# the branch's Decision: lines, protected). 27: stale, it is regenerated and committed
+# alone before the check and the review (so the reviewer's diff holds it), with a body
+# naming it that the commit-msg hook passes; then the ship goes on. A second ship of the
+# reviewed branch does not run it.
+new_index_repo() {
+  local dir
+  dir="$(new_repo "$1")"
+  mkdir -p "$dir/docs"
+  cat >"$dir/.harness/index.sh" <<'INDEX'
+git log --format=%b | grep '^Decision:' >docs/index.md
+echo run >>"$INDEX_RUNS"
+INDEX
+  printf 'sh .harness/index.sh\n' >"$dir/.harness/index-command"
+  printf 'docs/\n' >"$dir/.harness/protected-paths"
+  git -C "$dir" add -A && git -C "$dir" commit -q -m $'Index\n\nDecision: the index lives in docs.'
+  (cd "$dir" && INDEX_RUNS=/dev/null sh .harness/index.sh) && git -C "$dir" add -A &&
+    git -C "$dir" commit -q -m $'Index\n\ndocs/index.md: first build.'
+  git -C "$dir" commit -q --allow-empty -m $'Decide\n\nDecision: ship.sh keeps the index fresh.'
+  (cd "$dir" && bash "$INSTALL_HOOKS" 2>/dev/null)
+  echo "$dir"
+}
+dir="$(new_index_repo ship-index)"
+INDEX_RUNS="$dir.log/index-runs" run_ship "$dir" "$PASS_JSON" success
+first="$(describe)"
+input="$(cat "$dir.log/claude-stdin" 2>/dev/null)"
+subjects="$(git -C "$dir" log --format=%s -3 feature | tr '\n' '|')"
+index_commit="$(git -C "$dir" log --format=%H --grep '^Refresh the index' -1 feature)"
+INDEX_RUNS="$dir.log/index-runs" run_ship "$dir" "$PASS_JSON" success
+if grep -q '^exit 0' <<<"$first" && [ "$subjects" = "Record review of feature: PASS|Refresh the index (.harness/index-command)|Decide|" ] &&
+  [ "$(git -C "$dir" diff --name-only "$index_commit~1" "$index_commit")" = docs/index.md ] &&
+  git -C "$dir" log -1 --format=%b "$index_commit" | grep -q '^docs/index.md: regenerated by the first line of .harness/index-command' &&
+  grep -q 'ship.sh keeps the index fresh' "$dir/docs/index.md" && grep -q 'ship.sh keeps the index fresh' <<<"$input" &&
+  grep -q 'committed the refreshed index: docs/index.md' <<<"$first" &&
+  [ "$(wc -l <"$dir.log/index-runs" | tr -d ' ')" = 1 ] && [ "$(remote_rev "$dir" main)" = "$(rev "$dir" feature)" ]; then
+  result "ship.sh: a stale index is regenerated and committed before the review, through the commit-msg hook" yes ""
+else
+  result "ship.sh: a stale index is regenerated and committed before the review, through the commit-msg hook" no "first ship: $first
+subjects: $subjects
+index runs: $(cat "$dir.log/index-runs" 2>/dev/null)
+second ship: $(describe)"
+fi
+
+# 28. An index already up to date: the command runs, nothing is committed for it. A failing
+# index command stops before the check and the review, with nothing committed.
+dir="$(new_index_repo ship-index-fresh)"
+(cd "$dir" && INDEX_RUNS=/dev/null sh .harness/index.sh) && git -C "$dir" add -A &&
+  git -C "$dir" commit -q -m $'Index\n\ndocs/index.md: up to date.'
+INDEX_RUNS="$dir.log/index-runs" run_ship "$dir" "$PASS_JSON" success
+fresh="$(describe)"
+fresh_subjects="$(git -C "$dir" log --format=%s -2 feature | tr '\n' '|')"
+dir2="$(new_index_repo ship-index-red)"
+printf 'exit 3\n' >"$dir2/.harness/index.sh"
+git -C "$dir2" commit -q --no-verify -am "break the index"
+head_before="$(rev "$dir2" HEAD)"
+INDEX_RUNS=/dev/null run_ship "$dir2" "$PASS_JSON" success
+if grep -q '^exit 0' <<<"$fresh" && grep -q 'the index is up to date: sh .harness/index.sh changed nothing' <<<"$fresh" &&
+  [ "$fresh_subjects" = "Record review of feature: PASS|Index|" ] &&
+  [ "$STATUS" -eq 1 ] && grep -q 'STOPPED: the index command failed (exit 3, above): sh .harness/index.sh. Nothing was committed and no review was started.' <<<"$ERR" &&
+  [ "$(rev "$dir2" HEAD)" = "$head_before" ] && [ ! -e "$dir2.log/claude-args" ] && ! grep -q 'check: 1 passed' <<<"$OUT"; then
+  result "ship.sh: an up-to-date index commits nothing; a failing index command stops before the review" yes ""
+else
+  result "ship.sh: an up-to-date index commits nothing; a failing index command stops before the review" no "fresh: $fresh
+fresh subjects: $fresh_subjects
+failing: $(describe)"
 fi
 
 if [ "$failures" -ne 0 ]; then

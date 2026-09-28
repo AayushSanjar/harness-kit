@@ -45,8 +45,8 @@ jobs:
   # "are always charged for, even when used by public repositories", so none is used.
   #
   # It runs only for pushes to main: a branch push or a pull request runs validate alone.
-  # ship.sh waits for the branch's runs, so a fault a merged change let SURVIVE shows up
-  # here, after the merge, as a red run on main.
+  # release.sh (this repository's) and ship.sh (a consumer's) wait for the branch's runs, so
+  # a fault a merged change let SURVIVE shows up here, after the merge, as a red run on main.
   replay-faults:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: validate

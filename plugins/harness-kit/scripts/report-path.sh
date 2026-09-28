@@ -16,7 +16,8 @@
 #
 # Run from anywhere inside the project's git repository. <branch> is the branch name with
 # every "/" replaced by "-"; on a detached HEAD it is "detached-<first 12 of the sha>".
-# This is the only place the name is worked out: session-start.mjs and ship.sh call it.
+# This is the only place the name is worked out: session-start.mjs, ship.sh and upgrade.sh
+# call it.
 #
 # STALE FILES (--prune): a .reports/*.md report or .reports/*.commit.txt draft is deleted
 # when no local branch maps to its name. The pointers themselves (latest.md,

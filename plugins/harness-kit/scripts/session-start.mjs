@@ -25,7 +25,14 @@
 // person commits with `git commit -F .reports/latest.commit.txt` instead of writing the
 // message by hand.
 //
-// THE BLAST-RADIUS LINE. After the report and commit draft lines comes one more: before finishing, Claude
+// THE COMMIT LINE. After the draft line: Claude may commit its own work locally with that
+// draft once the project's check passes (the commit-msg hook from install-hooks.sh checks
+// the message as it is committed), but never a change to a protected file (those go to the
+// person as a patch, applied with land.sh, which runs the approval) and never a push. The
+// git-guard hook (git-guard.mjs) refuses the push, destructive git and the person's
+// scripts outside the temp folder whatever Claude reads here.
+//
+// THE BLAST-RADIUS LINE. After the report, commit draft and commit lines comes one more: before finishing, Claude
 // searches for every file, comment, test and document that describes behaviour it changed,
 // and updates each or lists it in the report, so a change does not leave its descriptions
 // saying the old thing.
@@ -112,7 +119,14 @@ if (input.agent_type !== REVIEWER) {
           `(replace what is there; .reports/latest.commit.txt points at it). ` +
           `Its first line is a one-line subject, then a blank line, then a body that ` +
           COMMIT_DRAFT_RULES.join(" ") +
-          ` Never commit the draft itself; the person commits with it.`,
+          ` Never commit the draft file itself.`,
+      );
+      lines.push(
+        `harness-kit: you may commit your own work locally with that draft (git commit -F ${draftPath}) once the project's check passes; ` +
+          `the commit-msg hook checks the message and, if it refuses, says how to fix it. ` +
+          `Never commit a change to a file that .harness/protected-paths lists: put those changes in a patch under .reports/ ` +
+          `(git diff -- <files> > .reports/<name>.patch, then git apply -R that patch to take them out of the working tree), ` +
+          `and name "land.sh .reports/<name>.patch" in "Your commands": the person applies it, with the approval. Never push: the person ships.`,
       );
     }
     lines.push(BLAST_RADIUS);

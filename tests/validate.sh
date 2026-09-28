@@ -48,7 +48,7 @@ check "claude plugin validate --strict (plugin: plugins/harness-kit)" "$out" $?
 # empty folder outside any git repository, so there is no report line and no .reports/
 # folder is made here, and without HARNESS_KIT_EVAL, so there is no warning (tests/ship.test.sh
 # covers both).
-expected="harness-kit 0.12.0 loaded"
+expected="harness-kit 0.13.0 loaded"
 empty="$(mktemp -d)"
 out="$(cd "$empty" && env -u HARNESS_KIT_EVAL -u CLAUDE_PROJECT_DIR GIT_CEILING_DIRECTORIES="$(dirname "$empty")" \
   node "$PLUGIN/scripts/session-start.mjs" </dev/null 2>&1)"
@@ -124,22 +124,25 @@ check "tests/review.test.sh (all cases)" "" $?
 bash "$ROOT/tests/eval-reviewer.test.sh"
 check "tests/eval-reviewer.test.sh (all cases)" "" $?
 
-# (l) The person's own steps: report-path.sh, session-start.mjs's report, commit draft and
-# blast-radius lines, stale reports and drafts, the HARNESS_KIT_EVAL warning,
-# check-reports.mjs, land.sh, ship.sh (its saved check output and its notifications) and
-# install-hooks.sh's pre-push hook (with a fake gh, a fake osascript and a local bare
-# repository as the remote, nothing touches GitHub), one per line.
+# (l) The person's own steps: report-path.sh, session-start.mjs's report, commit draft,
+# commit and blast-radius lines, stale reports and drafts, the HARNESS_KIT_EVAL warning,
+# check-reports.mjs, land.sh, ship.sh (its saved check output, its notifications, the
+# review line it commits and the index it refreshes) and install-hooks.sh's pre-push and
+# commit-msg hooks (with a fake gh, a fake osascript and a local bare repository as the
+# remote, nothing touches GitHub), one per line.
 bash "$ROOT/tests/ship.test.sh"
 check "tests/ship.test.sh (all cases)" "" $?
 
 # (n) check-commits.mjs's cases: protected files need a reason in a commit body, numbers
 # in a body need the diff or a "Told:" line (continued onto the lines after it), replay
-# snapshots are exempt, commit references and "v" versions, and --warn, one per line.
+# snapshots are exempt, commit references and "v" versions, a Decision: line must not name
+# a removed path, --warn, and --message (the commit-msg hook's check), one per line.
 bash "$ROOT/tests/check-commits.test.sh"
 check "tests/check-commits.test.sh (all cases)" "" $?
 
-# (o) upgrade.sh's cases (with a fake claude, nothing touches GitHub), including the
-# pre-push hook it installs, one per line.
+# (o) upgrade.sh's cases (with a fake claude and a local repository as harness-kit's
+# history, nothing touches GitHub), including the hooks it installs and the pin commit
+# draft it writes and proves, one per line.
 bash "$ROOT/tests/upgrade.test.sh"
 check "tests/upgrade.test.sh (all cases)" "" $?
 
@@ -156,6 +159,17 @@ check "tests/check-defects.test.sh (all cases)" "" $?
 # (s) harness-metrics.mjs's cases (a fake gh; nothing touches GitHub), one per line.
 bash "$ROOT/tests/harness-metrics.test.sh"
 check "tests/harness-metrics.test.sh (all cases)" "" $?
+
+# (t) release.sh's cases (a fake gh, a fake osascript and a local bare repository as the
+# remote; nothing touches GitHub), one per line.
+bash "$ROOT/tests/release.test.sh"
+check "tests/release.test.sh (all cases)" "" $?
+
+# (u) git-guard.mjs's cases: git push, destructive git and the person's scripts denied in
+# the real working tree and allowed in scratch copies under the temp folder (commands are
+# given to the hook, never run), one per line.
+bash "$ROOT/tests/git-guard.test.sh"
+check "tests/git-guard.test.sh (all cases)" "" $?
 
 # (r) The record-defect skill is started only by the person: its frontmatter turns off
 # model invocation.

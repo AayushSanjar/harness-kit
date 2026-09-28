@@ -1,5 +1,5 @@
-# The local event log, sourced by land.sh, ship.sh and replay-faults.sh; harness-metrics.mjs
-# reads it. Written for bash 3.2 (macOS).
+# The local event log, sourced by land.sh, ship.sh, release.sh and replay-faults.sh;
+# harness-metrics.mjs reads it. Written for bash 3.2 (macOS).
 #
 # WHERE: <git common dir>/harness-kit/events.tsv, which is .git/harness-kit/events.tsv in a
 # normal clone (every worktree of the clone shares it). It is inside .git, so it is never
@@ -8,14 +8,17 @@
 # THE LINES, appended, one per event, tab-separated (tabs and line breaks in a value become
 # spaces):
 #   date    UTC, YYYY-MM-DDTHH:MM:SSZ
-#   tool    land.sh, ship.sh or replay-faults.sh
+#   tool    land.sh, ship.sh, release.sh or replay-faults.sh
 #   branch  the branch the tool worked on ("(detached)" on a detached HEAD)
 #   head    HEAD's commit when the event was written ("none" before the first commit)
-#   event   land.sh: LANDED or STOPPED; ship.sh: SHIPPED or STOPPED; replay-faults.sh: REPLAYED
-#   what    STOPPED: a short reason, such as check-failed (ship.sh's refusals start
-#           "refused-"); REPLAYED: "killed=K,survived=S,error=E"; LANDED: "-"; SHIPPED: the base
+#   event   land.sh: LANDED or STOPPED; ship.sh: SHIPPED or STOPPED; release.sh: RELEASED or
+#           STOPPED; replay-faults.sh: REPLAYED
+#   what    STOPPED: a short reason, such as check-failed (ship.sh's and release.sh's
+#           refusals start "refused-"); REPLAYED: "killed=K,survived=S,error=E"; LANDED: "-";
+#           SHIPPED: the base; RELEASED: the tag
 #   detail  STOPPED: the message printed after "STOPPED:" or "REFUSED:"; REPLAYED: "all", or
-#           "ids:" and the ids asked for; LANDED: the patch's path; SHIPPED: what was merged
+#           "ids:" and the ids asked for; LANDED: the patch's path; SHIPPED and RELEASED: what
+#           was merged
 #
 # Writing never changes what the tool does: outside a git repository nothing is written,
 # and a failed write prints one note on stderr.

@@ -75,4 +75,4 @@ No field may hold a tab or a line break.
 
 Write the report and the commit message draft where the harness-kit SessionStart lines say, as usual. In the report's Evidence, quote the new test's FAIL line before the fix, its PASS line after, the two runs that pin the introducing commit, and the check command's final line. The commit draft's body names every protected file changed (`.harness/protected-paths`, the new test, the spec if it is protected) with the reason, has a `Breaks:` line for the new test (what makes it fail: this bug), and a `Told:` line for any number from the person's description.
 
-Never commit, push, run `land.sh`, `ship.sh`, `review.sh` or `eval-reviewer.sh`, or run the approval command: those are the person's steps.
+Never commit, push, run `land.sh`, `ship.sh`, `release.sh`, `upgrade.sh`, `review.sh` or `eval-reviewer.sh`, or run the approval command: those are the person's steps. (This skill's change always touches a protected file, the new test, so it is never Claude's to commit; the git-guard hook refuses a push and the person's scripts outside the temp folder anyway.)
