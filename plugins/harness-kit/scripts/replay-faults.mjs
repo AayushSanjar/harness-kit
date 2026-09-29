@@ -19,7 +19,10 @@
 //       worktree that could not be made, or text to find missing or repeated), and
 //       part.<label>.json (the snapshot's tree, the ids asked for, the entries this part
 //       ran and whether it ran the baseline), baseline.seconds (how long the baseline ran)
-//       and <id>.timeout (a run stopped by a time limit, below). With
+//       and <id>.timeout (a run stopped by a time limit, below). A run given IDs with
+//       .harness/check-only is targeted: its baseline is CHECK with --only and each distinct
+//       check of the entries asked for, one --only each (`CHECK --only '<a>' --only '<b>'`),
+//       so it runs only their checks; with no IDs the baseline is the whole of CHECK. With
 //       HARNESS_KIT_REPLAY_BASELINE_FROM set to the results folder of a baseline part of the
 //       same snapshot (as harness-kit's CI shards do), its baseline.seconds sets the run
 //       limit from the start. Progress goes to stderr. On SIGINT, SIGTERM or SIGHUP, or a
@@ -39,13 +42,21 @@
 //       is TREE: no results, parts from different snapshots or with different ids asked for,
 //       not exactly one baseline, an entry run by two parts, or a baseline that could not run
 //       or ran longer than its limit.
-//   node replay-faults.mjs select MUTATIONS CHECK_FILES CHANGED [BEFORE]
-//       For land.sh: prints, one per line, the IDs of the entries whose own file is among
-//       the paths in CHANGED (a file of paths, one per line), or whose check has a
-//       CHECK_FILES path among them, or that the patch added or changed: no entry in
-//       BEFORE (MUTATIONS as it was before the patch; missing means empty) has the same id
-//       with the same fields. Notes on stderr name the checks with no CHECK_FILES line.
+//   node replay-faults.mjs select [--why] MUTATIONS CHECK_FILES CHANGED [BEFORE]
+//       For land.sh and replay-faults.sh's targeted run: prints, one per line, the IDs of
+//       the entries whose own file is among the paths in CHANGED (a file of paths, one per
+//       line), or whose check has a CHECK_FILES path among them, or that the patch added or
+//       changed: no entry in BEFORE (MUTATIONS as it was before the patch; missing means
+//       empty) has the same id with the same fields. With --why, each line is the id, a tab
+//       and the changed paths that tie it, joined by ","; an added or changed entry is tied
+//       by .harness/mutations.tsv. Notes on stderr name the checks with no CHECK_FILES line.
 //       Exit 2, as list does, when MUTATIONS is unusable.
+//   node replay-faults.mjs machinery MACHINERY CHANGED
+//       For replay-faults.sh's Replay line: prints, one per line, the paths in CHANGED that
+//       the file MACHINERY (.harness/replay-machinery: one path per line from the project
+//       root, a line ending in "/" meaning everything under that folder, # comments and
+//       blank lines skipped; missing means none) names. A change to one of them means only
+//       a full replay can be trusted.
 //
 // THE JOB COUNT. At most as many checks run at once as the machine has CPUs
 // (os.availableParallelism()). HARNESS_KIT_REPLAY_JOBS, a whole number of 1 or more, lowers
@@ -71,8 +82,9 @@
 //                    less than F. A run that started before the baseline ended gets its
 //                    limit when the baseline ends (and is stopped at once if already past it).
 //   the baseline     M times the last baseline recorded in this repository's event log (the
-//                    baseline= field of the last REPLAYED line), or the fallback when there
-//                    is none, and never less than F. A baseline that passes its limit stops
+//                    baseline= field of the last full REPLAYED line, whose detail is "all": a
+//                    targeted replay's baseline ran only some checks, so it is not counted),
+//                    or the fallback when there is none, and never less than F. A baseline that passes its limit stops
 //                    the whole session (exit 2).
 //   the session      HARNESS_KIT_REPLAY_SESSION_SECONDS when set; otherwise the baseline's
 //                    limit (when this part runs the baseline) plus the number of rounds (the
@@ -231,14 +243,15 @@ const die = (message, code = 2) => {
 };
 
 // The seconds of the last baseline recorded in the project's event log (the baseline= field
-// of its last REPLAYED line from replay-faults.sh), or null.
+// of its last full REPLAYED line from replay-faults.sh, detail "all"; a targeted replay's
+// baseline ran only some checks), or null.
 const recordedBaseline = (project) => {
   const common = git(["-C", project, "rev-parse", "--path-format=absolute", "--git-common-dir"]).stdout.trim();
   const log = common === "" ? null : read(join(common, "harness-kit/events.tsv"));
   let seconds = null;
   for (const line of (log ?? "").split("\n")) {
     const f = line.split("\t");
-    const found = f[1] === "replay-faults.sh" && f[4] === "REPLAYED" ? /(?:^|,)baseline=([0-9]+(?:\.[0-9]+)?)s(?:,|$)/.exec(f[5] ?? "") : null;
+    const found = f[1] === "replay-faults.sh" && f[4] === "REPLAYED" && f[6] === "all" ? /(?:^|,)baseline=([0-9]+(?:\.[0-9]+)?)s(?:,|$)/.exec(f[5] ?? "") : null;
     if (found) seconds = Number(found[1]);
   }
   return seconds;
@@ -254,6 +267,10 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
   const mine = part === BASELINE ? [] : asked.filter((_, k) => !shard || k % Number(shard[2]) === Number(shard[1]) - 1);
   const withBaseline = part === "all" || part === BASELINE;
   const only = existsSync(join(project, ".harness/check-only"));
+  // A targeted run (IDs given, with .harness/check-only): the baseline runs only the checks
+  // of the entries asked for, one --only each, in file order.
+  const baselineChecks = only && ids.length > 0 ? [...new Set(asked.map((e) => e.check))] : [];
+  const baselineOnly = baselineChecks.map((_, k) => `--only "$${k + 1}"`).join(" ");
   // Inside another replay, one check at a time (THE JOB COUNT).
   const nested = process.env.HARNESS_KIT_REPLAY_OUTER === "1" && count("HARNESS_KIT_REPLAY_CPUS") === null;
   const cpus = count("HARNESS_KIT_REPLAY_CPUS") ?? (nested ? 1 : availableParallelism());
@@ -282,6 +299,9 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
     die(`cannot write the results to ${out}: ${error.message}`);
   }
   if (only) say(`each entry runs only its own check (.harness/check-only): ${check} --only <check>`);
+  if (withBaseline && baselineChecks.length > 0) {
+    say(`the baseline runs only the checks of the entries asked for (.harness/check-only): ${check} ${baselineChecks.map((c) => `--only '${c}'`).join(" ")}`);
+  }
   say(`up to ${jobs} checks at once (${cpus} CPUs${nested ? ", taken as 1 inside another replay" : ""})`);
 
   // The runs, in order: the baseline first, then the entries, fragile ones left out.
@@ -457,7 +477,12 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
     }
     const log = openSync(join(out, `${id}.log`), "w");
     const targeted = only && entry;
-    const handle = startLimited("/bin/sh", ["-c", targeted ? `${check} --only "$1"` : check, "harness-kit-replay", ...(targeted ? [entry.check] : [])], {
+    const [line, lineArgs] = targeted
+      ? [`${check} --only "$1"`, [entry.check]]
+      : !entry && baselineChecks.length > 0
+        ? [`${check} ${baselineOnly}`, baselineChecks]
+        : [check, []];
+    const handle = startLimited("/bin/sh", ["-c", line, "harness-kit-replay", ...lineArgs], {
       cwd: worktree,
       stdio: ["ignore", log, log],
       env: { ...process.env, HARNESS_KIT_REPLAY: "1", HARNESS_KIT_REPLAY_OUTER: "1", [REGISTRY]: registry },
@@ -616,7 +641,8 @@ if (command === "list") {
 } else if (command === "judge") {
   judge(args);
 } else if (command === "select") {
-  const [path, checkFiles, changedList, beforePath] = args;
+  const why = args[0] === "--why";
+  const [path, checkFiles, changedList, beforePath] = why ? args.slice(1) : args;
   const { entries, problems } = mutations(path);
   if (problems.length > 0) die(problems.join("\n"));
   // The entries as they were before the patch, by id, as their fields joined; a file that
@@ -635,16 +661,25 @@ if (command === "list") {
     files.get(name).push(file.replace(/^\.\//, ""));
   }
   const changed = (read(changedList) ?? "").split("\n").filter(Boolean);
-  const touches = (entry) => changed.some((p) => entry.endsWith("/") ? p.startsWith(entry) : p === entry);
+  const touching = (entry) => changed.filter((p) => entry.endsWith("/") ? p.startsWith(entry) : p === entry);
   const unmapped = new Set();
   for (const e of entries) {
     const mapped = files.get(e.check);
     if (!mapped) unmapped.add(e.check);
-    if (changed.includes(e.file) || (mapped ?? []).some(touches) || addedOrChanged(e)) console.log(e.id);
+    const tied = new Set([...(changed.includes(e.file) ? [e.file] : []), ...(mapped ?? []).flatMap(touching)]);
+    if (addedOrChanged(e)) tied.add(".harness/mutations.tsv");
+    if (tied.size > 0) console.log(why ? `${e.id}\t${[...tied].join(",")}` : e.id);
   }
   for (const check of unmapped) {
     process.stderr.write(`note: .harness/check-files has no line for the check "${check}", so only a change to an entry's own file starts its replays\n`);
   }
+} else if (command === "machinery") {
+  const [machineryPath, changedList] = args;
+  const named = rows(read(machineryPath)).map(([, fields]) => fields.join("\t").trim().replace(/^\.\//, "")).filter(Boolean);
+  const changed = (read(changedList) ?? "").split("\n").filter(Boolean);
+  for (const p of changed) {
+    if (named.some((entry) => (entry.endsWith("/") ? p.startsWith(entry) : p === entry))) console.log(p);
+  }
 } else {
-  die("usage: replay-faults.mjs list|run|judge|select ...");
+  die("usage: replay-faults.mjs list|run|judge|select|machinery ...");
 }

@@ -1,0 +1,12 @@
+# The replay machinery (replay-faults.sh's THE REPLAY LINE): a fault in one of these files
+# could change verdicts that a targeted replay does not run, so a change to one makes
+# harness-kit's CI replay a branch push in full (.github/workflows/validate.yml). The
+# person's list (.reports/inc-speed-b.brief.md). tests/validate.sh is left out for now: it
+# changes in nearly every commit; the person will revisit that.
+plugins/harness-kit/scripts/replay-faults.sh
+plugins/harness-kit/scripts/replay-faults.mjs
+plugins/harness-kit/scripts/time-limit.mjs
+.harness/check-command
+.harness/check-only
+.harness/replay-machinery
+.github/workflows/validate.yml

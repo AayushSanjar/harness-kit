@@ -48,8 +48,9 @@
 # check-files line starts a replay only through its entries' own files; land.sh names it
 # in a note. An entry the patch adds to .harness/mutations.tsv, or changes (any field, id
 # kept), is replayed too: a new or edited entry is proved before it lands. Replays run the
-# check once per entry plus once without a fault, in parallel up to the CPU count, locally,
-# never in CI (replay-faults.sh).
+# check once per entry plus once without a fault (with .harness/check-only, each entry and
+# the baseline only those entries' checks), in parallel up to the CPU count, locally
+# (replay-faults.sh).
 #
 # CLEANUP. Its temporary files are removed on any exit, a signal included (limit-lib.sh's
 # hk_temp and hk_on_exit); after a forced kill, the time-limit helper's next start sweeps them.

@@ -68,11 +68,13 @@ CHECK
   cat >"$dir/check.sh" <<'CHECK'
 case " $* " in *" --skip-reviewed "*) ;; *) echo "FAIL check.sh: no --skip-reviewed"; exit 1 ;; esac
 [ -z "${REPLAY_ENV_LOG:-}" ] || echo "HARNESS_KIT_REPLAY=${HARNESS_KIT_REPLAY:-unset}" >>"$REPLAY_ENV_LOG"
-only=""
-while [ $# -gt 0 ]; do [ "$1" != --only ] || { only="$2"; shift; }; shift; done
+[ -z "${REPLAY_ARGS_LOG:-}" ] || echo "$*" >>"$REPLAY_ARGS_LOG"
+only=" "
+while [ $# -gt 0 ]; do [ "$1" != --only ] || { only="$only$2 "; shift; }; shift; done
+wants() { [ "$only" = " " ] || case "$only" in *" $1 "*) true ;; *) false ;; esac; }
 status=0
-[ -n "$only" ] && [ "$only" != greeting ] || sh checks/greeting.sh || status=1
-[ -n "$only" ] && [ "$only" != other ] || sh checks/other.sh || status=1
+! wants greeting || sh checks/greeting.sh || status=1
+! wants other || sh checks/other.sh || status=1
 exit $status
 CHECK
   printf 'sh check.sh --skip-reviewed\n' >"$dir/.harness/check-command"
@@ -196,7 +198,7 @@ fi
 # 7b. The event log: each run that reached its totals line (cases 1-5) left one REPLAYED
 # line with its counts, its baseline's seconds (compared apart: they vary) and the ids asked
 # for; the refusals left none (P6 has the interrupted run). A run of every entry says "all".
-run_in "$dir" bash "$REPLAY"
+run_in "$dir" bash "$REPLAY" --full
 logged="$(grep -v $'\tTIMED\t' "$dir/.git/harness-kit/events.tsv" 2>/dev/null | cut -f2,5-7)"
 got="$(sed -E 's/,baseline=[0-9]+\.[0-9]{2}s//' <<<"$logged")"
 want="$(printf '%s\tREPLAYED\t%s\t%s\n' \
@@ -237,7 +239,7 @@ fi
 # 7c. A fragile entry, whose text to find holds a version or a date, is an ERROR and is not
 # replayed; the other entries still run.
 frag="$(new_project fragile "${M_KILLED}m-version\tapp.sh\t# the greeting, v1.2.3\t#\tgreeting\nm-date\tapp.sh\t# 2026-09-27 the greeting\t#\tgreeting\n")"
-run_in "$frag" bash "$REPLAY"
+run_in "$frag" bash "$REPLAY" --full
 if [ "$STATUS" -eq 1 ] && grep -q '^ERROR m-version: fragile entry: its text to find holds the version "v1.2.3"' <<<"$OUT" &&
   grep -q '^ERROR m-date: fragile entry: its text to find holds the date "2026-09-27"' <<<"$OUT" &&
   grep -q '^KILLED m-killed' <<<"$OUT" && ! grep -q 'replaying m-version\|replaying m-date' <<<"$ERR" &&
@@ -251,11 +253,11 @@ fi
 # as the baseline's is; with it, "<check command> --only <check>", so only the entry's
 # check is in its run. The verdicts are the same both ways.
 only="$(new_project only "$M_KILLED$M_OTHER")"
-run_in "$only" bash "$REPLAY"
+run_in "$only" bash "$REPLAY" --full
 whole_out="$OUT" whole_status=$STATUS whole_err="$ERR"
 whole="$(sed -n 's/.*each run.s output is in \(.*\) (baseline.log.*/\1/p' <<<"$ERR")"
 touch "$only/.harness/check-only"
-run_in "$only" bash "$REPLAY"
+run_in "$only" bash "$REPLAY" --full
 results="$(sed -n 's/.*each run.s output is in \(.*\) (baseline.log.*/\1/p' <<<"$ERR")"
 rm -f "$only/.harness/check-only"
 if [ "$whole_status" -eq 0 ] && [ "$STATUS" -eq 0 ] && [ "$OUT" = "$whole_out" ] &&
@@ -273,6 +275,101 @@ else
 $whole_out
 $whole_err
 with it: $(describe)"
+fi
+
+# results_of STDERR: the results folder a run names on stderr.
+results_of() { sed -n 's/.*each run.s output is in \(.*\) (baseline.log.*/\1/p' <<<"$1"; }
+# replayed_lines DIR: how many REPLAYED lines DIR's event log holds.
+replayed_lines() { awk -F'\t' '$5 == "REPLAYED"' "$1/.git/harness-kit/events.tsv" 2>/dev/null | grep -c .; }
+
+# 7e. TARGETED, THE DEFAULT: with no ids, only the entries tied to the files changed since
+# the base branch (main) are replayed: on a branch with one commit changing app.sh, m-killed
+# (whose own file it is) and not m-other; --plan prints the same Replay line alone and runs
+# nothing. On a branch whose only change (an untracked file) ties no entry, nothing runs,
+# no REPLAYED line is written, and the exit is 0.
+tgt="$(new_project targeted "$M_KILLED$M_OTHER")"
+tgt_mb="$(git -C "$tgt" rev-parse main | cut -c1-7)"
+git -C "$tgt" switch -q -c feat
+printf '# the greeting, said once\necho hello\n' >"$tgt/app.sh"
+git -C "$tgt" commit -qam "feat: the comment"
+run_in "$tgt" bash "$REPLAY" --plan
+plan="$OUT" plan_status=$STATUS plan_err="$ERR"
+run_in "$tgt" bash "$REPLAY"
+t_out="$OUT" t_err="$ERR" t_status=$STATUS
+t_detail="$(awk -F'\t' '$5 == "REPLAYED" { d = $7 } END { print d }' "$tgt/.git/harness-kit/events.tsv" 2>/dev/null)"
+t_lines="$(replayed_lines "$tgt")"
+git -C "$tgt" switch -q -c docs main
+printf 'notes\n' >"$tgt/notes.txt"
+run_in "$tgt" bash "$REPLAY"
+rm -f "$tgt/notes.txt"
+want_plan="Replay: targeted (1 fault): tied to the files changed since main (merge-base $tgt_mb): app.sh"
+if [ "$plan_status" -eq 0 ] && [ "$plan" = "$want_plan" ] && ! grep -q 'replaying' <<<"$plan_err" &&
+  [ "$t_status" -eq 0 ] && grep -qxF "harness-kit replay-faults.sh: $want_plan" <<<"$t_err" &&
+  grep -q '^KILLED m-killed' <<<"$t_out" && ! grep -q 'm-other' <<<"$t_out" &&
+  grep -qx 'replay-faults: 1 replayed: 1 KILLED, 0 SURVIVED, 0 TIMEOUT, 0 ERROR' <<<"$t_out" && [ "$t_detail" = "ids: m-killed" ] &&
+  [ "$STATUS" -eq 0 ] && [ -z "$OUT" ] &&
+  grep -qxF "harness-kit replay-faults.sh: Replay: targeted (0 faults): no fault is tied to the 1 file changed since main (merge-base $tgt_mb)" <<<"$ERR" &&
+  [ "$(replayed_lines "$tgt")" = "$t_lines" ] && clean "$tgt"; then
+  result "replay-faults: with no ids, only the faults tied to the files changed since the base branch are replayed, and the Replay line says targeted (N faults) and why" yes ""
+else
+  result "replay-faults: with no ids, only the faults tied to the files changed since the base branch are replayed, and the Replay line says targeted (N faults) and why" no "plan: exit $plan_status: $plan
+$plan_err
+targeted run: exit $t_status, detail $t_detail
+$t_out
+$t_err
+nothing tied: $(describe)"
+fi
+
+# 7f. --full replays every entry, whatever changed, against a baseline of the whole check;
+# its Replay line says so, and its event line says "all".
+git -C "$tgt" switch -q feat
+run_in "$tgt" bash "$REPLAY" --full
+f_results="$(results_of "$ERR")"
+f_detail="$(awk -F'\t' '$5 == "REPLAYED" { d = $7 } END { print d }' "$tgt/.git/harness-kit/events.tsv" 2>/dev/null)"
+if [ "$STATUS" -eq 0 ] && grep -qx 'harness-kit replay-faults.sh: Replay: full: asked for with --full' <<<"$ERR" &&
+  grep -q '^KILLED m-killed' <<<"$OUT" && grep -q '^KILLED m-other' <<<"$OUT" &&
+  grep -qx 'replay-faults: 2 replayed: 2 KILLED, 0 SURVIVED, 0 TIMEOUT, 0 ERROR' <<<"$OUT" && [ "$f_detail" = all ] &&
+  grep -q 'greeting' "$f_results/baseline.log" && grep -q 'other' "$f_results/baseline.log" && clean "$tgt"; then
+  result "replay-faults: --full replays every entry against a whole-check baseline, and the event line says all" yes ""
+else
+  result "replay-faults: --full replays every entry against a whole-check baseline, and the event line says all" no "detail: $f_detail
+$(describe)"
+fi
+
+# 7g. With .harness/check-only, a run of chosen ids (a targeted run is one) runs its
+# baseline with one --only for each distinct check of those entries, not the whole check;
+# each entry still runs with its own --only.
+touch "$tgt/.harness/check-only"
+rm -f "$WORK/args.log"
+REPLAY_ARGS_LOG="$WORK/args.log" run_in "$tgt" bash "$REPLAY" m-killed m-other
+rm -f "$tgt/.harness/check-only"
+args="$(sort "$WORK/args.log" 2>/dev/null)"
+want_args="$(printf '%s\n' '--skip-reviewed --only greeting' '--skip-reviewed --only greeting --only other' '--skip-reviewed --only other' | sort)"
+if [ "$STATUS" -eq 0 ] && [ "$args" = "$want_args" ] &&
+  grep -q "the baseline runs only the checks of the entries asked for (.harness/check-only): sh check.sh --skip-reviewed --only 'greeting' --only 'other'" <<<"$ERR" &&
+  grep -qx 'harness-kit replay-faults.sh: Replay: targeted (2 faults): the ids asked for' <<<"$ERR" &&
+  grep -qx 'replay-faults: 2 replayed: 2 KILLED, 0 SURVIVED, 0 TIMEOUT, 0 ERROR' <<<"$OUT" && clean "$tgt"; then
+  result "replay-faults: with .harness/check-only, a run of chosen ids runs its baseline with --only for each of their checks" yes ""
+else
+  result "replay-faults: with .harness/check-only, a run of chosen ids runs its baseline with --only for each of their checks" no "the check's arguments, one run a line:
+$args
+$(describe)"
+fi
+
+# 7h. .harness/replay-machinery: a changed file it names (a folder line, "checks/", names
+# checks/greeting.sh) is named at the end of the Replay line, "machinery changed:", which
+# harness-kit's CI reads to replay a branch push in full.
+git -C "$tgt" switch -q -c mach main
+printf '# a note\n' >>"$tgt/checks/greeting.sh"
+git -C "$tgt" commit -qam "mach: a note"
+printf '# the replay machinery\nchecks/\n' >"$tgt/.harness/replay-machinery"
+run_in "$tgt" bash "$REPLAY" --plan
+rm -f "$tgt/.harness/replay-machinery"
+if [ "$STATUS" -eq 0 ] &&
+  [ "$OUT" = "Replay: targeted (0 faults): no fault is tied to the 2 files changed since main (merge-base $tgt_mb); machinery changed: checks/greeting.sh" ]; then
+  result "replay-faults: --plan names a changed .harness/replay-machinery path as machinery changed" yes ""
+else
+  result "replay-faults: --plan names a changed .harness/replay-machinery path as machinery changed" no "$(describe)"
 fi
 
 # ---------------------------------------------------------------------------------------
@@ -330,7 +427,7 @@ pool_start() {
   exec 3<>"$pipes/events"
   (
     cd "$dir" || exit 1
-    env "$@" POOL_DIR="$pipes" bash "$REPLAY" >"$WORK/pool.out" 2>"$WORK/pool.err" 3>&- &
+    env "$@" POOL_DIR="$pipes" bash "$REPLAY" --full >"$WORK/pool.out" 2>"$WORK/pool.err" 3>&- &
     echo $! >"$pipes/pid"
     wait $!
     echo "exit $?" >"$pipes/events"
@@ -416,9 +513,9 @@ fi
 # the same way, and those are the verdicts a replay gives (m-other's is the baseline's
 # ERROR).
 printf 'edited\n' >"$dir/other.txt"
-HARNESS_KIT_REPLAY_JOBS=1 run_in "$dir" bash "$REPLAY"
+HARNESS_KIT_REPLAY_JOBS=1 run_in "$dir" bash "$REPLAY" --full
 serial_out="$OUT" serial_status=$STATUS
-HARNESS_KIT_REPLAY_CPUS=4 HARNESS_KIT_REPLAY_JOBS=4 run_in "$dir" bash "$REPLAY"
+HARNESS_KIT_REPLAY_CPUS=4 HARNESS_KIT_REPLAY_JOBS=4 run_in "$dir" bash "$REPLAY" --full
 git -C "$dir" checkout -q -- other.txt
 if [ "$serial_status" -eq 1 ] && [ "$STATUS" -eq 1 ] && [ "$OUT" = "$serial_out" ] &&
   grep -q '^KILLED m-killed: ' <<<"$OUT" && grep -q '^SURVIVED m-survived: ' <<<"$OUT" &&
@@ -436,9 +533,9 @@ fi
 # P3. One baseline per session: whatever the number of jobs, the check runs once without
 # any fault, and once per entry.
 rm -f "$WORK/pool-1.log" "$WORK/pool-4.log"
-POOL_LOG="$WORK/pool-1.log" HARNESS_KIT_REPLAY_JOBS=1 run_in "$pool" bash "$REPLAY"
+POOL_LOG="$WORK/pool-1.log" HARNESS_KIT_REPLAY_JOBS=1 run_in "$pool" bash "$REPLAY" --full
 out1="$OUT" s1=$STATUS
-POOL_LOG="$WORK/pool-4.log" HARNESS_KIT_REPLAY_CPUS=4 HARNESS_KIT_REPLAY_JOBS=4 run_in "$pool" bash "$REPLAY"
+POOL_LOG="$WORK/pool-4.log" HARNESS_KIT_REPLAY_CPUS=4 HARNESS_KIT_REPLAY_JOBS=4 run_in "$pool" bash "$REPLAY" --full
 runs="run baseline run f1 run f2 run f3 run f4"
 if [ "$s1" -eq 0 ] && [ "$STATUS" -eq 0 ] && [ "$out1" = "$POOL_KILLED" ] && [ "$OUT" = "$POOL_KILLED" ] &&
   [ "$(sort "$WORK/pool-1.log" | tr '\n' ' ')" = "$runs " ] && [ "$(sort "$WORK/pool-4.log" | tr '\n' ' ')" = "$runs " ] &&
@@ -454,11 +551,11 @@ fi
 # a project whose check runs replays does not start a pool the size of the machine inside
 # each outer run; HARNESS_KIT_REPLAY_CPUS still sets the pool when given.
 rm -f "$WORK/outer.log"
-run_in "$pool" env -u HARNESS_KIT_REPLAY_OUTER POOL_OUTER_LOG="$WORK/outer.log" bash "$REPLAY"
+run_in "$pool" env -u HARNESS_KIT_REPLAY_OUTER POOL_OUTER_LOG="$WORK/outer.log" bash "$REPLAY" --full
 outer_status=$STATUS outer_err="$ERR"
-run_in "$pool" env HARNESS_KIT_REPLAY_OUTER=1 bash "$REPLAY"
+run_in "$pool" env HARNESS_KIT_REPLAY_OUTER=1 bash "$REPLAY" --full
 inner_status=$STATUS inner_out="$OUT" inner_err="$ERR"
-run_in "$pool" env HARNESS_KIT_REPLAY_OUTER=1 HARNESS_KIT_REPLAY_CPUS=3 bash "$REPLAY"
+run_in "$pool" env HARNESS_KIT_REPLAY_OUTER=1 HARNESS_KIT_REPLAY_CPUS=3 bash "$REPLAY" --full
 if [ "$outer_status" -eq 0 ] && [ "$(sort -u "$WORK/outer.log" 2>/dev/null)" = 1 ] && [ "$(wc -l <"$WORK/outer.log" | tr -d ' ')" = 5 ] &&
   ! grep -q 'inside another replay' <<<"$outer_err" &&
   [ "$inner_status" -eq 0 ] && [ "$inner_out" = "$POOL_KILLED" ] &&
@@ -477,7 +574,7 @@ fi
 # 2/3 and 3/3 of the mixed entries, each into its own folder (none prints a verdict). The
 # shards between them run every entry once, and --judge on the four folders prints what a
 # whole run prints, and exits as it does.
-run_in "$dir" bash "$REPLAY"
+run_in "$dir" bash "$REPLAY" --full
 whole_out="$OUT" whole_status=$STATUS
 parts="$WORK/parts"
 rm -rf "$parts"
@@ -671,7 +768,7 @@ alive() {
 limits="$(new_limits limits 'h-hang\tapp.txt\tok\tdeaf-hang\tapp\nh-ok\tapp.txt\tok\tbad\tapp\n')"
 rm -f "$WORK/limit-pids"
 LIMIT_PIDS="$WORK/limit-pids" HARNESS_KIT_REPLAY_CPUS=2 HARNESS_KIT_REPLAY_LIMIT_MULTIPLE=3 HARNESS_KIT_REPLAY_GRACE_SECONDS=1 \
-  HARNESS_KIT_REPLAY_LIMIT_FLOOR_SECONDS=1.5 HARNESS_KIT_REPLAY_BASELINE_FALLBACK_SECONDS=5 run_guarded "$limits"
+  HARNESS_KIT_REPLAY_LIMIT_FLOOR_SECONDS=1.5 HARNESS_KIT_REPLAY_BASELINE_FALLBACK_SECONDS=5 run_guarded "$limits" --full
 left="$(alive "$WORK/limit-pids")"
 if [ "$GUARDED" = yes ] && [ "$STATUS" = 1 ] && [ -z "$left" ] && [ -s "$WORK/limit-pids" ] &&
   grep -q '^TIMEOUT h-hang: ran longer than its limit of 1.5 seconds (the floor; 3 times the baseline.s [0-9.]* seconds is less); stopped after [0-9.]* seconds$' <<<"$OUT" &&
@@ -704,9 +801,11 @@ fi
 # limit has no baseline in it. No run here comes near its limit: nothing waits.
 derive="$(new_limits derive 'd-a\tapp.txt\tok\tbad\tapp\nd-b\tapp.txt\tok\tno\tapp\n')"
 export HARNESS_KIT_REPLAY_CPUS=2 HARNESS_KIT_REPLAY_LIMIT_MULTIPLE=3 HARNESS_KIT_REPLAY_LIMIT_FLOOR_SECONDS=3 HARNESS_KIT_REPLAY_BASELINE_FALLBACK_SECONDS=5
-run_guarded "$derive"
+run_guarded "$derive" --full
 first="$ERR" first_status=$STATUS
 printf '2026-09-29T00:00:00Z\treplay-faults.sh\tmain\tnone\tREPLAYED\tkilled=2,survived=0,timeout=0,error=0,baseline=2.00s\tall\n' >>"$derive/.git/harness-kit/events.tsv"
+# A later targeted replay's baseline ran only some checks, so it is not the recorded one.
+printf '2026-09-29T00:00:00Z\treplay-faults.sh\tmain\tnone\tREPLAYED\tkilled=1,survived=0,timeout=0,error=0,baseline=9.00s\tids: d-a\n' >>"$derive/.git/harness-kit/events.tsv"
 run_guarded "$derive" --part baseline --out "$WORK/derive-parts/baseline"
 second="$ERR" second_status=$STATUS
 run_guarded "$derive" --part 1/1 --out "$WORK/derive-parts/1" --baseline-from "$WORK/derive-parts/baseline"
@@ -761,7 +860,7 @@ fi
 session="$(new_limits session 'h1\tapp.txt\tok\thang1\tapp\nh2\tapp.txt\tok\thang2\tapp\nh3\tapp.txt\tok\thang3\tapp\n')"
 rm -f "$WORK/session-pids"
 LIMIT_PIDS="$WORK/session-pids" HARNESS_KIT_REPLAY_JOBS=1 HARNESS_KIT_REPLAY_LIMIT_FLOOR_SECONDS=5 \
-  HARNESS_KIT_REPLAY_BASELINE_FALLBACK_SECONDS=5 HARNESS_KIT_REPLAY_SESSION_SECONDS=2 run_guarded "$session"
+  HARNESS_KIT_REPLAY_BASELINE_FALLBACK_SECONDS=5 HARNESS_KIT_REPLAY_SESSION_SECONDS=2 run_guarded "$session" --full
 left="$(alive "$WORK/session-pids")"
 if [ "$GUARDED" = yes ] && [ "$STATUS" = 1 ] && [ -z "$left" ] &&
   grep -q '^TIMEOUT h1: still running when the session.s limit of 2 seconds ran out; stopped after [0-9.]* seconds$' <<<"$OUT" &&
@@ -782,7 +881,7 @@ stuck="$(new_limits stuck 'h1\tapp.txt\tok\thang1\tapp\nh2\tapp.txt\tok\thang2\t
 touch "$stuck/hang-always"
 rm -f "$WORK/baseline-pids"
 LIMIT_PIDS="$WORK/baseline-pids" HARNESS_KIT_REPLAY_CPUS=2 HARNESS_KIT_REPLAY_LIMIT_MULTIPLE=3 HARNESS_KIT_REPLAY_LIMIT_FLOOR_SECONDS=1 \
-  HARNESS_KIT_REPLAY_BASELINE_FALLBACK_SECONDS=1 run_guarded "$stuck"
+  HARNESS_KIT_REPLAY_BASELINE_FALLBACK_SECONDS=1 run_guarded "$stuck" --full
 rm -f "$stuck/hang-always"
 left="$(alive "$WORK/baseline-pids")"
 if [ "$GUARDED" = yes ] && [ "$STATUS" = 2 ] && [ -z "$left" ] && [ "$(wc -l <"$WORK/baseline-pids" | tr -d ' ')" = 2 ] &&
@@ -807,7 +906,7 @@ printf 'echo "$HARNESS_KIT_REGISTRY_DIR $(node "$REG_TL" register --owner $$ pat
 printf 'exec sh reg.sh --skip-reviewed\n' >"$reg/.harness/check-command"
 git -C "$reg" add -A && git -C "$reg" commit -q -m "check: log the registry"
 rm -f "$WORK/reg.log"
-REG_TL="$SCRIPTS/time-limit.mjs" REG_LOG="$WORK/reg.log" HARNESS_KIT_REPLAY_CPUS=3 run_guarded "$reg"
+REG_TL="$SCRIPTS/time-limit.mjs" REG_LOG="$WORK/reg.log" HARNESS_KIT_REPLAY_CPUS=3 run_guarded "$reg" --full
 folders="$(cut -d' ' -f1 "$WORK/reg.log" 2>/dev/null | sort -u)"
 misplaced="$(while read -r folder record; do [ "$(dirname "$record")" = "$folder" ] || echo "$record"; done <"$WORK/reg.log")"
 if [ "$GUARDED" = yes ] && [ "$STATUS" = 0 ] && [ "$(wc -l <"$WORK/reg.log" | tr -d ' ')" = 3 ] &&
@@ -840,7 +939,7 @@ git -C "$spawn" add -A && git -C "$spawn" commit -q -m "check: spawn a group"
 rm -f "$WORK/spawn-pids"
 SPAWN_TL="$SCRIPTS/time-limit.mjs" SPAWN_PIDS="$WORK/spawn-pids" HARNESS_KIT_LIMIT_GRACE_SECONDS=1 HARNESS_KIT_REPLAY_CPUS=2 \
   HARNESS_KIT_REPLAY_LIMIT_MULTIPLE=3 HARNESS_KIT_REPLAY_GRACE_SECONDS=1 HARNESS_KIT_REPLAY_LIMIT_FLOOR_SECONDS=1.5 \
-  HARNESS_KIT_REPLAY_BASELINE_FALLBACK_SECONDS=5 run_guarded "$spawn"
+  HARNESS_KIT_REPLAY_BASELINE_FALLBACK_SECONDS=5 run_guarded "$spawn" --full
 sleep 0.2
 left="$(alive "$WORK/spawn-pids")"
 for p in $left; do kill -9 "$p" 2>/dev/null; done
@@ -888,6 +987,17 @@ else
 $a_out
 ran: $(cat "$WORK/vonly-a.log" 2>/dev/null)
 case z: $(describe)"
+fi
+
+# V2. --only given more than once (a targeted replay's baseline): the named checks' test
+# files together, each run once ("case a" named twice runs a.test.sh once).
+VONLY_LOG="$WORK/vonly-ab.log" run_in "$vonly" bash tests/validate.sh --skip-reviewed --only "case a" --only "case b" --only "case a"
+if [ "$STATUS" -eq 0 ] && [ "$OUT" = "$(printf 'PASS case a\nPASS case b')" ] &&
+  [ "$(cat "$WORK/vonly-ab.log" 2>/dev/null)" = "$(printf 'ran-a\nran-b')" ]; then
+  result "validate.sh --only, given twice, runs both checks' test files once each" yes ""
+else
+  result "validate.sh --only, given twice, runs both checks' test files once each" no "ran: $(cat "$WORK/vonly-ab.log" 2>/dev/null)
+$(describe)"
 fi
 
 # ---------------------------------------------------------------------------------------

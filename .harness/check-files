@@ -279,3 +279,30 @@ ship.sh: every run is timed against the ship budget, and an overrun is said once
 ship.sh: every run is timed against the ship budget, and an overrun is said once	plugins/harness-kit/scripts/ship.sh
 ship.sh: every run is timed against the ship budget, and an overrun is said once	plugins/harness-kit/scripts/events.sh
 stop-gate budget: an over-budget check is said once per session and recorded every time	plugins/harness-kit/scripts/time-limit.mjs
+replay-faults: with no ids, only the faults tied to the files changed since the base branch are replayed, and the Replay line says targeted (N faults) and why	tests/replay-faults.test.sh
+replay-faults: with no ids, only the faults tied to the files changed since the base branch are replayed, and the Replay line says targeted (N faults) and why	plugins/harness-kit/scripts/replay-faults.sh
+replay-faults: with no ids, only the faults tied to the files changed since the base branch are replayed, and the Replay line says targeted (N faults) and why	plugins/harness-kit/scripts/replay-faults.mjs
+replay-faults: --full replays every entry against a whole-check baseline, and the event line says all	tests/replay-faults.test.sh
+replay-faults: --full replays every entry against a whole-check baseline, and the event line says all	plugins/harness-kit/scripts/replay-faults.sh
+replay-faults: --full replays every entry against a whole-check baseline, and the event line says all	plugins/harness-kit/scripts/replay-faults.mjs
+replay-faults: with .harness/check-only, a run of chosen ids runs its baseline with --only for each of their checks	tests/replay-faults.test.sh
+replay-faults: with .harness/check-only, a run of chosen ids runs its baseline with --only for each of their checks	plugins/harness-kit/scripts/replay-faults.mjs
+replay-faults: --plan names a changed .harness/replay-machinery path as machinery changed	tests/replay-faults.test.sh
+replay-faults: --plan names a changed .harness/replay-machinery path as machinery changed	plugins/harness-kit/scripts/replay-faults.sh
+replay-faults: --plan names a changed .harness/replay-machinery path as machinery changed	plugins/harness-kit/scripts/replay-faults.mjs
+validate.sh --only, given twice, runs both checks' test files once each	tests/replay-faults.test.sh
+validate.sh --only, given twice, runs both checks' test files once each	tests/validate.sh
+validate.yml: a Monday 03:00 UTC schedule runs the replay jobs	tests/ci-replay.test.sh
+validate.yml: a Monday 03:00 UTC schedule runs the replay jobs	.github/workflows/validate.yml
+validate.yml: a branch push whose plan names changed machinery runs the replay jobs; the validate job sets that output from replay-faults.sh --plan	tests/ci-replay.test.sh
+validate.yml: a branch push whose plan names changed machinery runs the replay jobs; the validate job sets that output from replay-faults.sh --plan	.github/workflows/validate.yml
+validate.yml: a branch push whose plan names changed machinery runs the replay jobs; the validate job sets that output from replay-faults.sh --plan	plugins/harness-kit/scripts/replay-faults.sh
+start-up picture: without a CI replay, the local full replay command always says how long it would take	tests/session-start.test.sh
+start-up picture: without a CI replay, the local full replay command always says how long it would take	plugins/harness-kit/scripts/start-picture.mjs
+start-up picture: the replay line adds CI's last full replay, or unknown when gh fails or passes its limit	tests/session-start.test.sh
+start-up picture: the replay line adds CI's last full replay, or unknown when gh fails or passes its limit	plugins/harness-kit/scripts/start-picture.mjs
+start-up picture: the replay line adds CI's last full replay, or unknown when gh fails or passes its limit	plugins/harness-kit/scripts/time-limit.mjs
+start-up picture: from 7 days on, with a CI replay named, the command starts the full replay on CI and never runs one locally	tests/session-start.test.sh
+start-up picture: from 7 days on, with a CI replay named, the command starts the full replay on CI and never runs one locally	plugins/harness-kit/scripts/start-picture.mjs
+session-start: the Summary template has Result, Evidence, Replay, Deviations (against the branch's brief), Decide, Your commands, in that order	tests/ship.test.sh
+session-start: the Summary template has Result, Evidence, Replay, Deviations (against the branch's brief), Decide, Your commands, in that order	plugins/harness-kit/scripts/session-start.mjs

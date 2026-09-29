@@ -16,7 +16,9 @@ failures=0
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 export GIT_AUTHOR_NAME=test GIT_AUTHOR_EMAIL=test@example.invalid
 export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.invalid
-unset HARNESS_KIT_EVAL CLAUDE_PROJECT_DIR
+unset HARNESS_KIT_EVAL CLAUDE_PROJECT_DIR HARNESS_KIT_LIMIT_START_CI_SECONDS
+# The CPU count the local full replay's time estimate uses (start-picture.mjs), fixed.
+export HARNESS_KIT_REPLAY_CPUS=4
 
 result() {
   local label="$1" ok="$2" detail="$3"
@@ -307,9 +309,10 @@ fi
 # ---------------------------------------------------------------------------------------
 # 7b. The last full fault replay: the latest REPLAYED line whose detail is "all", on any
 # branch, with its age in whole days; from 7 days on, and with none, the command that runs
-# one (never cut); a replay of chosen ids is not full; no .harness/mutations.tsv, no command.
+# one (never cut), --full, with how long it would take (with no CI replay named); a replay
+# of chosen ids is not full; no .harness/mutations.tsv, no command.
 # ---------------------------------------------------------------------------------------
-replay_cmd="bash $(cd "$ROOT/plugins/harness-kit/scripts" && pwd)/replay-faults.sh"
+replay_cmd="bash $(cd "$ROOT/plugins/harness-kit/scripts" && pwd)/replay-faults.sh --full"
 ago() { node -e 'console.log(new Date(Date.now() - Number(process.argv[1]) * 3600e3).toISOString().replace(/\.\d+Z$/, "Z"))' "$1"; }
 dir="$(new_repo replay)"
 head="$(git -C "$dir" rev-parse HEAD)"
@@ -335,10 +338,10 @@ event "$dir7" "$seven_at" replay-faults.sh main "$head" REPLAYED "killed=45,surv
 run_session "$dir7"
 seven="$(line 3)"
 if [ "$no_mutations" = "last full fault replay: none (there is no .harness/mutations.tsv)" ] &&
-  [ "$no_log" = "last full fault replay: none (the local event log has no full replay); run one with $replay_cmd" ] &&
-  [ "$partial" = "last full fault replay: none (the local event log has no full replay); run one with $replay_cmd" ] &&
+  [ "$no_log" = "last full fault replay: none (the local event log has no full replay); run one with $replay_cmd (time unknown: no full replay recorded here)" ] &&
+  [ "$partial" = "last full fault replay: none (the local event log has no full replay); run one with $replay_cmd (time unknown: no full replay recorded here)" ] &&
   [ "$six" = "last full fault replay: 6 days ago ($six_at, branch other, 40 KILLED, 1 SURVIVED, 0 TIMEOUT, 2 ERROR)" ] &&
-  [ "$seven" = "last full fault replay: 7 days ago ($seven_at, branch main, 45 KILLED, 0 SURVIVED, 0 TIMEOUT, 0 ERROR); over 7 days: run one with $replay_cmd" ]; then
+  [ "$seven" = "last full fault replay: 7 days ago ($seven_at, branch main, 45 KILLED, 0 SURVIVED, 0 TIMEOUT, 0 ERROR); over 7 days: run one with $replay_cmd (about 5 minutes, estimated: 1 round of the last recorded baseline's 310 seconds, for 1 fault on 4 CPUs)" ]; then
   result "start-up picture: the last full fault replay's age, with the command to run one from 7 days on or with none" yes ""
 else
   result "start-up picture: the last full fault replay's age, with the command to run one from 7 days on or with none" no \
@@ -347,6 +350,110 @@ no log: $no_log
 only a partial replay: $partial
 6 days: $six
 7 days: $seven"
+fi
+
+# ---------------------------------------------------------------------------------------
+# 7c. Without a CI replay (no .harness/ci-replay), the local command always says how long a
+# full replay would take: the time of the last one, from the TIMED line written with it;
+# when the last full replay has no TIMED line (written before v0.19.0), an estimate from its
+# baseline (rounds of the replay's pool: ceil((7 faults + 1) / 4 CPUs) = 2, of 300 seconds;
+# a later targeted replay's baseline and time do not count: it ran only some checks); with
+# no full replay at all, unknown.
+# ---------------------------------------------------------------------------------------
+seven_faults() { mkdir -p "$1/.harness" && for i in 1 2 3 4 5 6 7; do printf 'f%s\tapp.txt\thello\tbye\tunit\n' "$i"; done >"$1/.harness/mutations.tsv"; }
+took="$(new_repo took)" && seven_faults "$took"
+took_at="$(ago 200)"
+event "$took" "$took_at" replay-faults.sh main "$head" REPLAYED "killed=7,survived=0,timeout=0,error=0,baseline=300.00s" "all"
+event "$took" "$took_at" replay-faults.sh main "$head" TIMED replay "seconds=5700.00,budget=180,over"
+run_session "$took"
+took_line="$(line 3)"
+est="$(new_repo estimate)" && seven_faults "$est"
+est_at="$(ago 220)"
+event "$est" "$est_at" replay-faults.sh main "$head" REPLAYED "killed=7,survived=0,timeout=0,error=0,baseline=300.00s" "all"
+event "$est" "$(ago 1)" replay-faults.sh feat-x "$head" REPLAYED "killed=1,survived=0,timeout=0,error=0,baseline=20.00s" "ids: f1"
+event "$est" "$(ago 1)" replay-faults.sh feat-x "$head" TIMED replay "seconds=40.00,budget=180,within"
+run_session "$est"
+est_line="$(line 3)"
+unknown="$(new_repo unknown)" && seven_faults "$unknown"
+run_session "$unknown"
+unknown_line="$(line 3)"
+if [ "$took_line" = "last full fault replay: 8 days ago ($took_at, branch main, 7 KILLED, 0 SURVIVED, 0 TIMEOUT, 0 ERROR); over 7 days: run one with $replay_cmd (took 95 minutes on ${took_at:0:10})" ] &&
+  [ "$est_line" = "last full fault replay: 9 days ago ($est_at, branch main, 7 KILLED, 0 SURVIVED, 0 TIMEOUT, 0 ERROR); over 7 days: run one with $replay_cmd (about 10 minutes, estimated: 2 rounds of the last recorded baseline's 300 seconds, for 7 faults on 4 CPUs)" ] &&
+  [ "$unknown_line" = "last full fault replay: none (the local event log has no full replay); run one with $replay_cmd (time unknown: no full replay recorded here)" ]; then
+  result "start-up picture: without a CI replay, the local full replay command always says how long it would take" yes ""
+else
+  result "start-up picture: without a CI replay, the local full replay command always says how long it would take" no \
+    "took: $took_line
+estimate: $est_line
+unknown: $unknown_line"
+fi
+
+# ---------------------------------------------------------------------------------------
+# 7d. With .harness/ci-replay ("validate.yml<TAB>replay-verdicts"), CI's last full replay,
+# read with a fake gh on PATH: the newest completed run whose replay-verdicts job ran (a
+# newer run whose job was skipped is passed over), with its age; "CI unknown" with why when
+# gh fails, or does not answer within the limit (1 second here; the fake sleeps 5).
+# From 7 days on, the command starts the full replay on CI and never names replay-faults.sh.
+# ---------------------------------------------------------------------------------------
+fakebin="$WORK/bin"
+mkdir -p "$fakebin"
+cat >"$fakebin/gh" <<'GH'
+#!/usr/bin/env bash
+echo "$*" >>"$FAKE_GH_LOG"
+case "$FAKE_GH" in
+  fail) echo "HTTP 502: bad gateway" >&2; exit 1 ;;
+  hang) sleep 5; exit 0 ;;
+esac
+case "$1 $2" in
+  "run list") printf '[{"databaseId":2,"createdAt":"%s"},{"databaseId":1,"createdAt":"%s"}]\n' "$FAKE_CI_AT" "$FAKE_CI_AT" ;;
+  "run view")
+    if [ "$3" = 2 ]; then
+      printf '{"jobs":[{"name":"validate","conclusion":"success","completedAt":"%s"},{"name":"replay-verdicts","conclusion":"skipped","completedAt":"%s"}]}\n' "$FAKE_CI_AT" "$FAKE_CI_AT"
+    else
+      printf '{"jobs":[{"name":"replay-verdicts","conclusion":"success","completedAt":"%s"}]}\n' "$FAKE_CI_AT"
+    fi
+    ;;
+  *) echo "unexpected gh $*" >&2; exit 1 ;;
+esac
+GH
+chmod +x "$fakebin/gh"
+ci="$(new_repo ci)" && seven_faults "$ci"
+printf '# the CI replay\nvalidate.yml\treplay-verdicts\n' >"$ci/.harness/ci-replay"
+ci_at="$(ago 1)"
+FAKE_GH=ok FAKE_CI_AT="$ci_at" FAKE_GH_LOG="$WORK/gh.log" PATH="$fakebin:$PATH" run_session "$ci"
+ok_line="$(line 3)"
+calls="$(cat "$WORK/gh.log" 2>/dev/null)"
+old_at="$(ago 200)"
+FAKE_GH=ok FAKE_CI_AT="$old_at" FAKE_GH_LOG="$WORK/gh.log" PATH="$fakebin:$PATH" run_session "$ci"
+old_line="$(line 3)"
+FAKE_GH=fail FAKE_GH_LOG="$WORK/gh.log" PATH="$fakebin:$PATH" run_session "$ci"
+fail_line="$(line 3)"
+began="$(date +%s)"
+HARNESS_KIT_LIMIT_START_CI_SECONDS=1 FAKE_GH=hang FAKE_GH_LOG="$WORK/gh.log" PATH="$fakebin:$PATH" run_session "$ci"
+hang_line="$(line 3)" hang_secs=$(($(date +%s) - began))
+ci_cmd="start one on CI with gh workflow run validate.yml --ref main"
+if [ "$ok_line" = "last full fault replay: none (the local event log has no full replay); CI 0 days ago (${ci_at:0:10}, run 1, passed)" ] &&
+  [ "$calls" = "$(printf 'run list --workflow validate.yml --branch main --status completed --limit 20 --json databaseId,createdAt\nrun view 2 --json jobs\nrun view 1 --json jobs')" ] &&
+  [ "$fail_line" = "last full fault replay: none (the local event log has no full replay); CI unknown (gh failed: HTTP 502: bad gateway); $ci_cmd" ] &&
+  [ "$hang_line" = "last full fault replay: none (the local event log has no full replay); CI unknown (gh did not answer within 1 seconds); $ci_cmd" ] &&
+  [ "$hang_secs" -lt 5 ]; then
+  result "start-up picture: the replay line adds CI's last full replay, or unknown when gh fails or passes its limit" yes ""
+else
+  result "start-up picture: the replay line adds CI's last full replay, or unknown when gh fails or passes its limit" no \
+    "ok: $ok_line
+gh calls:
+$calls
+fail: $fail_line
+hang ($hang_secs s): $hang_line"
+fi
+if [ "$old_line" = "last full fault replay: none (the local event log has no full replay); CI 8 days ago (${old_at:0:10}, run 1, passed); over 7 days: $ci_cmd" ] &&
+  ! grep -q 'replay-faults.sh' <<<"$old_line$fail_line$hang_line"; then
+  result "start-up picture: from 7 days on, with a CI replay named, the command starts the full replay on CI and never runs one locally" yes ""
+else
+  result "start-up picture: from 7 days on, with a CI replay named, the command starts the full replay on CI and never runs one locally" no \
+    "8 days: $old_line
+fail: $fail_line
+hang: $hang_line"
 fi
 
 # ---------------------------------------------------------------------------------------

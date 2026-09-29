@@ -2,8 +2,13 @@
 # Replay known faults: put each one back, in a throwaway copy of the project, and prove
 # the check that should catch it still fails.
 #
-#   replay-faults.sh [ID...]     run from anywhere inside the project's git repository;
-#                                every entry of .harness/mutations.tsv, or only those IDs
+#   replay-faults.sh             run from anywhere inside the project's git repository: a
+#                                TARGETED replay (below), of only the entries tied to the files
+#                                changed since the base branch
+#   replay-faults.sh --full      a FULL replay: every entry of .harness/mutations.tsv
+#   replay-faults.sh ID...       only those entries
+#   replay-faults.sh --plan      prints the Replay line a plain run would start with (below),
+#                                on stdout, and runs nothing
 #   replay-faults.sh --part PART --out DIR [--baseline-from BDIR] [ID...]
 #                                one part of a replay, for parts run apart (harness-kit's own
 #                                CI runs its replay as parts): PART is "baseline" (the check
@@ -22,7 +27,33 @@
 # LOCAL ONLY. It runs the project's whole check once per entry (plus once without any
 # fault), or one check per entry with .harness/check-only (below), so it is for the
 # person's terminal and for land.sh. Do not add it to a consumer
-# project's CI: a private repository pays for its Actions minutes.
+# project's CI: a private repository pays for its Actions minutes. (harness-kit's own CI,
+# a public repository's, replays in full: .github/workflows/validate.yml.)
+#
+# TARGETED, THE DEFAULT. With no ID and no option, the entries replayed are those tied to
+# the files changed since the base branch: the first line of .harness/review-base (default
+# main), locally or as origin/<base>, and its merge-base with HEAD. The changed files are
+# every path that differs between that merge-base and the working tree (committed or not;
+# a rename counts by both names) and every untracked file git does not ignore. An entry is
+# tied to them as land.sh ties an entry to a patch (replay-faults.mjs select): its own file
+# changed, a .harness/check-files path of its check changed, or the entry is new or changed
+# since the merge-base. With .harness/check-only, each runs against its own check, and so
+# does the baseline: only the checks of the entries replayed (a run given IDs does the same).
+# With no entry tied, nothing runs, no REPLAYED line is written, and the exit is 0. Without a
+# base branch or a merge-base it refuses (exit 2): give IDs, or --full.
+#
+# THE REPLAY LINE. Every run but a --part or --judge one says first which replay it is and
+# why, on stderr ("harness-kit replay-faults.sh: Replay: ..."), and --plan prints the same
+# line alone on stdout:
+#   Replay: targeted (N faults): tied to the files changed since <base> (merge-base <sha>): <up to 5 of those files>[ and K more]
+#   Replay: targeted (0 faults): no fault is tied to the N files changed since <base> (merge-base <sha>)
+#   Replay: targeted (N faults): the ids asked for
+#   Replay: full: asked for with --full
+# When a changed file is on .harness/replay-machinery (one path per line from the project
+# root, a line ending in "/" meaning a folder: the files a fault in which could change
+# verdicts the targeted replay does not run), a targeted line ends "; machinery changed:
+# <those files>". Only a full replay can be trusted then; harness-kit's CI runs one for a
+# branch push whose --plan says so. The report's Summary quotes this line under "Replay:".
 #
 # IN PARALLEL. The runs (the baseline and each entry's) go side by side, each in its own
 # worktree and with its own time-limit registry (HARNESS_KIT_REGISTRY_DIR, time-limit.mjs),
@@ -47,7 +78,8 @@
 # THE TIME LIMITS. Every run has a hard time limit, and so has the whole session; a run
 # that passes its limit is stopped and its verdict is TIMEOUT. A fault's run: 3 times the
 # baseline's measured seconds, never under 120 seconds. The baseline: 3 times the last
-# baseline recorded in the event log (below), or 20 minutes when none is recorded; a
+# full replay's baseline recorded in the event log (below; a targeted replay's baseline ran
+# only some checks, so it does not count), or 20 minutes when none is recorded; a
 # baseline that passes it stops the session (exit 2). The session: the baseline's limit plus
 # the rounds (the faults' runs divided by the job count, rounded up) times the run limit.
 # These are harness settings, each overridden by an environment variable:
@@ -66,11 +98,14 @@
 # ONE CHECK PER ENTRY (optional). When the project has a file .harness/check-only (its
 # content is not read), each entry's run is the check command with --only and the entry's
 # check name added at the end, as one word: `<check command> --only '<check>'`, so only
-# the check that must catch the fault runs. The baseline still runs the whole command, as
-# it must show a PASS line for every entry's check. The project's check (the last command
-# on the line, for a compound one) must then take --only NAME and run just that check,
-# printing its PASS or FAIL line as the whole run does. The verdicts are read the same way.
-# Without the file, each entry runs the whole command, as the baseline does.
+# the check that must catch the fault runs, in a full replay too. A full replay's baseline
+# still runs the whole command, as it must show a PASS line for every entry's check; a
+# targeted one's (or one of chosen IDs) runs the command with one --only for each distinct
+# check of its entries: `<check command> --only '<a>' --only '<b>'`. The project's check
+# (the last command on the line, for a compound one) must then take --only NAME, given once
+# or more, and run just those checks, printing their PASS or FAIL lines as the whole run
+# does. The verdicts are read the same way. Without the file, each entry and the baseline
+# run the whole command.
 #
 # HOW, once per run:
 #   1. The copy's content is the working tree AS IT IS: committed or not, untracked files
@@ -104,7 +139,7 @@
 # THE EVENT LOG. Each run that reaches its totals line (a whole run, or --judge) appends
 # one REPLAYED line, with the KILLED, SURVIVED, TIMEOUT and ERROR counts, the baseline's
 # seconds ("killed=K,survived=S,timeout=T,error=E,baseline=Bs") and "all" or the ids asked
-# for, to the local event log, .git/harness-kit/events.tsv (events.sh has the format). A
+# for (a targeted run's are the entries it picked), to the local event log, .git/harness-kit/events.tsv (events.sh has the format). A
 # refused or interrupted run, and a --part run, append nothing.
 #
 # THE TIME (events.sh's harness_timed_event). Next to its REPLAYED line, a run that writes
@@ -126,15 +161,20 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HERE/limit-lib.sh"
 NAME="replay-faults.sh"
 STARTED="$(harness_clock)"
-USAGE="usage: $NAME [ID...] | --part baseline|I/N --out DIR [--baseline-from BDIR] [ID...] | --judge DIR..."
+USAGE="usage: $NAME [--full | --plan | ID...] | --part baseline|I/N --out DIR [--baseline-from BDIR] [ID...] | --judge DIR..."
 say() { echo "harness-kit $NAME: $*" >&2; }
 refuse() { say "$*. Nothing was replayed."; exit 2; }
 
-mode=whole part="" out="" baseline_from=""
+mode=whole part="" out="" baseline_from="" pick=""
 case "${1:-}" in
   -h | --help)
     sed -n '2,/^set -u$/p' "${BASH_SOURCE[0]}" | sed '$d; s/^# \{0,1\}//'
     exit 0
+    ;;
+  --full | --plan)
+    pick="${1#--}"
+    shift
+    [ "$#" -eq 0 ] || refuse "--$pick takes no ids: give ids, --full or --plan ($USAGE)"
     ;;
   --part)
     [ "$#" -ge 4 ] && [ "$3" = --out ] && [ -n "$4" ] || refuse "$USAGE"
@@ -163,6 +203,9 @@ if [ "$mode" != judge ]; then
     case "$arg" in -*) refuse "unknown option $arg ($USAGE)" ;; esac
   done
 fi
+if [ "$mode" = whole ] && [ -z "$pick" ]; then
+  if [ "$#" -eq 0 ]; then pick=targeted; else pick=ids; fi
+fi
 
 PROJECT="$(git rev-parse --show-toplevel 2>/dev/null)" || refuse "not inside a git repository"
 cd "$PROJECT" || exit 2
@@ -174,6 +217,69 @@ else
   node "$HERE/replay-faults.mjs" list "$MUTATIONS" "$@" >/dev/null || refuse "fix .harness/mutations.tsv (above)"
 fi
 git rev-parse -q --verify HEAD >/dev/null || refuse "the repository has no commits yet"
+
+# plural N ONE MANY: "N ONE" or "N MANY".
+plural() { if [ "$1" -eq 1 ]; then echo "$1 $2"; else echo "$1 $3"; fi; }
+
+# replay_plan: the targeted replay (TARGETED, THE DEFAULT, above). Sets PLAN_IDS (the ids,
+# one per line) and PLAN_LINE (the Replay line); returns 1 with PLAN_ERROR when the files
+# changed cannot be worked out.
+replay_plan() {
+  local base ref="" candidate mb work why tied machinery shown more changed_count
+  base="$( { [ -f .harness/review-base ] && head -n 1 .harness/review-base; } | tr -d '\r' | tr -d '[:space:]')"
+  base="${base:-main}"
+  for candidate in "$base" "origin/$base"; do
+    if git rev-parse -q --verify "$candidate^{commit}" >/dev/null; then
+      ref="$candidate"
+      break
+    fi
+  done
+  [ -n "$ref" ] || { PLAN_ERROR="the base branch $base was not found, locally or as origin/$base"; return 1; }
+  mb="$(git merge-base "$ref" HEAD)" || { PLAN_ERROR="there is no merge-base between $ref and HEAD"; return 1; }
+  hk_temp work -d harness-kit-replay-plan || { PLAN_ERROR="cannot make a temporary folder"; return 1; }
+  git -c core.quotePath=false diff --no-renames --name-only "$mb" -- >"$work/changed" &&
+    git -c core.quotePath=false ls-files --others --exclude-standard >>"$work/changed" ||
+    { PLAN_ERROR="git could not list the files changed since $ref (above)"; return 1; }
+  sort -u -o "$work/changed" "$work/changed"
+  git show "$mb:.harness/mutations.tsv" >"$work/before" 2>/dev/null || : >"$work/before"
+  why="$(node "$HERE/replay-faults.mjs" select --why "$MUTATIONS" "$PROJECT/.harness/check-files" "$work/changed" "$work/before")" ||
+    { PLAN_ERROR="fix .harness/mutations.tsv (above)"; return 1; }
+  machinery="$(node "$HERE/replay-faults.mjs" machinery "$PROJECT/.harness/replay-machinery" "$work/changed")"
+  PLAN_IDS="$(cut -f1 <<<"$why" | sed '/^$/d')"
+  local count
+  count="$(grep -c . <<<"$PLAN_IDS")"
+  changed_count="$(grep -c . "$work/changed")"
+  if [ "$count" -eq 0 ]; then
+    PLAN_LINE="Replay: targeted (0 faults): no fault is tied to the $(plural "$changed_count" file files) changed since $base (merge-base ${mb:0:7})"
+  else
+    tied="$(cut -f2 <<<"$why" | tr ',' '\n' | sed '/^$/d' | sort -u)"
+    shown="$(head -n 5 <<<"$tied" | paste -sd, - | sed 's/,/, /g')"
+    more=$(($(grep -c . <<<"$tied") - 5))
+    PLAN_LINE="Replay: targeted ($(plural "$count" fault faults)): tied to the files changed since $base (merge-base ${mb:0:7}): $shown"
+    [ "$more" -le 0 ] || PLAN_LINE="$PLAN_LINE and $more more"
+  fi
+  [ -z "$machinery" ] || PLAN_LINE="$PLAN_LINE; machinery changed: $(paste -sd, - <<<"$machinery" | sed 's/,/, /g')"
+  return 0
+}
+
+case "$pick" in
+  plan | targeted)
+    replay_plan || refuse "$PLAN_ERROR; give ids, or --full"
+    if [ "$pick" = plan ]; then
+      echo "$PLAN_LINE"
+      exit 0
+    fi
+    say "$PLAN_LINE"
+    if [ -z "$PLAN_IDS" ]; then
+      say "no fault to replay: nothing was run"
+      exit 0
+    fi
+    # shellcheck disable=SC2086 # the ids are words: letters, digits, ".", "_" and "-"
+    set -- $PLAN_IDS
+    ;;
+  full) say "Replay: full: asked for with --full" ;;
+  ids) say "Replay: targeted ($(plural "$#" fault faults)): the ids asked for" ;;
+esac
 
 # outside_tree DIR: true when DIR is outside the working tree, or in a folder git ignores,
 # so that results kept there do not change the working tree a replay copies.

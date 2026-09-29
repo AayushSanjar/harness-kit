@@ -53,6 +53,11 @@
 //   plugin-command  120  UPGRADE_PLUGIN_SECONDS           claude plugin marketplace add and
 //                                                         claude plugin update (upgrade.sh)
 //   init            120  UPGRADE_INIT_SECONDS             the headless session (upgrade.sh)
+//   start-ci-read     5  HARNESS_KIT_LIMIT_START_CI_SECONDS  the start-up picture's read of
+//                                                         the last full CI fault replay,
+//                                                         both gh calls together
+//                                                         (start-picture.mjs; the person's
+//                                                         number, .reports/inc-speed-b.brief.md)
 //   the grace period 10  HARNESS_KIT_LIMIT_GRACE_SECONDS  from SIGTERM to SIGKILL
 //
 // THE BUDGETS, in seconds, each overridden by its environment variable (a number above 0).
@@ -105,6 +110,7 @@ export const LIMITS = {
   git: { env: "HARNESS_KIT_LIMIT_GIT_SECONDS", seconds: 300 },
   "plugin-command": { env: "UPGRADE_PLUGIN_SECONDS", seconds: 120 },
   init: { env: "UPGRADE_INIT_SECONDS", seconds: 120 },
+  "start-ci-read": { env: "HARNESS_KIT_LIMIT_START_CI_SECONDS", seconds: 5 },
 };
 export const GRACE = { env: "HARNESS_KIT_LIMIT_GRACE_SECONDS", seconds: 10 };
 

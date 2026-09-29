@@ -365,14 +365,16 @@ else
 line 4: $line4"
 fi
 
-# 2b. The Summary template: the report line names all five headings, in this order.
-headings="$(grep -oE '"(Result|Evidence|Deviations|Decide|Your commands):"' <<<"$line2" | tr '\n' ' ')"
-want='"Result:" "Evidence:" "Deviations:" "Decide:" "Your commands:" '
+# 2b. The Summary template: the report line names all six headings, in this order; "Replay:"
+# says which fault replay ran and why.
+headings="$(grep -oE '"(Result|Evidence|Replay|Deviations|Decide|Your commands):"' <<<"$line2" | tr '\n' ' ')"
+want='"Result:" "Evidence:" "Replay:" "Deviations:" "Decide:" "Your commands:" '
 if [ "$headings" = "$want" ] && grep -qF '"Decide:" what the person must decide; "none" if none.' <<<"$line2" &&
+  grep -qF '"Replay:" "targeted (N faults)" or "full", and why, as replay-faults.sh'"'"'s Replay line said it' <<<"$line2" &&
   grep -qF "\"Deviations:\" anything done differently from, or beyond, the brief ($dir/.reports/feature.brief.md, the brief from /harness-kit:brief as the person approved it, when there is one; otherwise what the person asked for)" <<<"$line2"; then
-  result "session-start: the Summary template has Result, Evidence, Deviations (against the branch's brief), Decide, Your commands, in that order" yes ""
+  result "session-start: the Summary template has Result, Evidence, Replay, Deviations (against the branch's brief), Decide, Your commands, in that order" yes ""
 else
-  result "session-start: the Summary template has Result, Evidence, Deviations (against the branch's brief), Decide, Your commands, in that order" no \
+  result "session-start: the Summary template has Result, Evidence, Replay, Deviations (against the branch's brief), Decide, Your commands, in that order" no \
     "headings found, in order: $headings
 line 2: $line2"
 fi

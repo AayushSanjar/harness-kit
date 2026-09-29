@@ -18,6 +18,8 @@
 // THE REPORT LINE. report-path.sh --prune, run in the project, deletes stale reports (and
 // stale briefs and approvals) and prints the report path for the current branch; this hook
 // tells Claude to write there, starting with the Summary template (summaryHeadings). Its
+// "Replay:" heading says which fault replay ran and why, as replay-faults.sh's Replay line
+// said it (targeted, of the faults tied to the files changed, or full). Its
 // "Deviations:" heading measures the work against the branch's brief, named by its path
 // (the report path ending .brief.md, as report-path.sh --brief names it): /harness-kit:brief
 // writes it and the person approves it with approve-brief.sh. Outside a git repository
@@ -55,8 +57,10 @@
 // THE START-UP PICTURE. After those lines, in a git repository, come the lines of
 // start-picture.mjs (its header says what each holds and where it comes from): the branch
 // and its brief with the goal, the last check result from the local event log with the
-// failing checks, the last full fault replay's age from the same log (with the command that
-// runs one from 7 days on), the branch's last review verdict from .harness/reviews.tsv, the
+// failing checks, the last full fault replay's age from the same log and, where
+// .harness/ci-replay names it, on CI, read with gh under a 5-second limit (from 7 days on,
+// the command that starts one on CI, or where there is no CI replay, the local command with
+// how long it would take), the branch's last review verdict from .harness/reviews.tsv, the
 // uncommitted changes, and the first lines of the project's state file (.harness/state-file,
 // default docs/STATE.md). At most 16 lines, none longer than 200 characters but for the
 // replay line's command, which is never cut; a missing source is shown as "none" with the
@@ -98,6 +102,7 @@ const timeRule = (brief) =>
 const summaryHeadings = (brief) => [
   `"Result:" one line.`,
   `"Evidence:" output lines quoted exactly (the final line of each test or check run, and the key FAIL line of each deliberate break), never paraphrased.`,
+  `"Replay:" "targeted (N faults)" or "full", and why, as replay-faults.sh's Replay line said it; "targeted (0 faults)" with why when no fault is tied to the changed files.`,
   `"Deviations:" anything done differently from, or beyond, the brief (${brief}, the brief from /harness-kit:brief as the person approved it, when there is one; otherwise what the person asked for), including any git command run; "none" if none.`,
   `"Decide:" what the person must decide; "none" if none.`,
   `"Your commands:" the exact commands the person runs next, in order.`,
@@ -169,7 +174,7 @@ if (input.agent_type !== REVIEWER) {
     lines.push(BASH_RULE);
     lines.push(timeRule(path.replace(/\.md$/, ".brief.md")));
   }
-  lines.push(...startPicture(projectDir));
+  lines.push(...(await startPicture(projectDir)));
   if (process.env.HARNESS_KIT_EVAL) {
     lines.push(EVAL_WARNING);
     process.stdout.write(

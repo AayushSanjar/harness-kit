@@ -8,13 +8,15 @@
 #                                             is accepted so that .harness/check-command can
 #                                             carry it, as land.sh and replay-faults.sh
 #                                             require.
-#   bash tests/validate.sh --only NAME        only the test files (tests/*.test.sh) that
+#   bash tests/validate.sh --only NAME ...    only the test files (tests/*.test.sh) that
 #                                             .harness/check-files lists for the check NAME,
-#                                             exiting non-zero if any fails: what a targeted
-#                                             replay runs (replay-faults.sh, with
-#                                             .harness/check-only, which this repository does
-#                                             not have, so its replays run every check). For a
-#                                             NAME with no test file there, every check runs.
+#                                             exiting non-zero if any fails: what a replay runs
+#                                             for one entry (replay-faults.sh, with
+#                                             .harness/check-only, which this repository has).
+#                                             --only may be given more than once: the named
+#                                             checks' test files together, each run once, in
+#                                             sorted order (a targeted replay's baseline). When
+#                                             any NAME has no test file there, every check runs.
 # Any other argument is refused.
 set -u
 
@@ -24,7 +26,7 @@ while [ "$#" -gt 0 ]; do
     --skip-reviewed) ;;
     --only)
       [ "$#" -ge 2 ] && [ -n "$2" ] || { echo "validate.sh: --only needs a check's name" >&2; exit 2; }
-      only="$2"
+      only="$only$2"$'\n'
       shift
       ;;
     *)
@@ -37,19 +39,25 @@ done
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# --only NAME: the test files check-files lists for NAME (its other files are the code the
-# check covers, not tests), each run as the whole check runs it.
+# --only NAME...: the test files check-files lists for each NAME (its other files are the
+# code the check covers, not tests), together, each run once, as the whole check runs it.
 if [ -n "$only" ]; then
-  tests="$(awk -F'\t' -v name="$only" '!/^#/ && NF == 2 && $1 == name && $2 ~ /^tests\/[^\/]+\.test\.sh$/ { print $2 }' \
-    "$ROOT/.harness/check-files" 2>/dev/null | sort -u)"
-  if [ -n "$tests" ]; then
+  tests="" missing=""
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    found="$(awk -F'\t' -v name="$name" '!/^#/ && NF == 2 && $1 == name && $2 ~ /^tests\/[^\/]+\.test\.sh$/ { print $2 }' \
+      "$ROOT/.harness/check-files" 2>/dev/null)"
+    [ -n "$found" ] || missing="$name"
+    tests="$tests$found"$'\n'
+  done <<<"$only"
+  if [ -z "$missing" ]; then
     status=0
-    for test in $tests; do
+    for test in $(sort -u <<<"$tests"); do
       bash "$ROOT/$test" </dev/null || status=1
     done
     exit "$status"
   fi
-  echo "validate.sh: .harness/check-files lists no test file for \"$only\", so the whole check runs" >&2
+  echo "validate.sh: .harness/check-files lists no test file for \"$missing\", so the whole check runs" >&2
 fi
 PLUGIN="$ROOT/plugins/harness-kit"
 failures=0
@@ -222,6 +230,11 @@ check "tests/time-limit.test.sh (all cases)" "" $?
 # (ab) background-guard.mjs's cases: background Bash calls given to the hook, never run.
 bash "$ROOT/tests/background-guard.test.sh"
 check "tests/background-guard.test.sh (all cases)" "" $?
+
+# (ae) The CI fault replay's triggers in .github/workflows/validate.yml: the weekly schedule,
+# and a branch push that changes the replay machinery (replay-faults.sh --plan).
+bash "$ROOT/tests/ci-replay.test.sh"
+check "tests/ci-replay.test.sh (all cases)" "" $?
 
 # (ac) Nothing in the plugin starts long work without the time-limit helper, and every
 # script that makes a temporary file cleans it up on any exit (check-limits.mjs).

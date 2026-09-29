@@ -5,6 +5,16 @@ on:
   pull_request:
   # By hand, to run the fault replays on a branch: gh workflow run validate.yml --ref <branch>
   workflow_dispatch:
+  # The weekly full fault replay, Mondays at 03:00 UTC (the person's slot,
+  # .reports/inc-speed-b.brief.md). docs.github.com/en/actions/reference/workflows-and-actions/
+  # events-that-trigger-workflows (read 2026-09-29): "Scheduled workflows run on the latest
+  # commit on the default branch."; "The `schedule` event can be delayed during periods of
+  # high loads of GitHub Actions workflow runs"; "In a public repository, scheduled
+  # workflows are automatically disabled when no repository activity has occurred in 60
+  # days." The start-up picture shows the age of the last full CI replay, so a run that
+  # stopped coming shows there.
+  schedule:
+    - cron: "0 3 * * 1"
 
 permissions:
   contents: read
@@ -25,6 +35,8 @@ jobs:
     # docs.github.com/en/actions/reference/runners/github-hosted-runners (read 2026-09-27):
     #   "ubuntu-latest, ubuntu-24.04, ubuntu-22.04, ubuntu-26.04"
     runs-on: ubuntu-24.04
+    outputs:
+      machinery: ${{ steps.plan.outputs.machinery }}
     steps:
       # The full history: tests/validate.sh runs check-defects.mjs on .harness/defects.tsv,
       # which needs the base branch (origin/main) and its merge-base with HEAD.
@@ -35,6 +47,23 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      # Whether this push changes the replay machinery (.harness/replay-machinery), from the
+      # Replay line of replay-faults.sh --plan; the replay jobs below run for a branch push
+      # that does. A plan that cannot be made counts as a change, so the replay runs.
+      - name: Plan the fault replay
+        id: plan
+        run: |
+          if line="$(bash plugins/harness-kit/scripts/replay-faults.sh --plan)"; then
+            echo "$line"
+          else
+            line="machinery changed: unknown (replay-faults.sh --plan failed, above)"
+            echo "$line"
+          fi
+          case "$line" in
+            *"machinery changed:"*) echo "machinery=true" >>"$GITHUB_OUTPUT" ;;
+            *) echo "machinery=false" >>"$GITHUB_OUTPUT" ;;
+          esac
 
       # Native installer, the method recommended in code.claude.com/docs/en/setup.
       - name: Install Claude Code
@@ -69,12 +98,18 @@ jobs:
   # the session's, 25 minutes, set above), so that a hang is reported as TIMEOUT by the
   # harness, not cancelled by GitHub.
   #
-  # They run for pushes to main, and by hand (workflow_dispatch): a branch push or a pull
-  # request runs validate alone. release.sh (this repository's) and ship.sh (a consumer's)
-  # wait for the branch's runs, so a fault a merged change let SURVIVE shows up here, after
-  # the merge, as a red run on main.
+  # They run for pushes to main, weekly (the schedule above), by hand (workflow_dispatch;
+  # the start-up picture's command when the last one is 7 days old), and for a branch push
+  # whose plan (the validate job's plan step) says it changes the replay machinery: the
+  # files on .harness/replay-machinery, a fault in which could change verdicts a targeted
+  # replay does not run. Any other branch push, and a pull request, runs validate alone.
+  # release.sh (this repository's) and ship.sh (a consumer's) wait for the branch's runs, so
+  # a machinery change merges only after its full replay passes; a fault any other merged
+  # change let SURVIVE shows up here, after the merge, as a red run on main. With
+  # .harness/check-only, each entry runs only its own test file (validate.sh --only), and
+  # the baseline part runs the whole check.
   replay-baseline:
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || needs.validate.outputs.machinery == 'true')) || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 30 # above the harness's limits (THE TIME LIMITS in replay-faults.sh)
@@ -105,7 +140,7 @@ jobs:
           if-no-files-found: error
 
   replay-shard:
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || needs.validate.outputs.machinery == 'true')) || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     needs: [validate, replay-baseline]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -144,8 +179,8 @@ jobs:
           if-no-files-found: error
 
   replay-verdicts:
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
-    needs: [replay-baseline, replay-shard]
+    if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || needs.validate.outputs.machinery == 'true')) || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: [validate, replay-baseline, replay-shard]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:

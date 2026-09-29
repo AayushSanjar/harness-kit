@@ -1,0 +1,3 @@
+# The workflow and the job whose result is the last full CI fault replay, for the
+# start-up picture (start-picture.mjs): "<workflow file><TAB><job name>".
+validate.yml	replay-verdicts

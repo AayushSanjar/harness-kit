@@ -1,6 +1,7 @@
 // The start-up picture: what session-start.mjs (the SessionStart hook) shows Claude about
-// where the branch stands, after its other lines. startPicture(projectDir) returns the lines;
-// outside a git repository there are none. Every line starts "harness-kit start-up:".
+// where the branch stands, after its other lines. startPicture(projectDir) returns (a promise
+// of) the lines; outside a git repository there are none. Every line starts "harness-kit
+// start-up:".
 //
 // THE LINES, in this order (at most 6 + STATE_LINES = 16):
 //   1. The branch and its brief. The brief's state comes from brief-lib.sh's brief_load, the
@@ -14,12 +15,26 @@
 //      head is where the result changed, not where the check last ran. For FAIL it names the
 //      first FAILING_NAMES failing checks, then "and N more".
 //   3. The last full fault replay: the latest REPLAYED line in the same event log whose
-//      detail is "all" (replay-faults.sh's whole replay of every entry; a replay of chosen ids
-//      is not full), on any branch: how many whole days ago it ran, rounded down, its date,
-//      branch and counts. From REPLAY_DAYS days on, and when there is none, it gives the
-//      command that runs one: bash <this plugin's scripts/replay-faults.sh>, never cut (the
-//      one exception to MAX_LINE, below: a cut command is no command). Only this clone's
-//      replays count: CI's are not in its event log. With no .harness/mutations.tsv there is
+//      detail is "all" (replay-faults.sh --full, every entry; a targeted replay, or one of
+//      chosen ids, is not full), on any branch: how many whole days ago it ran, rounded down,
+//      its date, branch and counts. Then, when the project names its CI replay in
+//      .harness/ci-replay ("<workflow file><TAB><job name>", as harness-kit does), CI's last
+//      full replay: the newest of the last CI_RUNS completed runs of that workflow on the base
+//      branch (.harness/review-base, default main) whose job concluded success or failure (a
+//      skipped job is no replay), read with gh under the start-ci-read limit (time-limit.mjs),
+//      both calls together: "CI N days ago (<date>, run <id>, passed|failed)", "CI none (...)",
+//      or "CI unknown (<why>)" when gh is missing, fails or does not answer in time.
+//      THE NUDGE: from REPLAY_DAYS days on, by the newer of the known ages, and when neither
+//      is known, it gives a command, never cut (the one exception to MAX_LINE, below: a cut
+//      command is no command). With .harness/ci-replay it starts the full replay on CI
+//      (gh workflow run <workflow> --ref <base>) and never names a local replay, which takes
+//      far longer. Without it, the command is bash <this plugin's scripts/replay-faults.sh>
+//      --full, always followed by how long it would take: "(took M minutes on <date>)", from
+//      the TIMED "replay" line written with the newest full REPLAYED line; otherwise "(about
+//      M minutes, estimated: R rounds of the last recorded baseline's B seconds, for N faults
+//      on J CPUs)", R being ceil((N + 1) / J), as replay-faults.mjs pools its runs, and B the
+//      baseline of the last full replay (a targeted one's ran only some checks); otherwise
+//      "(time unknown: no full replay recorded here)". With no .harness/mutations.tsv there is
 //      nothing to replay, so it says none and gives no command.
 //   4. The last review: the latest line for the branch in the working tree's
 //      .harness/reviews.tsv (review.sh has the format), with its verdict, items, date and
@@ -39,8 +54,10 @@
 // the replay line's command, after its text, is never cut.
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
+import { availableParallelism } from "node:os";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { limitSeconds, runLimited } from "./time-limit.mjs";
 
 const PREFIX = "harness-kit start-up: ";
 const STATE_LINES = 10;
@@ -54,6 +71,8 @@ const TOOL_NAMES = { "stop-gate.mjs": "the Stop hook" };
 const REPLAY_DAYS = 7;
 const REPLAY_SCRIPT = fileURLToPath(new URL("./replay-faults.sh", import.meta.url));
 const DAY_MS = 24 * 60 * 60 * 1000;
+const CI_REPLAY = ".harness/ci-replay";
+const CI_RUNS = 20; // the completed runs searched for the last full CI replay (the person's number)
 
 const git = (args, cwd) => {
   const r = spawnSync("git", args, { cwd, encoding: "utf8" });
@@ -131,23 +150,106 @@ const checkLine = (top, branch, head) => {
     `failing: ${names.slice(0, FAILING_NAMES).join("; ")}${more}`;
 };
 
-// 3. The last full fault replay: { text, command }, the command "" when there is none.
-const replayLine = (top, now = Date.now()) => {
-  const run = `run one with bash ${REPLAY_SCRIPT}`;
+// The base branch: the first line of .harness/review-base, default main (as ship.sh reads it).
+const baseBranch = (top) => (readText(join(top, ".harness", "review-base")) ?? "").split(/\r?\n/)[0].replace(/\s/g, "") || "main";
+const dateOf = (iso) => String(iso).slice(0, 10);
+const minutes = (seconds) => Math.max(1, Math.round(seconds / 60));
+const daysSince = (when, now) => Math.max(0, Math.floor((now - when) / DAY_MS));
+
+// .harness/ci-replay: { workflow, job }, { problem }, or null when there is none.
+const ciSpec = (top) => {
+  const text = readText(join(top, CI_REPLAY));
+  if (text === null) return null;
+  const line = text.split(/\r?\n/).find((l) => l.trim() !== "" && !l.startsWith("#")) ?? "";
+  const [workflow, job, ...rest] = line.split("\t").map((f) => f.trim());
+  if (!workflow || !job || rest.length > 0) return { problem: `${CI_REPLAY} does not hold "<workflow file><TAB><job name>"` };
+  return { workflow, job };
+};
+
+// CI's last full replay: { text, days } (days null when not known).
+const ciReplay = async (top, spec, base, now) => {
+  const limit = limitSeconds("start-ci-read");
+  const late = { why: `gh did not answer within ${limit} seconds` };
+  const began = Date.now();
+  const gh = async (args) => {
+    const left = limit - (Date.now() - began) / 1000;
+    if (left <= 0) return late;
+    const r = await runLimited("gh", args, { cwd: top, limit: left, grace: 1, capture: true });
+    if (r.timedOut) return late;
+    if (r.error) return { why: r.error.code === "ENOENT" ? "gh not found" : `gh could not start: ${r.error.message}` };
+    if (r.status !== 0) return { why: `gh failed: ${firstLine(r.stderr) || `exit ${r.status}`}` };
+    try {
+      return { json: JSON.parse(r.stdout) };
+    } catch {
+      return { why: "gh printed output that is not the expected JSON" };
+    }
+  };
+  const unknown = (why) => ({ text: `unknown (${why})`, days: null });
+  const runs = await gh(["run", "list", "--workflow", spec.workflow, "--branch", base, "--status", "completed", "--limit", String(CI_RUNS), "--json", "databaseId,createdAt"]);
+  if (runs.why) return unknown(runs.why);
+  for (const run of Array.isArray(runs.json) ? runs.json : []) {
+    const view = await gh(["run", "view", String(run.databaseId), "--json", "jobs"]);
+    if (view.why) return unknown(view.why);
+    const job = (view.json?.jobs ?? []).find((j) => j.name === spec.job && (j.conclusion === "success" || j.conclusion === "failure"));
+    if (!job) continue;
+    const when = Date.parse(job.completedAt || run.createdAt);
+    if (!Number.isFinite(when)) continue;
+    const days = daysSince(when, now);
+    return { text: `${plural(days, "day", "days")} ago (${dateOf(job.completedAt || run.createdAt)}, run ${run.databaseId}, ${job.conclusion === "success" ? "passed" : "failed"})`, days };
+  }
+  return { text: `none (no completed ${spec.job} in the last ${CI_RUNS} runs on ${base})`, days: null };
+};
+
+// How long a local full replay would take, from the event log's rows and the entries.
+const localTime = (top, rows, full) => {
+  if (full) {
+    const at = rows.indexOf(full);
+    const timed = rows[at + 1];
+    const s = timed && timed[1] === "replay-faults.sh" && timed[4] === "TIMED" && timed[5] === "replay" ? /^seconds=([0-9.]+)/.exec(timed[6]) : null;
+    if (s) return `(took ${plural(minutes(Number(s[1])), "minute", "minutes")} on ${dateOf(timed[0])})`;
+  }
+  const baseline = rows
+    .filter((f) => f[1] === "replay-faults.sh" && f[4] === "REPLAYED" && f[6] === "all")
+    .map((f) => /(?:^|,)baseline=([0-9]+(?:\.[0-9]+)?)s(?:,|$)/.exec(f[5] ?? ""))
+    .filter(Boolean)
+    .at(-1);
+  if (!baseline) return "(time unknown: no full replay recorded here)";
+  const b = Number(baseline[1]);
+  const n = tsvRows(readText(join(top, ".harness", "mutations.tsv")) ?? "").filter((f) => f.length === 5 && !f[0].startsWith("#")).length;
+  const cpus = /^[1-9][0-9]*$/.test(process.env.HARNESS_KIT_REPLAY_CPUS ?? "") ? Number(process.env.HARNESS_KIT_REPLAY_CPUS) : availableParallelism();
+  const rounds = Math.ceil((n + 1) / cpus);
+  return `(about ${plural(minutes(rounds * b), "minute", "minutes")}, estimated: ${plural(rounds, "round", "rounds")} of the last recorded baseline's ` +
+    `${Math.round(b * 10) / 10} seconds, for ${plural(n, "fault", "faults")} on ${plural(cpus, "CPU", "CPUs")})`;
+};
+
+// 3. The last full fault replay, here and on CI: { text, command }, the command "" when there
+// is none.
+const replayLine = async (top, now = Date.now()) => {
   if (!existsSync(join(top, ".harness", "mutations.tsv"))) return { text: "last full fault replay: none (there is no .harness/mutations.tsv)", command: "" };
-  const none = { text: "last full fault replay: none (the local event log has no full replay)", command: `; ${run}` };
   const common = git(["rev-parse", "--path-format=absolute", "--git-common-dir"], top)?.trim();
-  const text = common ? readText(join(common, "harness-kit", "events.tsv")) : null;
-  if (text === null) return none;
-  const e = tsvRows(text).filter((f) => f.length === 7 && f[1] === "replay-faults.sh" && f[4] === "REPLAYED" && f[6] === "all").at(-1);
+  const log = common ? readText(join(common, "harness-kit", "events.tsv")) : null;
+  const rows = log === null ? [] : tsvRows(log).filter((f) => f.length === 7);
+  const e = rows.filter((f) => f[1] === "replay-faults.sh" && f[4] === "REPLAYED" && f[6] === "all").at(-1);
   const when = e ? Date.parse(e[0]) : NaN;
-  if (!e || !Number.isFinite(when)) return none;
-  const [date, , branch, , , what] = e;
-  const n = /^killed=(\d+),survived=(\d+)(?:,timeout=(\d+))?,error=(\d+)/.exec(what);
-  const counts = n ? `${n[1]} KILLED, ${n[2]} SURVIVED, ${n[3] ?? 0} TIMEOUT, ${n[4]} ERROR` : what;
-  const days = Math.max(0, Math.floor((now - when) / DAY_MS));
-  const said = `last full fault replay: ${plural(days, "day", "days")} ago (${date}, branch ${branch}, ${counts})`;
-  return { text: said, command: days >= REPLAY_DAYS ? `; over ${REPLAY_DAYS} days: ${run}` : "" };
+  let local = "none (the local event log has no full replay)";
+  let localDays = null;
+  if (e && Number.isFinite(when)) {
+    const [date, , branch, , , what] = e;
+    const n = /^killed=(\d+),survived=(\d+)(?:,timeout=(\d+))?,error=(\d+)/.exec(what);
+    const counts = n ? `${n[1]} KILLED, ${n[2]} SURVIVED, ${n[3] ?? 0} TIMEOUT, ${n[4]} ERROR` : what;
+    localDays = daysSince(when, now);
+    local = `${plural(localDays, "day", "days")} ago (${date}, branch ${branch}, ${counts})`;
+  }
+  const base = baseBranch(top);
+  const spec = ciSpec(top);
+  const ci = spec === null ? null : spec.problem ? { text: `unknown (${spec.problem})`, days: null } : await ciReplay(top, spec, base, now);
+  const text = `last full fault replay: ${local}${ci ? `; CI ${ci.text}` : ""}`;
+  const known = [localDays, ci?.days ?? null].filter((d) => d !== null);
+  if (known.length > 0 && Math.min(...known) < REPLAY_DAYS) return { text, command: "" };
+  const lead = known.length > 0 ? `; over ${REPLAY_DAYS} days: ` : "; ";
+  if (spec?.problem) return { text, command: `${lead}fix ${CI_REPLAY} for the command that starts one on CI` };
+  if (spec) return { text, command: `${lead}start one on CI with gh workflow run ${spec.workflow} --ref ${base}` };
+  return { text, command: `${lead}run one with bash ${REPLAY_SCRIPT} --full ${localTime(top, rows, e)}` };
 };
 
 // 4. The last review.
@@ -211,12 +313,12 @@ const stateLines = (top) => {
 
 // startPicture PROJECT_DIR: the picture's lines, each with its prefix and cut; [] outside a
 // git repository.
-export const startPicture = (projectDir) => {
+export const startPicture = async (projectDir) => {
   const top = git(["rev-parse", "--show-toplevel"], projectDir)?.trim();
   if (!top) return [];
   const branch = git(["symbolic-ref", "--short", "-q", "HEAD"], top)?.trim() || "";
   const head = git(["rev-parse", "-q", "--verify", "HEAD"], top)?.trim() || "";
-  const replay = replayLine(top);
+  const replay = await replayLine(top);
   return [
     briefLine(top, branch, head),
     checkLine(top, branch, head),
