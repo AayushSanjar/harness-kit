@@ -13,7 +13,7 @@ ship.sh: a non-PASS review: commits its line with the standard message, stops an
 ship.sh: a stale index is regenerated and committed before the review, through the commit-msg hook	tests/ship.test.sh
 upgrade.sh: writes the pin commit draft (Breaks kept, Decision relabelled Upstream, numbers on Told) and it passes the commit-msg hook	tests/upgrade.test.sh
 git-guard: git push in the real working tree is denied, however it is written	tests/git-guard.test.sh
-approve-brief.sh: refuses without a terminal and writes nothing; with no brief it says to run /plan	tests/ship.test.sh
+approve-brief.sh: refuses without a terminal and writes nothing; with no brief it says to run /harness-kit:brief	tests/ship.test.sh
 review.sh: the input holds the brief and whether its approval matches	tests/review.test.sh
 ship.sh: no brief, or an approval that does not match, stops before the review with the exact fix	tests/ship.test.sh
 brief-guard: Write, Edit, MultiEdit and NotebookEdit of a *.brief.approved file in the real tree are denied	tests/brief-guard.test.sh
@@ -179,8 +179,8 @@ replay-faults: a hangup stops every check and removes every worktree	plugins/har
 replay-faults: a hangup stops every check and removes every worktree	plugins/harness-kit/scripts/limit-lib.sh
 session-start: the time rule is printed in a git repository, and not for the reviewer	tests/session-start.test.sh
 session-start: the time rule is printed in a git repository, and not for the reviewer	plugins/harness-kit/scripts/session-start.mjs
-skills/plan/SKILL.md: the brief's eight sections in order; OPEN rules raised first; never approves itself	tests/validate.sh
-skills/plan/SKILL.md: the brief's eight sections in order; OPEN rules raised first; never approves itself	plugins/harness-kit/skills/plan/SKILL.md
+skills/brief/SKILL.md: the brief's eight sections in order; OPEN rules raised first; never approves itself	tests/validate.sh
+skills/brief/SKILL.md: the brief's eight sections in order; OPEN rules raised first; never approves itself	plugins/harness-kit/skills/brief/SKILL.md
 replay-faults: a run that ignores the stop signal is force-killed when its grace period ends	plugins/harness-kit/scripts/time-limit.mjs
 replay-faults: a hanging check is stopped at its time limit and reported TIMEOUT; the others still get verdicts	plugins/harness-kit/scripts/time-limit.mjs
 replay-faults: interrupted with jobs running, it stops every check and removes every worktree	plugins/harness-kit/scripts/time-limit.mjs
@@ -199,3 +199,23 @@ replay-faults: each run has its own time-limit registry, not the replay's, and i
 replay-faults: a run stopped at its limit has its own registry swept: groups it started are stopped	tests/replay-faults.test.sh
 replay-faults: a run stopped at its limit has its own registry swept: groups it started are stopped	plugins/harness-kit/scripts/replay-faults.mjs
 replay-faults: a run stopped at its limit has its own registry swept: groups it started are stopped	plugins/harness-kit/scripts/time-limit.mjs
+check-names: a bare /brief or /record-defect in a script message, a SKILL.md or README fails, naming the file and line	tests/check-names.test.sh
+check-names: a bare /brief or /record-defect in a script message, a SKILL.md or README fails, naming the file and line	plugins/harness-kit/scripts/check-names.mjs
+check-names: the retired /plan fails, bare or as /harness-kit:plan	tests/check-names.test.sh
+check-names: the retired /plan fails, bare or as /harness-kit:plan	plugins/harness-kit/scripts/check-names.mjs
+check-names on this repository: no bare or retired harness command name, and no skill named like a built-in	tests/check-names.test.sh
+check-names on this repository: no bare or retired harness command name, and no skill named like a built-in	plugins/harness-kit/scripts/check-names.mjs
+check-names on this repository: no bare or retired harness command name, and no skill named like a built-in	plugins/harness-kit/scripts/ship.sh
+check-names on this repository: no bare or retired harness command name, and no skill named like a built-in	tests/claude-builtins.txt
+check-names: a skill named like a Claude Code built-in (plan) fails, naming the built-in list	tests/check-names.test.sh
+check-names: a skill named like a Claude Code built-in (plan) fails, naming the built-in list	plugins/harness-kit/scripts/check-names.mjs
+check-names: a skill's frontmatter name is the name checked, not its folder	tests/check-names.test.sh
+check-names: a skill's frontmatter name is the name checked, not its folder	plugins/harness-kit/scripts/check-names.mjs
+check-names: a built-in list without its source URL or Claude Code version fails	tests/check-names.test.sh
+check-names: a built-in list without its source URL or Claude Code version fails	plugins/harness-kit/scripts/check-names.mjs
+plan-mode-guard: EnterPlanMode is denied, and the reason names /harness-kit:brief	tests/plan-mode-guard.test.sh
+plan-mode-guard: EnterPlanMode is denied, and the reason names /harness-kit:brief	plugins/harness-kit/scripts/plan-mode-guard.mjs
+hooks.json runs plan-mode-guard.mjs on PreToolUse for EnterPlanMode	tests/plan-mode-guard.test.sh
+hooks.json runs plan-mode-guard.mjs on PreToolUse for EnterPlanMode	plugins/harness-kit/hooks/hooks.json
+session-start: Claude is told to run harness-kit's .sh scripts with bash	tests/session-start.test.sh
+session-start: Claude is told to run harness-kit's .sh scripts with bash	plugins/harness-kit/scripts/session-start.mjs

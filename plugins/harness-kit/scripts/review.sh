@@ -36,7 +36,7 @@
 # shown in full.
 #
 # THE BRIEF. The input's BRIEF section, after the CHECKLIST, holds the branch's brief
-# (.reports/<branch>.brief.md, written by the plan skill) and whether its approval matches
+# (.reports/<branch>.brief.md, written by /harness-kit:brief) and whether its approval matches
 # it (brief-lib.sh's brief_review_section): "approval: MATCHES" when
 # .reports/<branch>.brief.approved holds the brief's sha256 (approve-brief.sh writes it),
 # "approval: DOES NOT MATCH" when the brief changed after it was approved, "approval: NONE"

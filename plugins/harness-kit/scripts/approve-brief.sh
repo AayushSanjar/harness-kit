@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Approve the current branch's brief: the person's step between /plan and the work.
+# Approve the current branch's brief: the person's step between /harness-kit:brief and the work.
 #
 #   approve-brief.sh     run from anywhere inside the project's git repository, on the branch
 #
-# For people, in their own terminal. The plan skill (/plan <goal>) writes the brief to
+# For people, in their own terminal. /harness-kit:brief <goal> writes the brief to
 # .reports/<branch>.brief.md; this shows it, asks "Approve this brief? [y/N]", and on y
 # writes .reports/<branch>.brief.approved holding the brief's sha256 (brief-lib.sh). Any
 # later change to the brief, even one character, makes the approval stop matching: ship.sh
@@ -14,7 +14,7 @@
 # from the person reading the brief, not from a pipe or from Claude's shell. The git-guard
 # hook also denies it to Claude, and git-guard and brief-guard deny Claude writing the
 # approval file itself. On a detached HEAD there is no branch, so no brief. With no
-# brief it stops (exit 1) and says to run /plan. Any answer but y or yes (in any case)
+# brief it stops (exit 1) and says to run /harness-kit:brief. Any answer but y or yes (in any case)
 # writes nothing and leaves an earlier approval as it was (exit 1).
 #
 # Exit status: 0 approved; 1 not approved (no brief, or not y); 2 refused.
@@ -33,7 +33,7 @@ PROJECT="$(git rev-parse --show-toplevel 2>/dev/null)" || refuse "not inside a g
 branch="$(git symbolic-ref --short -q HEAD)" || refuse "HEAD is detached; check out the branch whose brief you are approving"
 brief_load "$PROJECT" "$branch" || refuse "$BRIEF_ERROR"
 if [ "$BRIEF_STATE" = missing ]; then
-  say "there is no brief for $branch ($BRIEF). In Claude, run /plan <goal> to write it, then run approve-brief.sh again. Nothing was written."
+  say "there is no brief for $branch ($BRIEF). In Claude, run /harness-kit:brief <goal> to write it, then run approve-brief.sh again. Nothing was written."
   exit 1
 fi
 [ -t 0 ] || refuse "stdin is not a terminal, so the answer could not come from you reading the brief. Run it yourself, in your own terminal: $HERE/approve-brief.sh. Nothing was written."

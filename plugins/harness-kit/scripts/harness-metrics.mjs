@@ -29,7 +29,7 @@
 // the start. Each number, and what would make it misleading:
 //   1. Escaped defects: the lines of .harness/defects.tsv dated in the period, by
 //      where-found.
-//      Misleading: only defects recorded with the record-defect skill are counted, so a low
+//      Misleading: only defects recorded with /harness-kit:record-defect are counted, so a low
 //      number can mean escaped bugs went unrecorded rather than that fewer escaped.
 //   2. Planted faults caught: the KILLED count of the last replay-faults.sh run of every
 //      entry dated in the period, out of the entries it replayed (a SURVIVED, TIMEOUT or

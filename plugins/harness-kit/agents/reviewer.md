@@ -13,7 +13,7 @@ Your input is one document with these sections, each headed `=== <NAME> ===`:
 
 - `REVIEW` — the project folder, the branch, the base, the merge-base and head commits, and the path of the checklist file.
 - `CHECKLIST` — the project's checklist, copied from that path.
-- `BRIEF` — the branch's brief, written before the work began (by the `/plan` skill) and approved by the person, with an `approval:` line saying whether that approval still matches it: `MATCHES`, `DOES NOT MATCH` (the brief changed after the person approved it) or `NONE` (never approved). When the branch has no brief, the section is one line starting `none:`. An evaluation's input has no BRIEF section.
+- `BRIEF` — the branch's brief, written before the work began (by `/harness-kit:brief`) and approved by the person, with an `approval:` line saying whether that approval still matches it: `MATCHES`, `DOES NOT MATCH` (the brief changed after the person approved it) or `NONE` (never approved). When the branch has no brief, the section is one line starting `none:`. An evaluation's input has no BRIEF section.
 - `CHECK COMMAND` — the project's check command, its exit status and its REAL output, run just before you started: by the script, or, when the section has a `reused:` line, by ship.sh just before it started the review, at the same head and working tree. It is not a summary. You cannot run it again.
 - `GIT LOG` — every commit on the branch since the merge-base, with full messages.
 - `GIT STATUS` — the working tree when the review started. Uncommitted changes are NOT part of what you are reviewing; if there are any, say so as a finding.

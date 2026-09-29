@@ -11,11 +11,11 @@
 #   2. If check-reviewed.mjs does not pass for the branch's current diff, and the working
 #      tree's .harness/reviews.tsv has no PASS for it yet:
 #      a. THE BRIEF (brief-lib.sh). The branch's brief, .reports/<branch>.brief.md (written
-#         by the plan skill, /plan <goal>), must exist, and its approval,
+#         by /harness-kit:brief <goal>), must exist, and its approval,
 #         .reports/<branch>.brief.approved (written by approve-brief.sh when the person
 #         answers y), must hold the brief's sha256 as it is now. Otherwise ship.sh stops
 #         here, before the index, the check and the review, printing the exact fix: no
-#         brief (run /plan, then approve-brief.sh), no approval (run approve-brief.sh), or
+#         brief (run /harness-kit:brief, then approve-brief.sh), no approval (run approve-brief.sh), or
 #         a brief changed since its approval (read it again and run approve-brief.sh). The
 #         one opt-out is the person's, per project: a committed .harness/brief-optional
 #         that HEAD's .harness/protected-paths lists (brief_optional). With it, a branch
@@ -172,7 +172,7 @@ brief_gate() {
         return 0
       fi
       [ -z "$BRIEF_OPTIONAL_WHY" ] || optional_note=" (Note: $BRIEF_OPTIONAL_WHY.)"
-      stop no-brief "there is no brief for $1 ($BRIEF), so no review was started. Fix: in Claude, run /plan <goal> to write it; read it, then approve it in your terminal: $approve; then re-run ship.sh.$optional_note"
+      stop no-brief "there is no brief for $1 ($BRIEF), so no review was started. Fix: in Claude, run /harness-kit:brief <goal> to write it; read it, then approve it in your terminal: $approve; then re-run ship.sh.$optional_note"
       ;;
     unapproved)
       stop brief-not-approved "the brief $BRIEF has no approval ($BRIEF_APPROVAL), so no review was started. Fix: read it, then approve it in your terminal: $approve; then re-run ship.sh."

@@ -3,7 +3,7 @@
 # (macOS).
 #
 # THE BRIEF is .reports/<branch>.brief.md (report-path.sh --name <branch> --brief), written
-# by the plan skill (/plan <goal>). THE APPROVAL is .reports/<branch>.brief.approved, written
+# by /harness-kit:brief <goal>. THE APPROVAL is .reports/<branch>.brief.approved, written
 # only by approve-brief.sh when the person answers y (git-guard.mjs and brief-guard.mjs deny
 # Claude writing it, by any tool, outside scratch copies): one line, the brief's sha256 in
 # lowercase hex. Both are for the person, not for git (check-reports.mjs fails if either is

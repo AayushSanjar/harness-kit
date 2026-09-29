@@ -19,7 +19,7 @@
 // stale briefs and approvals) and prints the report path for the current branch; this hook
 // tells Claude to write there, starting with the Summary template (summaryHeadings). Its
 // "Deviations:" heading measures the work against the branch's brief, named by its path
-// (the report path ending .brief.md, as report-path.sh --brief names it): the plan skill
+// (the report path ending .brief.md, as report-path.sh --brief names it): /harness-kit:brief
 // writes it and the person approves it with approve-brief.sh. Outside a git repository
 // there is no report line.
 //
@@ -41,6 +41,10 @@
 // searches for every file, comment, test and document that describes behaviour it changed,
 // and updates each or lists it in the report, so a change does not leave its descriptions
 // saying the old thing.
+//
+// THE BASH LINE. Then: harness-kit's .sh scripts are run as `bash <path>`, since some are
+// not executable (install-hooks.sh, events.sh and the *-lib.sh files), and a plugin copied into the cache
+// keeps the modes git gave it.
 //
 // THE TIME RULE. Then, in a git repository too: a command expected to take over 2 minutes is
 // estimated first, and run only if the approved brief lists it in its Verification plan
@@ -80,6 +84,7 @@ const EVAL_WARNING =
 const BLAST_RADIUS =
   "harness-kit: before finishing, search for every file, comment, test and document that describes behaviour you changed, " +
   "and update each or list it in the report.";
+const BASH_RULE = "harness-kit: run harness-kit's .sh scripts as `bash <path>`: some are not executable.";
 const timeRule = (brief) =>
   `harness-kit time rule: before you run any command you expect to take over 2 minutes, write down your estimate of its time. ` +
   `Run it only if the approved brief (${brief}) lists it in its Verification plan; otherwise ask the person. ` +
@@ -91,7 +96,7 @@ const timeRule = (brief) =>
 const summaryHeadings = (brief) => [
   `"Result:" one line.`,
   `"Evidence:" output lines quoted exactly (the final line of each test or check run, and the key FAIL line of each deliberate break), never paraphrased.`,
-  `"Deviations:" anything done differently from, or beyond, the brief (${brief}, the plan skill's brief as the person approved it, when there is one; otherwise what the person asked for), including any git command run; "none" if none.`,
+  `"Deviations:" anything done differently from, or beyond, the brief (${brief}, the brief from /harness-kit:brief as the person approved it, when there is one; otherwise what the person asked for), including any git command run; "none" if none.`,
   `"Decide:" what the person must decide; "none" if none.`,
   `"Your commands:" the exact commands the person runs next, in order.`,
 ];
@@ -159,6 +164,7 @@ if (input.agent_type !== REVIEWER) {
       );
     }
     lines.push(BLAST_RADIUS);
+    lines.push(BASH_RULE);
     lines.push(timeRule(path.replace(/\.md$/, ".brief.md")));
   }
   lines.push(...startPicture(projectDir));

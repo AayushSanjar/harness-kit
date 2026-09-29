@@ -14,7 +14,7 @@
 #                                         print the path for BRANCH only; creates and changes
 #                                         nothing
 #   report-path.sh --name BRANCH --brief  the path of BRANCH's brief, .reports/<branch>.brief.md
-#                                         (written by the plan skill; its approval, written by
+#                                         (written by /harness-kit:brief; its approval, written by
 #                                         approve-brief.sh, is the same path ending
 #                                         .brief.approved); creates and changes nothing
 #

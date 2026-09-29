@@ -78,7 +78,7 @@ check "claude plugin validate --strict (plugin: plugins/harness-kit)" "$out" $?
 # empty folder outside any git repository, so there is no report line, no start-up picture
 # and no .reports/ folder is made here, and without HARNESS_KIT_EVAL, so there is no warning (tests/ship.test.sh
 # covers both).
-expected="harness-kit 0.17.3 loaded"
+expected="harness-kit $(node -p 'require(process.argv[1]).version' "$PLUGIN/.claude-plugin/plugin.json" 2>&1) loaded"
 empty="$(mktemp -d)"
 out="$(cd "$empty" && env -u HARNESS_KIT_EVAL -u CLAUDE_PROJECT_DIR GIT_CEILING_DIRECTORIES="$(dirname "$empty")" \
   node "$PLUGIN/scripts/session-start.mjs" </dev/null 2>&1)"
@@ -318,23 +318,33 @@ out="$(node -e '
 ' "$ROOT/.github/workflows/validate.yml" "$PLUGIN/scripts/replay-faults.mjs" 2>&1)"
 check "validate.yml: the CI replay is one baseline part, shards 1 to 8 each passing --part i/8, and a verdicts job that needs them all" "$out" $?
 
-# (r) The record-defect and plan skills are started only by the person: their frontmatter
+# (r) The record-defect and brief skills are started only by the person: their frontmatter
 # turns off model invocation.
-for name in record-defect plan; do
+for name in record-defect brief; do
   skill="$PLUGIN/skills/$name/SKILL.md"
   out="$(awk 'NR == 1 && $0 != "---" { exit 1 } NR > 1 && $0 == "---" { exit found ? 0 : 1 } /^disable-model-invocation: true$/ { found = 1 } END { if (!found) exit 1 }' "$skill" 2>&1)"
   check "skills/$name/SKILL.md has disable-model-invocation: true" "${out:-no \"disable-model-invocation: true\" line in its frontmatter}" $?
 done
 
-# (v) The plan skill's brief has the fixed sections, in this order, and the skill raises
+# (v) The brief skill's brief has the fixed sections, in this order, and the skill raises
 # OPEN spec rules before planning and never approves its own brief.
-skill="$PLUGIN/skills/plan/SKILL.md"
+skill="$PLUGIN/skills/brief/SKILL.md"
 got="$(sed -n '/^# Brief: /,/^```$/p' "$skill" | grep '^## ' | tr '\n' '|')"
 want="## Goal|## Scope|## Spec rules touched|## Acceptance tests|## Verification plan|## Blast radius|## New thresholds|## Protected files expected|"
 out="sections in the brief template: $got"
 [ "$got" = "$want" ] && grep -q 'stop before planning further' "$skill" && grep -q '\.harness/review-reads' "$skill" &&
   grep -q 'Never write `.reports/<branch>.brief.approved`, and never run `approve-brief.sh`' "$skill"
-check "skills/plan/SKILL.md: the brief's eight sections in order; OPEN rules raised first; never approves itself" "$out" $?
+check "skills/brief/SKILL.md: the brief's eight sections in order; OPEN rules raised first; never approves itself" "$out" $?
+
+# (ae) Harness commands are written by their full names (/harness-kit:<name>), no retired
+# name comes back, and no skill is named like a Claude Code built-in (check-names.mjs, with
+# the built-in list in tests/claude-builtins.txt). The test prints one line per case.
+bash "$ROOT/tests/check-names.test.sh"
+check "tests/check-names.test.sh (all cases)" "" $?
+
+# (af) plan-mode-guard.mjs refuses Claude's EnterPlanMode tool, and hooks.json runs it.
+bash "$ROOT/tests/plan-mode-guard.test.sh"
+check "tests/plan-mode-guard.test.sh (all cases)" "" $?
 
 # (m) No report is tracked in this repository.
 out="$(cd "$ROOT" && node "$PLUGIN/scripts/check-reports.mjs" 2>&1)"

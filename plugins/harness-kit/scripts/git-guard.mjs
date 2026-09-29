@@ -13,8 +13,8 @@
 //     form: it rewrites history, and an interactive one cannot run in Claude's shell);
 //   - running land.sh, ship.sh, release.sh, upgrade.sh, approve-protected.sh or
 //     approve-brief.sh (by path, or through bash, sh, zsh, dash, ksh, source or "."): they
-//     are the person's steps (approve-brief.sh is the person approving the plan skill's
-//     brief; it also refuses without a terminal);
+//     are the person's steps (approve-brief.sh is the person approving the brief that
+//     /harness-kit:brief wrote; it also refuses without a terminal);
 //   - any command with a word naming a brief's approval, a path ending in ".brief.approved"
 //     (as an argument, a redirection's target or an assignment's value, in full or with an
 //     unknown folder in front, such as "$R/x.brief.approved", or a glob such as

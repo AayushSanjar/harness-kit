@@ -12,7 +12,7 @@
 // line, default main), locally or as origin/<base>, and its merge-base with HEAD. In CI
 // that needs the full history (actions/checkout with `fetch-depth: 0`).
 //
-// THE FILE, one escaped defect per line, written by the record-defect skill (its SKILL.md
+// THE FILE, one escaped defect per line, written by /harness-kit:record-defect (its SKILL.md
 // has the full format), tab-separated, # comments and blank lines allowed:
 //   date  id  description  where-found  introducing-commit  test-added  fixing-commit
 //   date                YYYY-MM-DD

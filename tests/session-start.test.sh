@@ -364,6 +364,17 @@ normal session: $normal
 reviewer session: $(describe)"
 fi
 
+# THE BASH LINE. In a git repository the hook tells Claude to run harness-kit's .sh scripts
+# with bash; the reviewer's session gets the version line only (checked above).
+dir="$(new_repo bash-rule)"
+run_session "$dir"
+if [ "$STATUS" -eq 0 ] &&
+  grep -qxF "harness-kit: run harness-kit's .sh scripts as \`bash <path>\`: some are not executable." <<<"$OUT"; then
+  result "session-start: Claude is told to run harness-kit's .sh scripts with bash" yes ""
+else
+  result "session-start: Claude is told to run harness-kit's .sh scripts with bash" no "$(describe)"
+fi
+
 if [ "$failures" -ne 0 ]; then
   echo "$failures session-start case(s) failed"
   exit 1

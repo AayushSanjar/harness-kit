@@ -1,11 +1,11 @@
 ---
-name: plan
-description: Write the branch's brief before any work starts. Reads the project's spec and setup, raises any OPEN spec rule the goal touches, and writes .reports/<branch>.brief.md with fixed sections (goal, scope, spec rules, acceptance tests, verification plan, blast radius, new thresholds, protected files) for the person to approve with approve-brief.sh. ship.sh will not start a review without an approved brief. Started only by the person, with the goal.
+name: brief
+description: Write the branch's brief before any work starts. Reads the project's spec and setup, raises any OPEN spec rule the goal touches, and writes .reports/<branch>.brief.md with fixed sections (goal, scope, spec rules, acceptance tests, verification plan, blast radius, new thresholds, protected files) for the person to approve with approve-brief.sh. ship.sh will not start a review without an approved brief. Started only by the person, with the goal: /harness-kit:brief <goal>.
 argument-hint: <the goal of this branch, in the person's words>
 disable-model-invocation: true
 ---
 
-# Plan the branch: write its brief
+# Write the branch's brief (/harness-kit:brief)
 
 The person wants this done on the current branch:
 

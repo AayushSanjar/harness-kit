@@ -311,7 +311,7 @@ if [ "$STATUS" -eq 0 ] &&
   grep -qF "write your final report to $dir/.reports/feature.md" <<<"$line2" &&
   grep -qF '"## Summary"' <<<"$line2" && grep -q 'at most 15 lines' <<<"$line2" &&
   grep -q 'Never commit it' <<<"$line2" &&
-  [ "$(grep -vc '^harness-kit start-up: ' <<<"$OUT")" = 6 ] && [ "$(grep -c '^harness-kit start-up: ' <<<"$OUT")" = 5 ] &&
+  [ "$(grep -vc '^harness-kit start-up: ' <<<"$OUT")" = 7 ] && [ "$(grep -c '^harness-kit start-up: ' <<<"$OUT")" = 5 ] &&
   grep -q 'removed the stale report .reports/gone.md' <<<"$ERR" &&
   grep -q 'removed the stale report .reports/old.md' <<<"$ERR" &&
   grep -q 'removed the stale commit draft .reports/gone.commit.txt' <<<"$ERR" &&
@@ -368,7 +368,7 @@ fi
 headings="$(grep -oE '"(Result|Evidence|Deviations|Decide|Your commands):"' <<<"$line2" | tr '\n' ' ')"
 want='"Result:" "Evidence:" "Deviations:" "Decide:" "Your commands:" '
 if [ "$headings" = "$want" ] && grep -qF '"Decide:" what the person must decide; "none" if none.' <<<"$line2" &&
-  grep -qF "\"Deviations:\" anything done differently from, or beyond, the brief ($dir/.reports/feature.brief.md, the plan skill's brief as the person approved it, when there is one; otherwise what the person asked for)" <<<"$line2"; then
+  grep -qF "\"Deviations:\" anything done differently from, or beyond, the brief ($dir/.reports/feature.brief.md, the brief from /harness-kit:brief as the person approved it, when there is one; otherwise what the person asked for)" <<<"$line2"; then
   result "session-start: the Summary template has Result, Evidence, Deviations (against the branch's brief), Decide, Your commands, in that order" yes ""
 else
   result "session-start: the Summary template has Result, Evidence, Deviations (against the branch's brief), Decide, Your commands, in that order" no \
@@ -1059,7 +1059,7 @@ ship_as_is "$dir" "$PASS_JSON"
 none="$(describe)"
 none_ok=no
 if [ "$STATUS" -eq 1 ] &&
-  grep -qF "STOPPED: there is no brief for feature (.reports/feature.brief.md), so no review was started. Fix: in Claude, run /plan <goal> to write it; read it, then approve it in your terminal: $SCRIPTS/approve-brief.sh; then re-run ship.sh." <<<"$ERR" &&
+  grep -qF "STOPPED: there is no brief for feature (.reports/feature.brief.md), so no review was started. Fix: in Claude, run /harness-kit:brief <goal> to write it; read it, then approve it in your terminal: $SCRIPTS/approve-brief.sh; then re-run ship.sh." <<<"$ERR" &&
   ! grep -q 'check: 1 passed' <<<"$OUT" && [ ! -e "$dir.log/claude-args" ] && [ ! -e "$dir.log/gh-calls" ] &&
   [ "$(rev "$dir" HEAD)" = "$head_before" ] && [ -z "$(remote_rev "$dir" feature)" ]; then
   none_ok=yes
@@ -1136,13 +1136,13 @@ brief there, changed: $(describe)"
 fi
 
 # 31. approve-brief.sh refuses without a terminal (stdin a pipe, even one saying y) and
-# writes nothing; with no brief it says to run /plan; on a detached HEAD it refuses.
+# writes nothing; with no brief it says to run /harness-kit:brief; on a detached HEAD it refuses.
 dir="$(new_repo approve-refused)"
 OUT="$(cd "$dir" && bash "$APPROVE_BRIEF" <<<"y" 2>&1)"
 STATUS=$? ERR=""
 no_brief="$(describe)"
 no_brief_ok=no
-[ "$STATUS" -eq 1 ] && grep -qF 'there is no brief for feature (.reports/feature.brief.md). In Claude, run /plan <goal> to write it' <<<"$OUT" && no_brief_ok=yes
+[ "$STATUS" -eq 1 ] && grep -qF 'there is no brief for feature (.reports/feature.brief.md). In Claude, run /harness-kit:brief <goal> to write it' <<<"$OUT" && no_brief_ok=yes
 brief_for "$dir" unapproved
 OUT="$(cd "$dir" && printf 'y\n' | bash "$APPROVE_BRIEF" 2>&1)"
 STATUS=$? ERR=""
@@ -1154,9 +1154,9 @@ if [ "$no_brief_ok" = yes ] && [ "$piped_status" -eq 2 ] && [ "$STATUS" -eq 2 ] 
   grep -qF 'REFUSED: stdin is not a terminal, so the answer could not come from you reading the brief.' <<<"$piped" &&
   grep -qF "Run it yourself, in your own terminal: $SCRIPTS/approve-brief.sh. Nothing was written." <<<"$piped" &&
   ! grep -q 'Approve this brief' <<<"$piped" && [ ! -e "$dir/.reports/feature.brief.approved" ]; then
-  result "approve-brief.sh: refuses without a terminal and writes nothing; with no brief it says to run /plan" yes ""
+  result "approve-brief.sh: refuses without a terminal and writes nothing; with no brief it says to run /harness-kit:brief" yes ""
 else
-  result "approve-brief.sh: refuses without a terminal and writes nothing; with no brief it says to run /plan" no "no brief ($no_brief_ok): $no_brief
+  result "approve-brief.sh: refuses without a terminal and writes nothing; with no brief it says to run /harness-kit:brief" no "no brief ($no_brief_ok): $no_brief
 piped y: $piped
 /dev/null: $(describe)
 approval: $(cat "$dir/.reports/feature.brief.approved" 2>/dev/null)"
