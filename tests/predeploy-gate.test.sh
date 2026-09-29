@@ -205,8 +205,11 @@ else
   result "deploy.sh, no config: refuses, deploy does not run" no "$(describe_deploy)"
 fi
 
-# TIME LIMITS (time-limit.mjs): a check that hangs, with a limit of 1 second and a 1-second
+# TIME LIMITS (time-limit.mjs): a check that hangs, with a limit of 5 seconds and a 1-second
 # grace period; it records its pid and its child's, to show nothing of its group is left.
+# The limit runs from the spawn, and the check must write both pids before it ends: with 1
+# second, a loaded replay stopped the check before it had written them (D7). A check that
+# starts more than 5 seconds late would still fail these cases.
 HANG_CHECK='echo $$ >check.pid; sleep 30 & echo $! >check.child; wait'
 gone() {
   local f
@@ -219,9 +222,9 @@ gone() {
 # 14. The gate: the check past its limit is denied as COULD NOT RUN, timed out, and its
 # whole process group is stopped (not only the shell that started it).
 dir="$(new_project hang "$HANG_CHECK")"
-HARNESS_KIT_LIMIT_CHECK_SECONDS=1 HARNESS_KIT_LIMIT_GRACE_SECONDS=1 run_gate "$dir" "forge deploy"
+HARNESS_KIT_LIMIT_CHECK_SECONDS=5 HARNESS_KIT_LIMIT_GRACE_SECONDS=1 run_gate "$dir" "forge deploy"
 sleep 0.2
-if [ "$STATUS" -eq 0 ] && is_deny "$OUT" && grep -qF 'result:  COULD NOT RUN: timed out after 1 s' <<<"$REASON" && gone "$dir"; then
+if [ "$STATUS" -eq 0 ] && is_deny "$OUT" && grep -qF 'result:  COULD NOT RUN: timed out after 5 s' <<<"$REASON" && gone "$dir"; then
   result "predeploy-gate: a check past its limit is denied, COULD NOT RUN: timed out, and its group is gone" yes ""
 else
   result "predeploy-gate: a check past its limit is denied, COULD NOT RUN: timed out, and its group is gone" no "$(describe)
@@ -230,10 +233,10 @@ fi
 
 # 15. deploy.sh: the check past its limit TIMED OUT, exit 124, and nothing is deployed.
 dir="$(new_project deploy-hang "$HANG_CHECK")"
-HARNESS_KIT_LIMIT_CHECK_SECONDS=1 HARNESS_KIT_LIMIT_GRACE_SECONDS=1 run_deploy "$dir"
+HARNESS_KIT_LIMIT_CHECK_SECONDS=5 HARNESS_KIT_LIMIT_GRACE_SECONDS=1 run_deploy "$dir"
 sleep 0.2
 if [ "$STATUS" -eq 124 ] && [ ! -e "$dir/deployed" ] && gone "$dir" &&
-  grep -qF 'the check TIMED OUT (its limit is 1 seconds; above); not deploying' <<<"$OUT"; then
+  grep -qF 'the check TIMED OUT (its limit is 5 seconds; above); not deploying' <<<"$OUT"; then
   result "deploy.sh: a check past its limit TIMED OUT; the deploy does not run" yes ""
 else
   result "deploy.sh: a check past its limit TIMED OUT; the deploy does not run" no "$(describe_deploy)"
