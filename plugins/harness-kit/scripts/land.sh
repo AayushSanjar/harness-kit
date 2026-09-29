@@ -17,7 +17,10 @@
 #   2. git apply <patch>
 #   3. .harness/approve-command     optional; first line, run in the project. It may prompt
 #                                   the person, so it keeps the terminal's input.
-#   4. .harness/check-command       the first line, as it is, run in the project.
+#   4. .harness/check-command       the first line, as it is, run in the project, under the
+#                                   time-limit helper's check limit (time-limit.mjs, 540
+#                                   seconds by default): past it, the check is stopped with
+#                                   its whole process group and land.sh stops, check-timeout.
 #   5. Fault replays                optional; when .harness/mutations.tsv has entries that
 #                                   the patch may have broken, or that the patch adds or
 #                                   changes, replay-faults.sh runs those entries (and
@@ -28,7 +31,7 @@
 #
 # THE EVENT LOG. Each STOPPED, with a short reason (no-check-command, no-skip-reviewed,
 # patch-does-not-apply, temp-file, apply-failed, approval-failed, check-failed,
-# mutations-unusable, replay-failed) and its message, and each LANDED, is appended to the
+# check-timeout, mutations-unusable, replay-failed) and its message, and each LANDED, is appended to the
 # local event log, .git/harness-kit/events.tsv (events.sh has the format). Usage errors
 # (exit 2) are not recorded. The check's result in step 4 (its output, stdout and stderr
 # together, is shown and saved) goes to events.sh's harness_check_event, which appends a
@@ -48,6 +51,9 @@
 # check once per entry plus once without a fault, in parallel up to the CPU count, locally,
 # never in CI (replay-faults.sh).
 #
+# CLEANUP. Its temporary files are removed on any exit, a signal included (limit-lib.sh's
+# hk_temp and hk_on_exit); after a forced kill, the time-limit helper's next start sweeps them.
+#
 # Exit status: 0 landed and checked; 1 stopped (the message says whether the patch is
 # applied); 2 usage.
 set -u
@@ -55,6 +61,8 @@ set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=events.sh
 . "$HERE/events.sh"
+# shellcheck source=limit-lib.sh
+. "$HERE/limit-lib.sh"
 say() { echo "harness-kit land.sh: $*" >&2; }
 # stopped REASON MESSAGE: record the stop in the event log, then print it.
 stopped() {
@@ -99,10 +107,11 @@ if ! git apply --check "$patch"; then
 fi
 # The paths the patch changes, for step 5: new names from --numstat, old names of renames
 # from the patch's own "rename from" lines.
-changed="$(mktemp "${TMPDIR:-/tmp}/harness-kit-land.XXXXXX")" || { stopped temp-file "cannot make a temporary file. Nothing was changed."; exit 1; }
-before="$changed.mutations-before"
-check_out="$changed.check-output"
-trap 'rm -f "$changed" "$before" "$check_out" "$check_out.status"' EXIT
+hk_on_exit
+hk_temp work -d harness-kit-land || { stopped temp-file "cannot make a temporary folder. Nothing was changed."; exit 1; }
+changed="$work/changed"
+before="$work/mutations-before"
+check_out="$work/check-output"
 { git apply --numstat -z "$patch" | tr '\0' '\n' | cut -f3-; sed -n 's/^rename from //p' "$patch"; } >"$changed"
 # .harness/mutations.tsv before the patch, so step 5 can tell which entries it adds or changes.
 : >"$before"
@@ -117,6 +126,7 @@ say "applied $patch"
 approve="$(first_line "$H/approve-command")"
 if [ -n "$approve" ]; then
   say "running the approval command: $approve"
+  # no-limit: the approval command waits for the person, who answers in this terminal
   /bin/sh -c "$approve"
   status=$?
   if [ "$status" -ne 0 ]; then
@@ -127,8 +137,15 @@ fi
 
 # 4. The check, with --skip-reviewed (step 0).
 say "running the check: $check"
-{ /bin/sh -c "$check" </dev/null 2>&1; echo $? >"$check_out.status"; } | tee "$check_out"
+{ hk_limited --merge check land.sh /bin/sh -c "$check" </dev/null 2>&1; echo $? >"$check_out.status"; } | tee "$check_out"
 status="$(cat "$check_out.status")"
+if [ "$status" -eq 124 ]; then
+  limit="$(hk_limit check)"
+  harness_check_event land.sh "" "timeout ${limit}s" <"$check_out"
+  stopped check-timeout "the check did not finish within its limit of $limit seconds (TIMEOUT, above): $check. It was stopped. The patch IS applied and nothing was committed."
+  say "Next: find what hangs or runs slowly and fix it, then run the check again, or: git apply -R '$patch'"
+  exit 1
+fi
 harness_check_event land.sh "" "$status" <"$check_out"
 if [ "$status" -ne 0 ]; then
   stopped check-failed "the check failed (exit $status): $check. The patch IS applied and nothing was committed."

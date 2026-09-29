@@ -247,6 +247,31 @@ else
 off: $(checked "$off")"
 fi
 
+# 12. IT FAILS CLOSED ON TIME. A check that hangs (and ignores SIGTERM, with a child in its
+# group) is stopped at its limit, 1 second here with a 1-second grace period, and the stop
+# is BLOCKED with the TIMEOUT message, counted as block 1 of 3; it is recorded as a FAIL with
+# "timeout 1s", and nothing of its process group is left.
+dir="$(new_git_project hangs "echo \"PASS lint\"; trap '' TERM; sleep 30 & echo \$! >\"$WORK/hangs.child\"; echo \$\$ >\"$WORK/hangs.pid\"; wait")"
+began=$SECONDS
+HARNESS_KIT_LIMIT_CHECK_SECONDS=1 HARNESS_KIT_LIMIT_GRACE_SECONDS=1 run_gate "$dir" s-hangs false
+took=$((SECONDS - began))
+reason="$(node -e 'try { console.log(JSON.parse(process.argv[1]).reason) } catch {}' "$OUT")"
+left=""
+for f in "$WORK/hangs.child" "$WORK/hangs.pid"; do
+  [ -f "$f" ] && kill -0 "$(cat "$f")" 2>/dev/null && left="$left $(cat "$f")"
+done
+if [ "$STATUS" -eq 0 ] && is_block "$OUT" && [ -z "$left" ] && [ "$took" -le 5 ] &&
+  [ "$(head -n 1 <<<"$reason")" = 'harness-kit stop gate: `scripts/check.sh` did not finish within 1 seconds (TIMEOUT); it was stopped. Block 1 of 3.' ] &&
+  grep -qx 'Find what hangs or runs slowly and fix it before finishing.' <<<"$reason" &&
+  [ "$(checked "$dir" | cut -f4,5)" = "$(printf 'FAIL\ttimeout 1s: no FAIL lines')" ]; then
+  result "stop-gate: a check that runs past its limit blocks the stop with TIMEOUT, and its process group is gone" yes ""
+else
+  result "stop-gate: a check that runs past its limit blocks the stop with TIMEOUT, and its process group is gone" no \
+    "$(describe)
+took ${took}s; still running:${left:- none}
+log: $(checked "$dir")"
+fi
+
 if [ "$failures" -ne 0 ]; then
   echo "$failures stop-gate case(s) failed"
   exit 1

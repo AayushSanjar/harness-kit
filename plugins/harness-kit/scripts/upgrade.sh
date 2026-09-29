@@ -20,7 +20,9 @@
 #      "plugins" list must hold harness-kit@harness-kit at <version>, and its
 #      "plugin_errors", if any, must not name harness-kit. The session is stopped as soon as
 #      the init event is read, before the model answers, so nothing is spent; the wait is
-#      at most UPGRADE_INIT_SECONDS (default 120).
+#      at most UPGRADE_INIT_SECONDS (default 120). The session runs through the time-limit
+#      helper (time-limit.mjs) under that limit, and every stop of it, at the init event or
+#      at the limit, reaches its whole process group.
 #   5. The local git hooks: install-hooks.sh (next to this script), which installs the
 #      pre-push hook that refuses pushes to the review base branch unless ship.sh makes
 #      them, and the commit-msg hook that checks each commit message. A hook of either name
@@ -42,6 +44,12 @@
 #      with the command printed at the end.
 # It never commits and never pushes.
 #
+# TIME LIMITS (time-limit.mjs, through limit-lib.sh). Steps 2 and 3 each run under the
+# plugin-command limit (UPGRADE_PLUGIN_SECONDS, default 120), and step 7's fetch under the
+# git limit (300 seconds) and without prompts (hk_git_net); a TIMEOUT stops with a message
+# saying so. The approval in step 6 waits for the person and has no limit. Its temporary
+# folder is removed on any exit, a signal included (hk_temp, hk_on_exit).
+#
 # Exit status: 0 upgraded and approved; 1 stopped (the message says what changed so far);
 # 2 usage.
 set -u
@@ -49,8 +57,10 @@ set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MARKETPLACE=harness-kit
 PLUGIN=harness-kit@harness-kit
-WAIT="${UPGRADE_INIT_SECONDS:-120}"
 POLL="${UPGRADE_POLL_SECONDS:-1}"
+# shellcheck source=limit-lib.sh
+. "$HERE/limit-lib.sh"
+WAIT="$(hk_limit init)"
 
 say() { echo "harness-kit upgrade.sh: $*" >&2; }
 stop() { say "STOPPED: $*"; exit 1; }
@@ -102,23 +112,33 @@ CHANGED="$SETTINGS now pins $tag (was $old); to undo: git checkout -- $SETTINGS"
 # ---------------------------------------------------------------------------------------
 # 2-3. The marketplace and the plugin.
 # ---------------------------------------------------------------------------------------
-claude plugin marketplace add "$repo#$tag" --scope project >&2 ||
-  stop "claude plugin marketplace add $repo#$tag --scope project failed (above). Check that the tag $tag exists on github.com/$repo. $CHANGED"
+hk_limited plugin-command upgrade.sh claude plugin marketplace add "$repo#$tag" --scope project >&2
+case $? in
+  0) ;;
+  124) stop "claude plugin marketplace add $repo#$tag --scope project did not finish within $(hk_limit plugin-command) seconds (TIMEOUT, above) and was stopped. $CHANGED" ;;
+  *) stop "claude plugin marketplace add $repo#$tag --scope project failed (above). Check that the tag $tag exists on github.com/$repo. $CHANGED" ;;
+esac
 say "2/7 re-added the marketplace at $repo#$tag"
-claude plugin update "$PLUGIN" --scope project >&2 ||
-  stop "claude plugin update $PLUGIN --scope project failed (above). $CHANGED, and the marketplace is at $tag."
+hk_limited plugin-command upgrade.sh claude plugin update "$PLUGIN" --scope project >&2
+case $? in
+  0) ;;
+  124) stop "claude plugin update $PLUGIN --scope project did not finish within $(hk_limit plugin-command) seconds (TIMEOUT, above) and was stopped. $CHANGED, and the marketplace is at $tag." ;;
+  *) stop "claude plugin update $PLUGIN --scope project failed (above). $CHANGED, and the marketplace is at $tag." ;;
+esac
 say "3/7 updated $PLUGIN"
 
 # ---------------------------------------------------------------------------------------
 # 4. The version a new session loads, from its init event.
 # ---------------------------------------------------------------------------------------
-work="$(mktemp -d "${TMPDIR:-/tmp}/harness-kit-upgrade.XXXXXX")" || stop "cannot make a temporary folder. $CHANGED"
+# The headless session's helper process, while it runs: stopping it (SIGTERM) stops the
+# session's whole process group (time-limit.mjs).
 pid=""
 cleanup() {
-  [ -z "$pid" ] || kill "$pid" 2>/dev/null
-  rm -rf "$work"
+  [ -z "$pid" ] || { kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; }
+  pid=""
 }
-trap cleanup EXIT
+hk_on_exit cleanup
+hk_temp work -d harness-kit-upgrade || stop "cannot make a temporary folder. $CHANGED"
 
 # init_event FILE: prints the first init event in FILE as JSON, or nothing.
 init_event() {
@@ -132,24 +152,25 @@ init_event() {
   ' "$1"
 }
 
-claude -p "Reply with the single word ok." --output-format stream-json --verbose --max-turns 1 \
+node "$HK_LIMIT_JS" run --limit init --name upgrade.sh -- \
+  claude -p "Reply with the single word ok." --output-format stream-json --verbose --max-turns 1 \
   </dev/null >"$work/session.jsonl" 2>"$work/session.err" &
 pid=$!
-waited=0
 event=""
 while :; do
   event="$(init_event "$work/session.jsonl")"
   [ -z "$event" ] || break
-  kill -0 "$pid" 2>/dev/null ||
+  if ! kill -0 "$pid" 2>/dev/null; then
+    wait "$pid" 2>/dev/null
+    status=$?
+    pid=""
+    [ "$status" -ne 124 ] ||
+      stop "no init event from the headless session within ${WAIT}s (TIMEOUT); it was stopped with its whole process group. $CHANGED, and the plugin is updated."
     stop "the headless session ended without an init event: $(tail -c 2000 "$work/session.err"). $CHANGED, and the plugin is updated."
-  [ "$waited" -lt "$WAIT" ] ||
-    stop "no init event from the headless session within ${WAIT}s. $CHANGED, and the plugin is updated."
+  fi
   sleep "$POLL"
-  waited=$((waited + POLL))
 done
-kill "$pid" 2>/dev/null
-wait "$pid" 2>/dev/null
-pid=""
+cleanup
 
 loaded="$(node -e '
   const [event, id, want] = [JSON.parse(process.argv[1]), process.argv[2], process.argv[3]];
@@ -183,6 +204,7 @@ if [ -z "$approve" ]; then
   say "6/7 no .harness/approve-command, so there is nothing to approve with; read \`git diff\` yourself."
 else
   say "6/7 running the approval command: $approve"
+  # no-limit: the approval command waits for the person, who answers in this terminal
   /bin/sh -c "$approve"
   status=$?
   [ "$status" -eq 0 ] ||
@@ -195,7 +217,7 @@ fi
 APPROVED="$CHANGED; the plugin is updated and loads $version; the hooks are installed and the approval passed"
 url="${UPGRADE_UPSTREAM_URL:-https://github.com/$repo.git}"
 git init -q --bare "$work/upstream" &&
-  git -C "$work/upstream" fetch -q --no-tags "$url" "+refs/tags/$old:refs/tags/$old" "+refs/tags/$tag:refs/tags/$tag" >&2 ||
+  hk_git_net upgrade.sh -C "$work/upstream" fetch -q --no-tags "$url" "+refs/tags/$old:refs/tags/$old" "+refs/tags/$tag:refs/tags/$tag" >&2 ||
   stop "could not fetch the tags $old and $tag from $url (above), so the commit draft was not written. $APPROVED. Nothing was committed; run upgrade.sh $version again when $url can be reached."
 git -C "$work/upstream" log --reverse --format=%H%x1f%s%x1f%b%x1e "refs/tags/$old..refs/tags/$tag" >"$work/upstream.log" ||
   stop "could not list harness-kit's commits from $old to $tag (above), so the commit draft was not written. $APPROVED. Nothing was committed."

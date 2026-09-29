@@ -86,7 +86,9 @@
 #        or found more than once is an ERROR), then the check runs (only the entry's
 #        check, with .harness/check-only).
 #      Each worktree is removed when its run ends, and every run is stopped and every
-#      worktree removed on interruption (Ctrl-C, kill).
+#      worktree removed on interruption (Ctrl-C, kill, a hangup or a closed output pipe).
+#      After a forced kill (kill -9), what is left is swept by the time-limit helper
+#      (time-limit.mjs) when a replay, or any other use of the helper, next starts.
 #   3. The verdicts, per entry, in file order: ERROR for a fragile entry; ERROR when the
 #      entry's check FAILS in the baseline, or has no PASS line there (a wrong name), as a
 #      failure with the fault would prove nothing; ERROR when the fault could not be put in;
@@ -113,6 +115,8 @@ set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=events.sh
 . "$HERE/events.sh"
+# shellcheck source=limit-lib.sh
+. "$HERE/limit-lib.sh"
 NAME="replay-faults.sh"
 USAGE="usage: $NAME [ID...] | --part baseline|I/N --out DIR [--baseline-from BDIR] [ID...] | --judge DIR..."
 say() { echo "harness-kit $NAME: $*" >&2; }
@@ -183,7 +187,7 @@ working_tree() {
 # judge DIR...: the verdicts, the totals and the event line; exits as a whole run does.
 judge() {
   local scratch tree status
-  scratch="$(mktemp -d "${TMPDIR:-/tmp}/harness-kit-replay-judge.XXXXXX")" || refuse "cannot make a temporary folder"
+  hk_temp scratch -d harness-kit-replay-judge || refuse "cannot make a temporary folder"
   tree="$(working_tree "$scratch/index")" || { rm -rf "$scratch"; refuse "could not read the working tree (above)"; }
   node "$HERE/replay-faults.mjs" judge "$MUTATIONS" "$tree" "$scratch/counts" "$@"
   status=$?
@@ -218,7 +222,7 @@ fi
 NODE_MODULES="$(find . \( -name .git -o -name node_modules \) -prune -name node_modules -type d -print | sed 's|^\./||')"
 
 # 1. The working tree as a commit, from a temporary index.
-index="$(mktemp "${TMPDIR:-/tmp}/harness-kit-replay-index.XXXXXX")" || refuse "cannot make a temporary file"
+hk_temp index harness-kit-replay-index || refuse "cannot make a temporary file"
 rm -f "$index"
 snapshot="$(
   tree="$(working_tree "$index")" &&
@@ -229,25 +233,23 @@ snapshot="$(
 rm -f "$index"
 
 # 2. The runs. replay-faults.mjs runs in the background so that a signal reaches this
-# script at once; it is passed on, and replay-faults.mjs stops every check and removes
-# every worktree before it exits.
+# script at once (an interrupt, a stop signal or a hangup; hk_on_exit's traps); it is passed
+# on, and replay-faults.mjs stops every check and removes every worktree before it exits.
 RUNNER=""
-interrupted() {
+stop_runner() {
   if [ -n "$RUNNER" ]; then
     kill -TERM "$RUNNER" 2>/dev/null
     wait "$RUNNER"
   fi
-  exit "$1"
+  RUNNER=""
 }
-trap 'interrupted 130' INT
-trap 'interrupted 143' TERM
+hk_on_exit stop_runner
 HARNESS_KIT_REPLAY_NODE_MODULES="$NODE_MODULES" HARNESS_KIT_REPLAY_BASELINE_FROM="$baseline_from" \
   node "$HERE/replay-faults.mjs" run "$MUTATIONS" "$RESULTS" "$PROJECT" "$snapshot" "$part" "$check" "$@" </dev/null &
 RUNNER=$!
 wait "$RUNNER"
 status=$?
 RUNNER=""
-trap - INT TERM
 [ "$status" -eq 0 ] || refuse "the replay could not run (above; exit $status)"
 
 if [ "$mode" = part ]; then

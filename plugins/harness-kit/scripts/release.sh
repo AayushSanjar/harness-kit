@@ -33,6 +33,15 @@
 # It never forces a push, never rewrites history, never moves an existing tag, and never
 # deletes the branch.
 #
+# TIME LIMITS (time-limit.mjs, through limit-lib.sh). The check runs under the check limit
+# (540 seconds by default); a TIMEOUT stops with check-timeout, and nothing is pushed. Every
+# git push, fetch and ls-remote (the local fast-forward of the base too) runs under the git
+# limit (300 seconds) and without prompts (hk_git_net: GIT_TERMINAL_PROMPT=0, ssh
+# BatchMode=yes), so a push that would need a password or passphrase fails at once, saying
+# so; a TIMEOUT stops with git-timeout, naming the command. CI's gh calls have their own
+# limits (ci-lib.sh). Each TIMEOUT stops the command's whole process group. Temporary files
+# are removed on any exit, a signal included (hk_temp, hk_on_exit).
+#
 # RESUMABLE. Re-running with the same tag after a stop continues where it stopped: the
 # check runs again (it is cheap next to a release), pushing a pushed branch does nothing, a
 # finished CI run is read, not re-run, a base already fast-forwarded and a tag already at
@@ -43,7 +52,8 @@
 # not.
 #
 # THE EVENT LOG. Each stop and each refusal (event STOPPED, with a short reason; a
-# refusal's starts "refused-"), and each RELEASED (what: the tag), is appended to the local
+# refusal's starts "refused-"; a TIMEOUT's is check-timeout, ci-timeout or git-timeout),
+# and each RELEASED (what: the tag), is appended to the local
 # event log, .git/harness-kit/events.tsv (events.sh has the format). So is the check's
 # result in step 2, through events.sh's harness_check_event: a CHECKED line when it differs
 # from the branch's last recorded result.
@@ -58,6 +68,9 @@ REMOTE=origin
 . "$HERE/events.sh"
 # shellcheck source=ci-lib.sh
 . "$HERE/ci-lib.sh"
+# shellcheck source=limit-lib.sh
+. "$HERE/limit-lib.sh"
+hk_on_exit
 CI_TOOL=release.sh CI_APPEAR="${SHIP_CI_APPEAR_SECONDS:-180}" CI_POLL="${SHIP_POLL_SECONDS:-10}"
 
 say() { echo "harness-kit release.sh: $*" >&2; }
@@ -87,7 +100,10 @@ head="$(git rev-parse HEAD)"
 local_tag="$(git rev-parse -q --verify "refs/tags/$tag^{commit}")"
 [ -z "$local_tag" ] || [ "$local_tag" = "$head" ] ||
   refuse refused-tag-exists "the tag $tag already exists here at $(git rev-parse --short "$local_tag"), not at $branch's head $(git rev-parse --short "$head"). Choose another tag; release.sh never moves one."
-remote_tag="$(git ls-remote --tags "$REMOTE" "refs/tags/$tag^{}" "refs/tags/$tag" | awk 'END { print $1 }')"
+listed="$(hk_git_net release.sh ls-remote --tags "$REMOTE" "refs/tags/$tag^{}" "refs/tags/$tag")"
+[ $? -ne 124 ] ||
+  stop git-timeout "git ls-remote of $REMOTE did not answer within $(hk_limit git) seconds (TIMEOUT, above), so release.sh cannot tell whether the tag $tag is there. Nothing was pushed. Re-run release.sh $tag."
+remote_tag="$(awk 'END { print $1 }' <<<"$listed")"
 [ -z "$remote_tag" ] || [ "$remote_tag" = "$head" ] ||
   refuse refused-tag-exists "the tag $tag already exists on $REMOTE at ${remote_tag:0:7}, not at $branch's head $(git rev-parse --short "$head"). Choose another tag; release.sh never moves one."
 
@@ -97,17 +113,27 @@ remote_tag="$(git ls-remote --tags "$REMOTE" "refs/tags/$tag^{}" "refs/tags/$tag
 check="$( { [ -f .harness/check-command ] && head -n 1 .harness/check-command; } | tr -d '\r')"
 [ -n "$check" ] || stop no-check-command "there is no .harness/check-command (or its first line is empty), so there is no check to release with. Nothing was pushed."
 say "running the check: $check"
-check_out="$(mktemp "${TMPDIR:-/tmp}/harness-kit-release-check.XXXXXX")" || stop temp-file "cannot make a temporary file for the check's output. Nothing was pushed."
-trap 'rm -f "$check_out" "$check_out.status"' EXIT
-{ /bin/sh -c "$check" </dev/null 2>&1; echo $? >"$check_out.status"; } | tee "$check_out" >&2
+hk_temp work -d harness-kit-release-check || stop temp-file "cannot make a temporary folder for the check's output. Nothing was pushed."
+check_out="$work/output"
+{ hk_limited --merge check release.sh /bin/sh -c "$check" </dev/null 2>&1; echo $? >"$check_out.status"; } | tee "$check_out" >&2
 status="$(cat "$check_out.status")"
+if [ "$status" -eq 124 ]; then
+  limit="$(hk_limit check)"
+  harness_check_event release.sh "$branch" "timeout ${limit}s" <"$check_out"
+  stop check-timeout "the check did not finish within its limit of $limit seconds (TIMEOUT, above): $check. It was stopped. Nothing was pushed. Find what hangs or runs slowly and fix it, commit, then re-run release.sh $tag."
+fi
 harness_check_event release.sh "$branch" "$status" <"$check_out"
 [ "$status" -eq 0 ] || stop check-failed "the check failed (exit $status, above): $check. Nothing was pushed. Fix what it reports, commit, then re-run release.sh $tag."
 
 # ---------------------------------------------------------------------------------------
 # 3. Push the branch.
 # ---------------------------------------------------------------------------------------
-git push -q -u "$REMOTE" "$branch" || stop push-branch-failed "pushing $branch to $REMOTE failed (above). Fix the cause, then re-run release.sh $tag."
+hk_git_net release.sh push -q -u "$REMOTE" "$branch"
+case $? in
+  0) ;;
+  124) stop git-timeout "git push of $branch to $REMOTE did not finish within $(hk_limit git) seconds (TIMEOUT, above), and may or may not have reached $REMOTE. Nothing else was pushed. Re-run release.sh $tag: pushing a pushed branch does nothing." ;;
+  *) stop push-branch-failed "pushing $branch to $REMOTE failed (above). Fix the cause, then re-run release.sh $tag." ;;
+esac
 say "pushed $branch ($(git rev-parse --short "$head")) to $REMOTE"
 
 # ---------------------------------------------------------------------------------------
@@ -118,20 +144,29 @@ ci_wait "$head" "$branch"
 # ---------------------------------------------------------------------------------------
 # 5. Fast-forward the base, tag, push both, switch to the base.
 # ---------------------------------------------------------------------------------------
-git fetch -q "$REMOTE" "$base" || stop fetch-failed "could not fetch $base from $REMOTE (above). Re-run release.sh $tag."
+hk_git_net release.sh fetch -q "$REMOTE" "$base"
+case $? in
+  0) ;;
+  124) stop git-timeout "git fetch of $base from $REMOTE did not finish within $(hk_limit git) seconds (TIMEOUT, above). Nothing was pushed to $base or tagged. Re-run release.sh $tag." ;;
+  *) stop fetch-failed "could not fetch $base from $REMOTE (above). Re-run release.sh $tag." ;;
+esac
 for ref in "refs/remotes/$REMOTE/$base" "refs/heads/$base"; do
   if git rev-parse -q --verify "$ref" >/dev/null && ! git merge-base --is-ancestor "$ref" "$head"; then
     stop base-not-fast-forward "${ref#refs/*/} has commits that $branch does not, so $base cannot fast-forward. Bring $branch up to date with $base, then re-run release.sh $tag."
   fi
 done
-git fetch -q . "$head:refs/heads/$base" ||
+hk_git_net release.sh fetch -q . "$head:refs/heads/$base" ||
   stop base-not-updated "could not fast-forward $base to $branch (above; is $base checked out in another worktree?). Nothing was pushed to it. Fix the cause, then re-run release.sh $tag."
 if [ -z "$local_tag" ]; then
   git tag "$tag" "$head" || stop tag-failed "could not make the tag $tag (above). $base is fast-forwarded locally; nothing was pushed to it. Re-run release.sh $tag."
 fi
 # HARNESS_KIT_SHIP=1: the pre-push hook (install-hooks.sh) lets this push of the base through.
-HARNESS_KIT_SHIP=1 git push -q --atomic "$REMOTE" "refs/heads/$base:refs/heads/$base" "refs/tags/$tag:refs/tags/$tag" ||
-  stop push-base-failed "pushing $base and $tag to $REMOTE failed (above); neither was pushed (--atomic). $base is fast-forwarded locally and $tag made. Fix the cause, then re-run release.sh $tag."
+HARNESS_KIT_SHIP=1 hk_git_net release.sh push -q --atomic "$REMOTE" "refs/heads/$base:refs/heads/$base" "refs/tags/$tag:refs/tags/$tag"
+case $? in
+  0) ;;
+  124) stop git-timeout "git push of $base and $tag to $REMOTE did not finish within $(hk_limit git) seconds (TIMEOUT, above); being --atomic, both or neither reached $REMOTE. $base is fast-forwarded locally and $tag made. Re-run release.sh $tag." ;;
+  *) stop push-base-failed "pushing $base and $tag to $REMOTE failed (above); neither was pushed (--atomic). $base is fast-forwarded locally and $tag made. Fix the cause, then re-run release.sh $tag." ;;
+esac
 git checkout -q "$base" || stop checkout-failed "$base and $tag are pushed, but switching to $base failed (above). Switch to $base yourself."
 harness_event release.sh "$branch" RELEASED "$tag" "fast-forwarded $base to $(git rev-parse --short "$head") and pushed it with $tag"
 say "RELEASED: $branch ($(git rev-parse --short "$head")) is $base on $REMOTE, tagged $tag. You are on $base."

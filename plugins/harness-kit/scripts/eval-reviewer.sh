@@ -7,8 +7,9 @@
 #
 # For people, in their own terminal: every run spends real money on one headless Claude run,
 # within review.sh's limits (REVIEW_MAX_TURNS, default 40; REVIEW_MAX_BUDGET_USD, default
-# 3.00, per run; REVIEW_MAX_INPUT_BYTES, default 250000). --regrade makes no Claude call and
-# costs nothing.
+# 3.00, per run; REVIEW_MAX_INPUT_BYTES, default 250000; and the time limit REVIEW_MAX_SECONDS,
+# default 900, per run, after which the run is stopped with its whole process group and is
+# an ERROR, "timed out after N seconds"). --regrade makes no Claude call and costs nothing.
 #
 # THE CASES, in .harness/reviewer-eval/cases.tsv: one per line, tab-separated, # comments and
 # blank lines skipped; "-" stands for an empty field. The last three fields are optional
@@ -49,7 +50,9 @@
 #     with the worktree; the folders they point at are not touched.
 # The reviewer runs with HARNESS_KIT_EVAL=1 in its environment, which a hook process
 # inherits, so harness-kit's Stop hook lets it finish without running the checks. The
-# worktree is removed afterwards, also on failure or interruption. Nothing is written to
+# worktree is removed afterwards, also on failure, interruption, a stop signal, a hangup or
+# a broken pipe (limit-lib.sh's hk_on_exit); each is recorded in the time-limit helper's
+# registry, so that the helper's sweep removes it after a forced kill. Nothing is written to
 # .harness/reviews.tsv; results go to a folder under the OS temp folder, printed at the
 # end: results.tsv, and runs/<id>.<run>/ with each run's input.md, its full stream-json
 # transcript (transcript.jsonl), the result event (out.json) and the review (review.txt).
@@ -166,18 +169,20 @@ NODE_MODULES="$(find . \( -name .git -o -name node_modules \) -prune -name node_
 RESULTS="$(mktemp -d "${TMPDIR:-/tmp}/harness-kit-eval.XXXXXX")" || die "cannot make a temporary folder"
 printf 'id\trun\tkind\tverdict\toutcome\tcost-usd\tduration-s\n' >"$RESULTS/results.tsv"
 
-# The worktree of the run in progress, if any. remove_worktree is safe to call twice.
+# The worktree of the run in progress, if any, and its record in the time-limit helper's
+# registry. remove_worktree is safe to call twice.
 WORKTREE=""
+WORKTREE_RECORD=""
 remove_worktree() {
   [ -n "$WORKTREE" ] || return 0
   git -C "$PROJECT" worktree remove --force "$WORKTREE" >/dev/null 2>&1
   rm -rf "$WORKTREE"
   git -C "$PROJECT" worktree prune
+  [ -z "$WORKTREE_RECORD" ] || rm -f "$WORKTREE_RECORD"
   WORKTREE=""
+  WORKTREE_RECORD=""
 }
-trap remove_worktree EXIT
-trap 'remove_worktree; trap - EXIT; exit 130' INT
-trap 'remove_worktree; trap - EXIT; exit 143' TERM
+hk_on_exit remove_worktree
 
 # link_node_modules WORKTREE: symlinks each of NODE_MODULES into WORKTREE at the same
 # path, when its parent folder exists there and nothing is at the path already.
@@ -203,6 +208,7 @@ run_case() {
 
   if [ -z "$why" ]; then
     WORKTREE="$(mktemp -d "${TMPDIR:-/tmp}/harness-kit-eval-wt.XXXXXX")" || why="cannot make a temporary folder"
+    [ -n "$why" ] || WORKTREE_RECORD="$(node "$HK_LIMIT_JS" register --owner $$ worktree "$PROJECT" "$WORKTREE")" || WORKTREE_RECORD=""
   fi
   if [ -z "$why" ]; then
     git -C "$PROJECT" -c core.hooksPath=/dev/null worktree add --detach --quiet "$WORKTREE" "$head_sha" >"$run/worktree.log" 2>&1 ||
@@ -234,7 +240,10 @@ run_case() {
     HARNESS_KIT_EVAL=1 review_run "$WORKTREE" "$run/input.md" "$run/transcript.jsonl" --stream
     status=$?
     node "$HERE/eval-reviewer.mjs" result "$run/transcript.jsonl" "$run/out.json"
-    if review_parse "$run" "$status" "$NAME"; then
+    if [ "$status" -eq 124 ]; then
+      why="timed out after $(hk_limit review) seconds: $REVIEW_ERROR"
+      read -r cost duration < <(node "$HERE/eval-reviewer.mjs" cost "$run/out.json")
+    elif review_parse "$run" "$status" "$NAME"; then
       IFS=$'\t' read -r verdict _ cost duration <"$run/record.tsv"
       outcome="$(node "$HERE/eval-reviewer.mjs" grade "$run/review.txt" "$kind" "$file_re" "$keyword_re" \
         "$verdict" "$(cut -f2 "$run/record.tsv")" "$na" "$expected")" || { outcome=ERROR why="could not grade the review"; }

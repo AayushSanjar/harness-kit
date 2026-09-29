@@ -49,6 +49,7 @@ FAKE
 # the first n calls of `gh run <list|watch|view>` fail that way, counted in
 # $FAKE_LOG/fail-calls-<list|watch|view>. <how> is timeout (exit 1 with a network error on
 # stderr, as gh prints one) or garbage (exit 0 with an HTML error page on stdout).
+# With $FAKE_LOG/watch-hangs, `gh run watch` writes its pid to $FAKE_LOG/watch.pid and hangs.
 cat >"$WORK/bin/gh" <<'FAKE'
 #!/usr/bin/env node
 const fs = require("fs");
@@ -69,6 +70,7 @@ const run = { databaseId: 4242, workflowName: "validate", status: "completed", c
   url: "https://ci.example.invalid/runs/4242" };
 const sub = `${args[0]} ${args[1]}`;
 if (sub === "run list") console.log(JSON.stringify([run]));
+else if (sub === "run watch" && fs.existsSync(`${log}/watch-hangs`)) { fs.writeFileSync(`${log}/watch.pid`, String(process.pid)); setTimeout(() => {}, 30000); }
 else if (sub === "run watch") process.exit(run.conclusion === "success" ? 0 : 1);
 else if (sub === "run view") console.log(JSON.stringify({ status: run.status, conclusion: run.conclusion, url: run.url }));
 else { console.error(`fake gh: unexpected call: ${args.join(" ")}`); process.exit(64); }
@@ -322,6 +324,87 @@ if [ "$STATUS" -eq 0 ] && [ "$(calls "$dir" 'view 4242')" = 3 ] && grep -q 'tryi
   result "release.sh: gh failing twice, then answering, is retried and releases" yes ""
 else
   result "release.sh: gh failing twice, then answering, is retried and releases" no "$(describe)"
+fi
+
+# ---------------------------------------------------------------------------------------
+# TIME LIMITS (time-limit.mjs), with limits of 1 second and a 1-second grace period: each
+# case waits for real for those only. alive FILE: the pid in FILE is running.
+# ---------------------------------------------------------------------------------------
+alive() { [ -f "$1" ] && kill -0 "$(cat "$1")" 2>/dev/null; }
+
+# T1. A check that hangs stops check-timeout before any push; its group is gone.
+dir="$(new_repo check-hangs)"
+printf 'echo $$ >"%s/check.pid"; sleep 30 & echo $! >"%s/check.child"; wait\n' "$dir.log" "$dir.log" >"$dir/scripts/check.sh"
+git -C "$dir" commit -q -am "next: a check that hangs"
+HARNESS_KIT_LIMIT_CHECK_SECONDS=1 HARNESS_KIT_LIMIT_GRACE_SECONDS=1 run_release "$dir" success v9.0.0
+sleep 0.2
+if [ "$STATUS" -eq 1 ] && ! alive "$dir.log/check.pid" && ! alive "$dir.log/check.child" &&
+  grep -qF 'STOPPED: the check did not finish within its limit of 1 seconds (TIMEOUT, above): sh scripts/check.sh --skip-reviewed. It was stopped. Nothing was pushed.' <<<"$ERR" &&
+  [ -z "$(remote "$dir" refs/heads/next)" ] && [ -z "$(remote "$dir" refs/tags/v9.0.0)" ] && [ ! -e "$dir.log/gh-calls" ]; then
+  result "release.sh: a check past its limit stops check-timeout before any push" yes ""
+else
+  result "release.sh: a check past its limit stops check-timeout before any push" no "$(describe)"
+fi
+
+# T2. A gh run watch that hangs stops ci-timeout with the run's URL; main and the tag are
+# untouched, and the watch is gone.
+dir="$(new_repo watch-hangs)"
+touch "$dir.log/watch-hangs"
+main_before="$(remote "$dir" refs/heads/main)"
+SHIP_CI_RUN_SECONDS=1 HARNESS_KIT_LIMIT_GRACE_SECONDS=1 run_release "$dir" success v9.0.1
+sleep 0.2
+if [ "$STATUS" -eq 1 ] && ! alive "$dir.log/watch.pid" &&
+  grep -qF 'STOPPED: CI run 4242 did not finish within its limit of 1 seconds (TIMEOUT, above): https://ci.example.invalid/runs/4242. The watch was stopped. Nothing was merged, pushed to the base branch or tagged. re-run release.sh v9.0.1 to keep waiting.' <<<"$ERR" &&
+  [ "$(remote "$dir" refs/heads/main)" = "$main_before" ] && [ -z "$(remote "$dir" refs/tags/v9.0.1)" ] &&
+  [ "$(cut -f5,6 "$dir/.git/harness-kit/events.tsv" | tail -n 1)" = "$(printf 'STOPPED\tci-timeout')" ]; then
+  result "release.sh: a gh run watch that hangs past its limit stops ci-timeout; main and the tag are untouched" yes ""
+else
+  result "release.sh: a gh run watch that hangs past its limit stops ci-timeout; main and the tag are untouched" no "$(describe)"
+fi
+
+# T3. A git push that hangs (the remote's pre-receive hook sleeps) stops git-timeout,
+# naming the push; main and the tag are untouched, and the hook is gone.
+dir="$(new_repo push-hangs)"
+printf '#!/bin/sh\necho $$ >"%s/receive.pid"\nsleep 30\n' "$dir.log" >"$dir.git/hooks/pre-receive"
+chmod +x "$dir.git/hooks/pre-receive"
+main_before="$(remote "$dir" refs/heads/main)"
+HARNESS_KIT_LIMIT_GIT_SECONDS=1 HARNESS_KIT_LIMIT_GRACE_SECONDS=1 run_release "$dir" success v9.0.2
+sleep 0.2
+if [ "$STATUS" -eq 1 ] && [ -s "$dir.log/receive.pid" ] && ! alive "$dir.log/receive.pid" &&
+  grep -qF 'harness-kit release.sh: TIMEOUT: `git push -q -u origin next` ran longer than its limit of 1 seconds (git)' <<<"$ERR" &&
+  grep -qF 'STOPPED: git push of next to origin did not finish within 1 seconds (TIMEOUT, above), and may or may not have reached origin.' <<<"$ERR" &&
+  [ "$(remote "$dir" refs/heads/main)" = "$main_before" ] && [ -z "$(remote "$dir" refs/tags/v9.0.2)" ] && [ ! -e "$dir.log/gh-calls" ]; then
+  result "release.sh: a git push past its limit stops git-timeout, naming the push; main and the tag are untouched" yes ""
+else
+  result "release.sh: a git push past its limit stops git-timeout, naming the push; main and the tag are untouched" no "$(describe)"
+fi
+
+# T4. A push that would need a prompt fails at once, saying it ran without prompts: the
+# remote is an ssh URL, and a fake ssh records its arguments and GIT_TERMINAL_PROMPT, then
+# fails as ssh does when BatchMode stops it asking for a password.
+dir="$(new_repo needs-prompt)"
+git -C "$dir" remote set-url origin ssh://git@example.invalid/needs-prompt.git
+cat >"$WORK/bin/ssh" <<FAKE
+#!/bin/sh
+printf 'args: %s\nGIT_TERMINAL_PROMPT=%s\n' "\$*" "\${GIT_TERMINAL_PROMPT-unset}" >>"$dir.log/ssh-calls"
+echo "git@example.invalid: Permission denied (publickey,password)." >&2
+exit 255
+FAKE
+chmod +x "$WORK/bin/ssh"
+began=$SECONDS
+run_release "$dir" success v9.0.3
+took=$((SECONDS - began))
+rm -f "$WORK/bin/ssh"
+calls="$(cat "$dir.log/ssh-calls" 2>/dev/null)"
+if [ "$STATUS" -eq 1 ] && [ "$took" -le 10 ] && grep -q '^args: .*-o BatchMode=yes' <<<"$calls" &&
+  ! grep -qv -e '^args: .*-o BatchMode=yes' -e '^GIT_TERMINAL_PROMPT=0$' <<<"$calls" &&
+  grep -qF 'harness-kit release.sh: git push ran without prompts (GIT_TERMINAL_PROMPT=0, ssh BatchMode=yes); if it needed a password or passphrase, set up a credential helper or ssh-agent, then re-run.' <<<"$ERR" &&
+  grep -qF 'STOPPED: pushing next to origin failed (above).' <<<"$ERR"; then
+  result "release.sh: a push that would need a prompt fails at once, and the message says it ran without prompts" yes ""
+else
+  result "release.sh: a push that would need a prompt fails at once, and the message says it ran without prompts" no "$(describe)
+took ${took}s; ssh calls:
+$calls"
 fi
 
 if [ "$failures" -ne 0 ]; then

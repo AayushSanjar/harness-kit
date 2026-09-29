@@ -345,6 +345,25 @@ else
   result "start-up picture: with HARNESS_KIT_EVAL set, it is in additionalContext" no "$(describe)"
 fi
 
+# THE TIME RULE. In a git repository the hook prints it, naming the branch's brief and the
+# time-limit helper's path; the reviewer's session gets the version line only.
+dir="$(new_repo time-rule)"
+run_session "$dir"
+rule="$(grep '^harness-kit time rule: ' <<<"$OUT")"
+helper="$(cd "$ROOT/plugins/harness-kit/scripts" && pwd)/time-limit.mjs"
+want="harness-kit time rule: before you run any command you expect to take over 2 minutes, write down your estimate of its time. Run it only if the approved brief ($dir/.reports/feat-x.brief.md) lists it in its Verification plan; otherwise ask the person. Never start a command in the background without a time limit: wrap it as node $helper run --limit <seconds> -- <command>. The background-guard hook refuses a background command that is not wrapped."
+normal="$(describe)"
+run_session "$dir" harness-kit:reviewer
+if [ "$rule" = "$want" ] && [ "$OUT" = "$(head -n 1 <<<"$OUT")" ] && ! grep -q 'time rule' <<<"$OUT"; then
+  result "session-start: the time rule is printed in a git repository, and not for the reviewer" yes ""
+else
+  result "session-start: the time rule is printed in a git repository, and not for the reviewer" no \
+    "want: $want
+got:  $rule
+normal session: $normal
+reviewer session: $(describe)"
+fi
+
 if [ "$failures" -ne 0 ]; then
   echo "$failures session-start case(s) failed"
   exit 1

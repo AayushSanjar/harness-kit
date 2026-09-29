@@ -350,6 +350,7 @@ const firstCiRuns = (root, when) => {
   const args = ["run", "list", "--limit", String(GH_LIMIT),
     "--json", "databaseId,headBranch,headSha,status,conclusion,createdAt,workflowName"];
   if (workflow) args.push("--workflow", workflow);
+  // no-limit: spawnSync's own 120-second timeout; gh run list starts no process of its own, so stopping it is enough
   const result = spawnSync("gh", args, { cwd: root, encoding: "utf8", timeout: 120000, maxBuffer: 256 * 1024 * 1024 });
   if (result.error || result.status !== 0) {
     return notFound(`gh run list failed: ${firstLine(result.stderr) || result.error?.message || `exit ${result.status}`}`);

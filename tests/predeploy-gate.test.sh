@@ -205,6 +205,40 @@ else
   result "deploy.sh, no config: refuses, deploy does not run" no "$(describe_deploy)"
 fi
 
+# TIME LIMITS (time-limit.mjs): a check that hangs, with a limit of 1 second and a 1-second
+# grace period; it records its pid and its child's, to show nothing of its group is left.
+HANG_CHECK='echo $$ >check.pid; sleep 30 & echo $! >check.child; wait'
+gone() {
+  local f
+  for f in "$1/check.pid" "$1/check.child"; do
+    [ -s "$f" ] || return 1
+    ! kill -0 "$(cat "$f")" 2>/dev/null || return 1
+  done
+}
+
+# 14. The gate: the check past its limit is denied as COULD NOT RUN, timed out, and its
+# whole process group is stopped (not only the shell that started it).
+dir="$(new_project hang "$HANG_CHECK")"
+HARNESS_KIT_LIMIT_CHECK_SECONDS=1 HARNESS_KIT_LIMIT_GRACE_SECONDS=1 run_gate "$dir" "forge deploy"
+sleep 0.2
+if [ "$STATUS" -eq 0 ] && is_deny "$OUT" && grep -qF 'result:  COULD NOT RUN: timed out after 1 s' <<<"$REASON" && gone "$dir"; then
+  result "predeploy-gate: a check past its limit is denied, COULD NOT RUN: timed out, and its group is gone" yes ""
+else
+  result "predeploy-gate: a check past its limit is denied, COULD NOT RUN: timed out, and its group is gone" no "$(describe)
+check: $(cat "$dir/check.pid" "$dir/check.child" 2>/dev/null | tr '\n' ' ')"
+fi
+
+# 15. deploy.sh: the check past its limit TIMED OUT, exit 124, and nothing is deployed.
+dir="$(new_project deploy-hang "$HANG_CHECK")"
+HARNESS_KIT_LIMIT_CHECK_SECONDS=1 HARNESS_KIT_LIMIT_GRACE_SECONDS=1 run_deploy "$dir"
+sleep 0.2
+if [ "$STATUS" -eq 124 ] && [ ! -e "$dir/deployed" ] && gone "$dir" &&
+  grep -qF 'the check TIMED OUT (its limit is 1 seconds; above); not deploying' <<<"$OUT"; then
+  result "deploy.sh: a check past its limit TIMED OUT; the deploy does not run" yes ""
+else
+  result "deploy.sh: a check past its limit TIMED OUT; the deploy does not run" no "$(describe_deploy)"
+fi
+
 if [ "$failures" -ne 0 ]; then
   echo "$failures predeploy-gate case(s) failed"
   exit 1

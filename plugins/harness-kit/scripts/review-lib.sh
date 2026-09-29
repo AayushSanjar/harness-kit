@@ -6,7 +6,13 @@
 # what failing means (review.sh exits, eval-reviewer.sh grades the run ERROR).
 #
 # Limits, from the environment: REVIEW_MAX_TURNS (default 40), REVIEW_MAX_BUDGET_USD
-# (default 3.00) and REVIEW_MAX_INPUT_BYTES (default 250000; see review_build_input).
+# (default 3.00) and REVIEW_MAX_INPUT_BYTES (default 250000; see review_build_input). And
+# time limits (time-limit.mjs, through limit-lib.sh): the reviewer run has the reviewer
+# limit (REVIEW_MAX_SECONDS, default 900) and the check the check limit (540); past it, each
+# is stopped with its whole process group.
+
+# shellcheck source=limit-lib.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/limit-lib.sh"
 
 REVIEW_PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REVIEW_AGENT="harness-kit:reviewer"
@@ -73,6 +79,7 @@ review_check_reads() {
 
 # review_check_section H WORK: runs the project's check command from the current folder and
 # prints the body of the CHECK COMMAND section: the command, its exit status and its output.
+# A check past its limit has exit status 124, and the helper's TIMEOUT line in its output.
 review_check_section() {
   local h="$1" work="$2" check="" check_status
   [ -f "$h/check-command" ] && check="$(head -n 1 "$h/check-command" | tr -d '\r')"
@@ -81,7 +88,7 @@ review_check_section() {
     return 0
   fi
   echo "Running the check command..." >&2
-  /bin/sh -c 'exec 2>&1; eval "$1"' harness-kit-review "$check" </dev/null >"$work/check.out"
+  hk_limited --merge check review.sh /bin/sh -c 'eval "$1"' harness-kit-review "$check" </dev/null >"$work/check.out" 2>&1
   check_status=$?
   review_format_check "$check" "$check_status" "$work/check.out"
 }
@@ -226,13 +233,15 @@ review_largest() {
 
 # review_run DIR INPUT OUT [--stream]: runs the reviewer headless in DIR on INPUT, within
 # the limits; returns claude's exit status. OUT gets the result JSON, or with --stream the
-# whole stream-json transcript, one event per line, the result event last.
+# whole stream-json transcript, one event per line, the result event last. A run past the
+# reviewer limit is stopped with its whole process group; it returns 124, with REVIEW_ERROR
+# saying so.
 review_run() {
-  local format=(--output-format json)
+  local format=(--output-format json) status
   [ "${4:-}" = --stream ] && format=(--output-format stream-json --verbose)
   (
     cd "$1" &&
-      claude -p "Review this branch. Your whole input follows: judge it as your instructions say, and end with the VERDICT line." \
+      hk_limited review reviewer claude -p "Review this branch. Your whole input follows: judge it as your instructions say, and end with the VERDICT line." \
         --disallowedTools Write Edit NotebookEdit Bash WebFetch WebSearch \
         --plugin-dir "$REVIEW_PLUGIN_ROOT" \
         --agent "$REVIEW_AGENT" \
@@ -241,6 +250,9 @@ review_run() {
         --max-budget-usd "$REVIEW_BUDGET" \
         <"$2" >"$3"
   )
+  status=$?
+  [ "$status" -ne 124 ] || REVIEW_ERROR="the reviewer ran longer than its limit of $(hk_limit review) seconds (TIMEOUT) and was stopped"
+  return "$status"
 }
 
 # review_parse WORK RUN_STATUS NAME: checks the run and the VERDICT line in WORK/out.json;

@@ -78,7 +78,7 @@ check "claude plugin validate --strict (plugin: plugins/harness-kit)" "$out" $?
 # empty folder outside any git repository, so there is no report line, no start-up picture
 # and no .reports/ folder is made here, and without HARNESS_KIT_EVAL, so there is no warning (tests/ship.test.sh
 # covers both).
-expected="harness-kit 0.16.0 loaded"
+expected="harness-kit 0.17.0 loaded"
 empty="$(mktemp -d)"
 out="$(cd "$empty" && env -u HARNESS_KIT_EVAL -u CLAUDE_PROJECT_DIR GIT_CEILING_DIRECTORIES="$(dirname "$empty")" \
   node "$PLUGIN/scripts/session-start.mjs" </dev/null 2>&1)"
@@ -214,6 +214,44 @@ check "tests/brief-guard.test.sh (all cases)" "" $?
 bash "$ROOT/tests/session-start.test.sh"
 check "tests/session-start.test.sh (all cases)" "" $?
 
+# (aa) The time-limit helper's cases (time-limit.mjs: the hard stop, its signals, its
+# registry and sweep) and check-limits.mjs's, with tiny limits, one per line.
+bash "$ROOT/tests/time-limit.test.sh"
+check "tests/time-limit.test.sh (all cases)" "" $?
+
+# (ab) background-guard.mjs's cases: background Bash calls given to the hook, never run.
+bash "$ROOT/tests/background-guard.test.sh"
+check "tests/background-guard.test.sh (all cases)" "" $?
+
+# (ac) Nothing in the plugin starts long work without the time-limit helper, and every
+# script that makes a temporary file cleans it up on any exit (check-limits.mjs).
+out="$(node "$PLUGIN/scripts/check-limits.mjs" 2>&1)"
+check "check-limits.mjs on the plugin's scripts: no long work without the time-limit helper" "$out" $?
+
+# (ad) The hooks that run a check fail closed on time: the check's own limit
+# (HOOK_CHECK_MAX_SECONDS, in stop-gate.mjs and predeploy-gate.mjs) plus the helper's grace
+# period (time-limit.mjs) is below the hook's timeout in hooks.json, so the hook stops its
+# check and decides before Claude Code gives up on it (a hook that times out decides
+# nothing, and the stop or the deploy would go ahead).
+out="$(node -e '
+  const fs = require("fs");
+  const [hooksFile, scripts] = process.argv.slice(1);
+  const hooks = JSON.parse(fs.readFileSync(hooksFile, "utf8")).hooks;
+  const grace = Number(/export const GRACE = \{ env: "[A-Z_]+", seconds: ([0-9]+) \}/.exec(fs.readFileSync(`${scripts}/time-limit.mjs`, "utf8"))?.[1]);
+  const problems = [];
+  if (!(grace > 0)) problems.push("no grace period (GRACE) in time-limit.mjs");
+  for (const [event, script] of [["Stop", "stop-gate.mjs"], ["PreToolUse", "predeploy-gate.mjs"]]) {
+    const hook = hooks[event]?.flatMap((m) => m.hooks).find((h) => (h.args ?? []).some((a) => a.endsWith(`/${script}`)));
+    const limit = Number(/const HOOK_CHECK_MAX_SECONDS = ([0-9]+);/.exec(fs.readFileSync(`${scripts}/${script}`, "utf8"))?.[1]);
+    if (!hook) problems.push(`hooks.json runs no ${script} on ${event}`);
+    else if (!(hook.timeout > 0)) problems.push(`the hook running ${script} has no timeout in hooks.json`);
+    if (!(limit > 0)) problems.push(`${script} has no HOOK_CHECK_MAX_SECONDS`);
+    else if (hook && !(limit + grace < hook.timeout)) problems.push(`${script}: its check limit of ${limit} seconds plus the grace period of ${grace} is not below its hook timeout of ${hook.timeout} seconds`);
+  }
+  if (problems.length > 0) { console.log(problems.join("\n")); process.exit(1); }
+' "$PLUGIN/hooks/hooks.json" "$PLUGIN/scripts" 2>&1)"
+check "hooks.json: the Stop hook's check limit plus the grace period is below its timeout; predeploy-gate's likewise" "$out" $?
+
 # (y) This repository checks its own escaped defects (the person's decision):
 # check-defects.mjs on .harness/defects.tsv, which must stay append-only, with every line
 # the branch adds well formed. check-defects.mjs finds the base (main, or origin/main) and
@@ -292,11 +330,11 @@ done
 # OPEN spec rules before planning and never approves its own brief.
 skill="$PLUGIN/skills/plan/SKILL.md"
 got="$(sed -n '/^# Brief: /,/^```$/p' "$skill" | grep '^## ' | tr '\n' '|')"
-want="## Goal|## Scope|## Spec rules touched|## Acceptance tests|## Blast radius|## New thresholds|## Protected files expected|"
+want="## Goal|## Scope|## Spec rules touched|## Acceptance tests|## Verification plan|## Blast radius|## New thresholds|## Protected files expected|"
 out="sections in the brief template: $got"
 [ "$got" = "$want" ] && grep -q 'stop before planning further' "$skill" && grep -q '\.harness/review-reads' "$skill" &&
   grep -q 'Never write `.reports/<branch>.brief.approved`, and never run `approve-brief.sh`' "$skill"
-check "skills/plan/SKILL.md: the brief's seven sections in order; OPEN rules raised first; never approves itself" "$out" $?
+check "skills/plan/SKILL.md: the brief's eight sections in order; OPEN rules raised first; never approves itself" "$out" $?
 
 # (m) No report is tracked in this repository.
 out="$(cd "$ROOT" && node "$PLUGIN/scripts/check-reports.mjs" 2>&1)"

@@ -12,7 +12,15 @@
 # With no .harness/predeploy-command it refuses instead of deploying unchecked:
 # someone who chose this script expects a check, and a run that checked nothing must
 # not look like one that passed.
+#
+# The check runs through the time-limit helper (time-limit.mjs) under the check limit (540
+# seconds by default): past it, its whole process group is stopped, the check TIMED OUT,
+# and nothing is deployed (exit 124). The deploy itself has no limit: it is the person's own
+# command, and a deploy killed halfway is worse than a slow one.
 set -u
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=limit-lib.sh
+. "$HERE/limit-lib.sh"
 
 if [ $# -eq 0 ]; then
   echo "usage: deploy.sh <deploy command and its arguments>" >&2
@@ -36,11 +44,15 @@ if [ -z "$check" ]; then
 fi
 
 echo "harness-kit deploy.sh: running the pre-deploy check in $root: $check" >&2
-(cd "$root" && /bin/sh -c "$check")
+(cd "$root" && hk_limited check deploy.sh /bin/sh -c "$check")
 status=$?
 
 case "$status" in
   0) ;;
+  124)
+    echo "harness-kit deploy.sh: the check TIMED OUT (its limit is $(hk_limit check) seconds; above); not deploying: $*" >&2
+    exit 124
+    ;;
   126 | 127)
     echo "harness-kit deploy.sh: the check COULD NOT RUN (exit $status); not deploying: $*" >&2
     exit "$status"
@@ -52,4 +64,5 @@ case "$status" in
 esac
 
 echo "harness-kit deploy.sh: the check passed; deploying: $*" >&2
+# no-limit: the deploy is the person's own command, and a deploy killed halfway is worse than a slow one
 exec "$@"

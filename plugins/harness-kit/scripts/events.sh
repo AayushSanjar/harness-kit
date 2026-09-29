@@ -17,13 +17,16 @@
 #           STOPPED; replay-faults.sh: REPLAYED; land.sh, ship.sh, release.sh and
 #           stop-gate.mjs: CHECKED (harness_check_event, below)
 #   what    STOPPED: a short reason, such as check-failed or no-brief (ship.sh's and
-#           release.sh's refusals start "refused-"); REPLAYED:
+#           release.sh's refusals start "refused-"; a TIMEOUT's, from the time-limit helper,
+#           ends "-timeout": check-timeout, index-timeout, review-timeout, ci-timeout or
+#           git-timeout); REPLAYED:
 #           "killed=K,survived=S,timeout=T,error=E,baseline=Bs" (B: the baseline's seconds;
 #           before v0.16.0, "killed=K,survived=S,error=E");
 #           LANDED: "-"; SHIPPED: the base; RELEASED: the tag; CHECKED: PASS or FAIL
 #   detail  STOPPED: the message printed after "STOPPED:" or "REFUSED:"; REPLAYED: "all", or
 #           "ids:" and the ids asked for; LANDED: the patch's path; SHIPPED and RELEASED: what
-#           was merged; CHECKED: PASS "-"; FAIL "exit N: " (or "signal S: ") and the failing
+#           was merged; CHECKED: PASS "-"; FAIL "exit N: " (or "signal S: ", or "timeout Ns: "
+#           for a check the time-limit helper stopped at its limit of N seconds) and the failing
 #           checks' names joined by "; ", or "no FAIL lines" when the check printed none
 #
 # CHECKED lines are written only when the result changes (harness_check_event), so the log
@@ -63,8 +66,9 @@ harness_check_names() {
 harness_check_set() { LC_ALL=C sort -u; }
 
 # harness_check_event TOOL BRANCH STATUS: record one run of the project's check, its output
-# (stdout and stderr) on stdin. STATUS is its exit status, or "signal S" when a signal ended
-# it; 0 is PASS, anything else FAIL. An empty BRANCH means the current one.
+# (stdout and stderr) on stdin. STATUS is its exit status, "signal S" when a signal ended
+# it, or "timeout Ns" when the time-limit helper stopped it at its limit of N seconds; 0 is
+# PASS, anything else FAIL. An empty BRANCH means the current one.
 #
 # A line is appended only when the result differs from the latest CHECKED line for the same
 # branch, whichever tool wrote it: PASS after FAIL, FAIL after PASS, or FAIL with a

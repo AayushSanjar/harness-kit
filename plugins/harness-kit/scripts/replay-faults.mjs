@@ -22,9 +22,9 @@
 //       and <id>.timeout (a run stopped by a time limit, below). With
 //       HARNESS_KIT_REPLAY_BASELINE_FROM set to the results folder of a baseline part of the
 //       same snapshot (as harness-kit's CI shards do), its baseline.seconds sets the run
-//       limit from the start. Progress goes to stderr. On SIGINT or SIGTERM it stops every
-//       running check (its whole process group), removes every worktree and exits 130 or
-//       143. Exit 0 when every run ended; 2 when OUT cannot be written, the baseline folder
+//       limit from the start. Progress goes to stderr. On SIGINT, SIGTERM or SIGHUP, or a
+//       closed output pipe (EPIPE), it stops every running check (its whole process group),
+//       removes every worktree and exits 130, 143, 129 or 141. Exit 0 when every run ended; 2 when OUT cannot be written, the baseline folder
 //       cannot be used, or the baseline ran longer than its limit (every other run is then
 //       stopped: no verdict can be read without the baseline).
 //   node replay-faults.mjs judge MUTATIONS TREE COUNTS DIR...
@@ -59,8 +59,11 @@
 //
 // THE TIME LIMITS. Every check run has one; when it runs out, the run's process group is
 // sent SIGTERM, then SIGKILL when the grace period ends if the run has not ended by then,
-// and the run is a TIMEOUT. When a stopped run's own process ends, anything left in its
-// process group is killed. They come from the harness settings below (each
+// and the run is a TIMEOUT. When a run's own process ends, anything left in its process
+// group is killed. The stopping is the time-limit helper's (time-limit.mjs's startLimited),
+// which also records each run's process group, and this process records each worktree, in
+// the helper's registry: a replay that is force-killed leaves them to the helper's sweep,
+// which runs when a replay (or any other use of the helper) next starts. They come from the harness settings below (each
 // overridden by the environment variable of the same name; the tests set tiny values):
 //   a fault's run    M times the baseline's measured seconds in this session, and never
 //                    less than F. A run that started before the baseline ended gets its
@@ -91,10 +94,11 @@
 //   no result    no part ran it (a part's results are missing): ERROR.
 //   KILLED       with the fault, a FAIL line for the entry's check and a non-zero exit.
 //   SURVIVED     otherwise.
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
+import { register, startLimited, sweep, unregister } from "./time-limit.mjs";
 
 const FIELDS = ["id", "file", "find", "replacement", "check"];
 const VERSION = /v?\d+\.\d+\.\d+/;
@@ -320,6 +324,7 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
   if (perRun !== null) say(`time limit per run: ${secs(perRun)} seconds (${runHow(measured)})`);
   else if (tasks.some((t) => t.entry)) say("time limit per run: set when the baseline ends");
 
+  sweep(); // leftovers of a replay that was force-killed
   const began = Date.now();
   const elapsed = (since) => (Date.now() - since) / 1000;
   const running = new Map();
@@ -329,16 +334,25 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
   let baselineOver = null;
   let sessionTimer = null;
 
+  // Each worktree's record in the time-limit helper's registry, by its path.
+  const records = new Map();
   const removeWorktree = (worktree) => {
     git(["-C", project, "worktree", "remove", "--force", worktree]);
     rmSync(worktree, { recursive: true, force: true });
     git(["-C", project, "worktree", "prune"]);
+    if (records.has(worktree)) unregister(records.get(worktree));
+    records.delete(worktree);
   };
 
   // A fresh worktree of the snapshot, with a symlink to each of the project's node_modules
   // folders; returns its path, or throws with why.
   const newWorktree = () => {
     const worktree = mkdtempSync(join(tmpdir(), "harness-kit-replay-wt."));
+    try {
+      records.set(worktree, register("worktree", worktree, { repo: project }));
+    } catch {
+      // A registry that cannot be written costs only the sweep.
+    }
     const added = git(["-C", project, "-c", "core.hooksPath=/dev/null", "worktree", "add", "--detach", "--quiet", worktree, snapshot]);
     if (added.status !== 0) {
       removeWorktree(worktree);
@@ -349,14 +363,6 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
       if (existsSync(dirname(link)) && !existsSync(link)) symlinkSync(join(project, rel), link);
     }
     return worktree;
-  };
-
-  const signalGroup = (job, signal) => {
-    try {
-      process.kill(-job.child.pid, signal);
-    } catch {
-      // Already gone.
-    }
   };
 
   const done = () => {
@@ -374,12 +380,9 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
   };
 
   // Stops a run: SIGTERM to its process group, then SIGKILL when the grace period ends, if
-  // its own process has not ended by then (end() kills what is left in the group when it has).
-  const terminate = (job) => {
-    job.stopped = true;
-    signalGroup(job, "SIGTERM");
-    if (job.grace === null) job.grace = setTimeout(() => signalGroup(job, "SIGKILL"), grace * 1000);
-  };
+  // its own process has not ended by then (the helper kills what is left in the group when
+  // it has).
+  const terminate = (job) => job.handle.stop();
 
   // A run that passes its limit: it is stopped, and it is a TIMEOUT.
   const overLimit = (job, limit, how) => {
@@ -406,8 +409,7 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
       next = tasks.length;
       for (const job of running.values()) {
         job.over ??= { kind: "session", limit };
-        job.stopped = true;
-        signalGroup(job, "SIGKILL");
+        job.handle.kill();
       }
       done();
     }, Math.max(0, (limit - elapsed(began)) * 1000));
@@ -430,24 +432,21 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
     }
     const log = openSync(join(out, `${id}.log`), "w");
     const targeted = only && entry;
-    const child = spawn("/bin/sh", ["-c", targeted ? `${check} --only "$1"` : check, "harness-kit-replay", ...(targeted ? [entry.check] : [])], {
+    const handle = startLimited("/bin/sh", ["-c", targeted ? `${check} --only "$1"` : check, "harness-kit-replay", ...(targeted ? [entry.check] : [])], {
       cwd: worktree,
-      detached: true,
       stdio: ["ignore", log, log],
       env: { ...process.env, HARNESS_KIT_REPLAY: "1", HARNESS_KIT_REPLAY_OUTER: "1" },
+      grace,
     });
     closeSync(log);
-    const job = { child, worktree, task, began: Date.now(), timer: null, over: null, grace: null, stopped: false };
-    running.set(child.pid, job);
+    const job = { handle, worktree, task, began: handle.began, timer: null, over: null };
+    running.set(id, job);
     if (!entry) limitRun(job, baselineLimit, "the baseline's limit");
     else if (perRun !== null) limitRun(job, perRun, runHow(measured));
     const end = (status) => {
-      if (!running.has(child.pid)) return;
-      running.delete(child.pid);
+      if (!running.has(id)) return;
+      running.delete(id);
       clearTimeout(job.timer);
-      clearTimeout(job.grace);
-      // A stopped run's own process has ended: what is left in its group goes too.
-      if (job.stopped) signalGroup(job, "SIGKILL");
       removeWorktree(worktree);
       finished += 1;
       const seconds = elapsed(job.began);
@@ -477,10 +476,9 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
       startMore();
       done();
     };
-    child.on("exit", (code, signal) => end(code ?? 128 + (signal === "SIGKILL" ? 9 : 15)));
-    child.on("error", (error) => {
-      writeFileSync(join(out, `${id}.error`), `the check could not start: ${error.message}\n`);
-      end(127);
+    handle.result.then((result) => {
+      if (result.error) writeFileSync(join(out, `${id}.error`), `the check could not start: ${result.error.message}\n`);
+      end(result.error ? 127 : result.status);
     });
   };
 
@@ -496,6 +494,12 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
   };
   process.on("SIGINT", () => stop(130));
   process.on("SIGTERM", () => stop(143));
+  process.on("SIGHUP", () => stop(129));
+  for (const stream of [process.stdout, process.stderr]) {
+    stream.on("error", (error) => {
+      if (error.code === "EPIPE") stop(141);
+    });
+  }
 
   limitSession(); // the session's limit, from the start
   startMore();

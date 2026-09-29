@@ -35,7 +35,8 @@ result() {
 # $FAKE_QUEUE (in name order, consumed) or else $FAKE_JSON, and exits $FAKE_EXIT. Asked for
 # stream-json, it prints two events before that result, as a real transcript has. With FAKE_KILL (the script's path) it first sends SIGTERM
 # to the eval-reviewer.sh that started it, as an interrupted run: the last of the unbroken
-# chain of ancestors running it (its subshells share its command line).
+# chain of ancestors running it (its subshells share its command line). With FAKE_SLEEP it
+# writes its pid to $FAKE_LOG/claude.pid and sleeps that long before printing anything.
 mkdir -p "$WORK/bin"
 cat >"$WORK/bin/claude" <<'FAKE'
 #!/bin/sh
@@ -53,6 +54,7 @@ for link in node_modules src/node_modules packages/web/node_modules; do
 done >"$FAKE_LOG/links"
 cat node_modules/pkg/index.js >"$FAKE_LOG/through-link" 2>/dev/null
 echo "$(($(cat "$FAKE_LOG/calls" 2>/dev/null || echo 0) + 1))" >"$FAKE_LOG/calls"
+[ -z "${FAKE_SLEEP:-}" ] || { echo $$ >"$FAKE_LOG/claude.pid"; sleep "$FAKE_SLEEP"; }
 if [ -n "${FAKE_KILL:-}" ]; then
   pid=$PPID target=""
   while [ "$pid" -gt 1 ]; do
@@ -297,6 +299,22 @@ if [ "$STATUS" -eq 1 ] && [ "$(row d1)" = 'd1 defect - ERROR $0.1234 12.3' ] &&
   result "eval: a failed run is an ERROR, the next case runs, and no worktree is left" yes ""
 else
   result "eval: a failed run is an ERROR, the next case runs, and no worktree is left" no "$(describe)"
+fi
+
+# 8b. A run past its limit (REVIEW_MAX_SECONDS=1, a 1-second grace period) is stopped with
+# its process group and is an ERROR, "timed out after 1 seconds"; no worktree is left.
+dir="$(new_repo timed-out)"
+cases "$dir" $'d1\tdefect\tbase\tdefect\tsrc/auth\\.js\texpir'
+REVIEW_MAX_SECONDS=1 HARNESS_KIT_LIMIT_GRACE_SECONDS=1 FAKE_SLEEP=30 FAKE_JSON="$CAUGHT_JSON" run_eval "$dir"
+sleep 0.2
+if [ "$STATUS" -eq 1 ] && [ "$(row d1)" = 'd1 defect - ERROR $0.0000 0.0' ] &&
+  grep -q 'd1 run 1 is an ERROR: timed out after 1 seconds: the reviewer ran longer than its limit of 1 seconds (TIMEOUT) and was stopped$' <<<"$ERR" &&
+  [ -s "$dir.log/claude.pid" ] && ! kill -0 "$(cat "$dir.log/claude.pid")" 2>/dev/null &&
+  untouched "$dir" && no_worktree "$dir" && [ -z "$(ls -A "$dir.tmp/harness-kit-live" 2>/dev/null)" ]; then
+  result "eval-reviewer: a run past its limit is an ERROR, timed out, and its worktree is removed" yes ""
+else
+  result "eval-reviewer: a run past its limit is an ERROR, timed out, and its worktree is removed" no "$(describe)
+records: $(ls -A "$dir.tmp/harness-kit-live" 2>/dev/null)"
 fi
 
 # 9. A forced interruption: SIGTERM while the reviewer runs. The worktree is still removed.

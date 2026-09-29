@@ -7,6 +7,16 @@
 #   CI_POLL     seconds between polls
 #   CI_RESUME   how to resume after a stop, as a phrase ("re-run release.sh v0.15.1")
 # and defines `stop REASON MESSAGE`, which records the stop, prints it and exits.
+#
+# TIME LIMITS (time-limit.mjs, through limit-lib.sh, which this file sources). Each gh read
+# runs under the gh-read limit (SHIP_GH_READ_SECONDS, 60 by default): a read past it is a
+# failed try, retried like any other. Each gh run watch runs under the CI-run limit
+# (SHIP_CI_RUN_SECONDS, 900 by default): past it, ci_wait stops with ci-timeout, the run's
+# URL and how to resume; nothing was merged, pushed to the base or tagged. Each is stopped
+# with its whole process group.
+
+# shellcheck source=limit-lib.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/limit-lib.sh"
 
 # ci_notify MESSAGE: a macOS notification (osascript), so a person who looked away while CI
 # ran sees the end. Skipped when not on macOS (uname -s is not Darwin); a failure is ignored.
@@ -45,16 +55,18 @@ ci_parse() {
 # Returns 0 with ci_parse's lines in CI_READ; returns 1 when every try failed, with the last
 # try's error in CI_ERROR. gh's stderr is shown as it comes.
 ci_gh_read() {
-  local kind="$1" try=1 out errfile err code
+  local kind="$1" try=1 out err code
   shift
+  # One file for gh's stderr, removed on exit (hk_temp); /dev/null if it cannot be made.
+  [ -n "${CI_ERRFILE:-}" ] || hk_temp CI_ERRFILE harness-kit-gh || CI_ERRFILE=/dev/null
   while :; do
-    errfile="$(mktemp "${TMPDIR:-/tmp}/harness-kit-gh.XXXXXX")" || errfile=/dev/null
-    out="$(gh "$@" 2>"$errfile")"
+    out="$(hk_limited gh-read "$CI_TOOL" gh "$@" 2>"$CI_ERRFILE")"
     code=$?
-    err="$(cat "$errfile" 2>/dev/null)"
-    [ "$errfile" = /dev/null ] || rm -f "$errfile"
+    err="$(cat "$CI_ERRFILE" 2>/dev/null)"
     [ -z "$err" ] || printf '%s\n' "$err" >&2
-    if [ "$code" -eq 0 ]; then
+    if [ "$code" -eq 124 ]; then
+      CI_ERROR="gh $1 $2 did not answer within its limit of $(hk_limit gh-read) seconds (TIMEOUT)"
+    elif [ "$code" -eq 0 ]; then
       CI_READ="$(ci_parse "$kind" <<<"$out")" && return 0
       CI_ERROR="gh $1 $2 printed output that is not the expected JSON: $(printf '%s' "$out" | tr '\n' ' ' | cut -c1-120)"
     else
@@ -137,8 +149,10 @@ ci_wait() {
     try=1
     while :; do
       echo "harness-kit $CI_TOOL: waiting for CI run $id to finish..." >&2
-      gh run watch "$id" --exit-status --compact --interval "$CI_POLL" >&2 </dev/null
+      hk_limited ci-run "$CI_TOOL" gh run watch "$id" --exit-status --compact --interval "$CI_POLL" >&2 </dev/null
       watched=$?
+      [ "$watched" -ne 124 ] ||
+        stop ci-timeout "CI run $id did not finish within its limit of $(hk_limit ci-run) seconds (TIMEOUT, above): ${url:-(no URL listed)}. The watch was stopped. Nothing was merged, pushed to the base branch or tagged. ${CI_RESUME:-re-run $CI_TOOL} to keep waiting."
       ci_gh_read view run view "$id" --json status,conclusion,url || ci_unknown "CI run $id" "Run: ${url:-(no URL listed)}"
       { read -r status; read -r conclusion; read -r view_url; } <<<"$CI_READ"
       [ -z "$view_url" ] || url="$view_url"

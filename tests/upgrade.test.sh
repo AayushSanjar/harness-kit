@@ -68,6 +68,11 @@ if [ "$1" = -p ]; then
     if (errors) init.plugin_errors = JSON.parse(errors);
     console.log(JSON.stringify(init));
   ' "${FAKE_LOADED:-0.9.0}" "${FAKE_PLUGIN_ERRORS:-}"
+  # The session's pid, and a child of its own (as a real session starts MCP servers and
+  # hooks), for the process-group case.
+  echo $$ >"$FAKE_LOG/session.pid"
+  sleep 30 &
+  echo $! >"$FAKE_LOG/session.child"
   exec sleep 30
 fi
 echo "fake claude: unexpected call: $*" >&2
@@ -348,6 +353,22 @@ else
   result "upgrade.sh: uncommitted changes stop it before anything; unreachable upstream stops it before the draft" no "dirty: $dirty
 dirty claude calls: $dirty_calls
 no upstream: $(describe)"
+fi
+
+# 12. After the init event, the headless session is stopped with its whole process group:
+# the session and the child it started are both gone when upgrade.sh ends.
+dir="$(new_project whole-group)"
+HARNESS_KIT_LIMIT_GRACE_SECONDS=1 run_upgrade "$dir" y 0.9.0
+sleep 0.2
+left=""
+for f in session.pid session.child; do
+  [ -s "$dir.log/$f" ] && kill -0 "$(cat "$dir.log/$f")" 2>/dev/null && left="$left $f"
+done
+if [ "$STATUS" -eq 0 ] && [ -s "$dir.log/session.child" ] && [ -z "$left" ]; then
+  result "upgrade.sh: after the init event, the headless session's whole process group is gone" yes ""
+else
+  result "upgrade.sh: after the init event, the headless session's whole process group is gone" no "$(describe)
+still running:${left:- nothing}"
 fi
 
 if [ "$failures" -ne 0 ]; then

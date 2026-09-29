@@ -32,11 +32,13 @@ result() {
 }
 
 # The fake claude: records how it was called, then prints $FAKE_JSON and exits $FAKE_EXIT.
+# With FAKE_SLEEP, it first writes its pid to $FAKE_LOG/claude.pid and sleeps that long.
 mkdir -p "$WORK/bin"
 cat >"$WORK/bin/claude" <<'FAKE'
 #!/bin/sh
 printf '%s\n' "$@" >"$FAKE_LOG/args"
 cat >"$FAKE_LOG/stdin"
+[ -z "${FAKE_SLEEP:-}" ] || { echo $$ >"$FAKE_LOG/claude.pid"; sleep "$FAKE_SLEEP"; }
 cat "$FAKE_JSON"
 exit "${FAKE_EXIT:-0}"
 FAKE
@@ -173,6 +175,19 @@ if [ "$STATUS" -ne 0 ] && [ ! -e "$dir/.harness/reviews.tsv" ] && grep -q 'the r
   result "review.sh: a failed run exits non-zero and appends nothing" yes ""
 else
   result "review.sh: a failed run exits non-zero and appends nothing" no "$(describe)"
+fi
+
+# 4b. A reviewer run past its limit (REVIEW_MAX_SECONDS=1, a 1-second grace period): it is
+# stopped with its process group, review.sh exits 5 with the TIMEOUT, and nothing is appended.
+dir="$(new_repo reviewer-hangs)"
+REVIEW_MAX_SECONDS=1 HARNESS_KIT_LIMIT_GRACE_SECONDS=1 FAKE_SLEEP=30 run_review "$dir" "$PASS_JSON"
+sleep 0.2
+if [ "$STATUS" -eq 5 ] && [ ! -e "$dir/.harness/reviews.tsv" ] && [ -s "$dir.log/claude.pid" ] && ! kill -0 "$(cat "$dir.log/claude.pid")" 2>/dev/null &&
+  grep -qF 'harness-kit review.sh: the reviewer ran longer than its limit of 1 seconds (TIMEOUT) and was stopped; nothing was appended to .harness/reviews.tsv' <<<"$ERR" &&
+  grep -qF 'limits: 40 turns, $3.00, 1 seconds' <<<"$ERR"; then
+  result "review.sh: a reviewer run past its limit exits 5 with TIMEOUT; nothing is appended" yes ""
+else
+  result "review.sh: a reviewer run past its limit exits 5 with TIMEOUT; nothing is appended" no "$(describe)"
 fi
 
 # 5. A VERDICT line that leaves out a checklist item: exit non-zero, nothing appended.

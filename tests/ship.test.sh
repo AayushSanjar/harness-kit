@@ -311,7 +311,7 @@ if [ "$STATUS" -eq 0 ] &&
   grep -qF "write your final report to $dir/.reports/feature.md" <<<"$line2" &&
   grep -qF '"## Summary"' <<<"$line2" && grep -q 'at most 15 lines' <<<"$line2" &&
   grep -q 'Never commit it' <<<"$line2" &&
-  [ "$(grep -vc '^harness-kit start-up: ' <<<"$OUT")" = 5 ] && [ "$(grep -c '^harness-kit start-up: ' <<<"$OUT")" = 5 ] &&
+  [ "$(grep -vc '^harness-kit start-up: ' <<<"$OUT")" = 6 ] && [ "$(grep -c '^harness-kit start-up: ' <<<"$OUT")" = 5 ] &&
   grep -q 'removed the stale report .reports/gone.md' <<<"$ERR" &&
   grep -q 'removed the stale report .reports/old.md' <<<"$ERR" &&
   grep -q 'removed the stale commit draft .reports/gone.commit.txt' <<<"$ERR" &&
@@ -1200,6 +1200,95 @@ recorded: $recorded (brief $brief_sha)
 after a later no: $after_no
 ship: exit $STATUS
 $ERR"
+fi
+
+# ---------------------------------------------------------------------------------------
+# TIME LIMITS (time-limit.mjs). A check that hangs, with a limit of 1 second and a 1-second
+# grace period: each case waits for real for those only. The hanging check records its pid
+# and its child's, so a case can see that nothing of its process group is left.
+# ---------------------------------------------------------------------------------------
+# hang_script FILE LOG: a check that writes its pid and a child's to LOG, then waits.
+hang_script() {
+  printf 'echo "PASS started"\necho $$ >"%s/hang.pid"\nsleep 30 &\necho $! >"%s/hang.child"\nwait\n' "$2" "$2" >"$1"
+}
+# left LOG: the pids of the hanging check still running, or nothing.
+left() {
+  local f
+  for f in "$1/hang.pid" "$1/hang.child"; do
+    [ -f "$f" ] && kill -0 "$(cat "$f")" 2>/dev/null && printf '%s ' "$(cat "$f")"
+  done
+}
+
+# T1. land.sh: the check past its limit stops check-timeout, the patch applied; the check's
+# group is gone, and the result is recorded as a FAIL with "timeout 1s".
+dir="$(new_land land-hang 0 'sh scripts/hang.sh --skip-reviewed')"
+hang_script "$dir/scripts/hang.sh" "$dir.log"
+head_before="$(rev "$dir" HEAD)"
+OUT="$(cd "$dir" && HARNESS_KIT_LIMIT_CHECK_SECONDS=1 HARNESS_KIT_LIMIT_GRACE_SECONDS=1 bash "$LAND" "$WORK/land-hang.patch" <<<"yes" 2>&1)"
+STATUS=$? ERR=""
+sleep 0.2
+if [ "$STATUS" -eq 1 ] && [ -z "$(left "$dir.log")" ] &&
+  grep -qF 'harness-kit land.sh: TIMEOUT: `/bin/sh -c sh scripts/hang.sh --skip-reviewed` ran longer than its limit of 1 seconds (check)' <<<"$OUT" &&
+  grep -qF 'STOPPED: the check did not finish within its limit of 1 seconds (TIMEOUT, above): sh scripts/hang.sh --skip-reviewed. It was stopped. The patch IS applied and nothing was committed.' <<<"$OUT" &&
+  [ "$(git -C "$dir" status --porcelain --untracked-files=no)" = " M app.txt" ] && [ "$(rev "$dir" HEAD)" = "$head_before" ] &&
+  [ "$(events "$dir")" = "$(printf 'land.sh\tfeature\tCHECKED\tFAIL\nland.sh\tfeature\tSTOPPED\tcheck-timeout')" ] &&
+  [ "$(event_detail "$dir" 1)" = "timeout 1s: no FAIL lines" ] && ! grep -q LANDED <<<"$OUT"; then
+  result "land.sh: a check past its limit stops check-timeout; the patch IS applied; the check's group is gone" yes ""
+else
+  result "land.sh: a check past its limit stops check-timeout; the patch IS applied; the check's group is gone" no "$(describe)
+still running: $(left "$dir.log")
+events: $(events "$dir") / $(event_detail "$dir" 1)"
+fi
+
+# T2. ship.sh: the check past its limit stops check-timeout before any review: no claude
+# call, nothing pushed, no gh call; the check's group is gone.
+dir="$(new_repo ship-hang)"
+hang_script "$dir/.harness/check.sh" "$dir.log"
+git -C "$dir" commit -q -am "feature: a check that hangs"
+head_before="$(rev "$dir" HEAD)"
+HARNESS_KIT_LIMIT_CHECK_SECONDS=1 HARNESS_KIT_LIMIT_GRACE_SECONDS=1 run_ship "$dir" "$PASS_JSON" success
+sleep 0.2
+if [ "$STATUS" -eq 1 ] && [ -z "$(left "$dir.log")" ] &&
+  grep -qF 'STOPPED: the check did not finish within its limit of 1 seconds (TIMEOUT, above): sh .harness/check.sh --skip-reviewed. It was stopped, and no review was started.' <<<"$ERR" &&
+  [ ! -e "$dir.log/claude-args" ] && [ ! -e "$dir.log/gh-calls" ] && [ ! -e "$dir/.harness/reviews.tsv" ] &&
+  [ "$(rev "$dir" HEAD)" = "$head_before" ] && [ -z "$(remote_rev "$dir" feature)" ] &&
+  [ "$(events "$dir")" = "$(printf 'ship.sh\tfeature\tCHECKED\tFAIL\nship.sh\tfeature\tSTOPPED\tcheck-timeout')" ]; then
+  result "ship.sh: a check past its limit stops check-timeout before any review" yes ""
+else
+  result "ship.sh: a check past its limit stops check-timeout before any review" no "$(describe)
+still running: $(left "$dir.log")
+events: $(events "$dir")"
+fi
+
+# T3. ship.sh: a hangup while the check runs (sent to ship.sh's process group, as a closed
+# terminal sends it) removes its temporary folder and its registry record, stops the
+# check's group, and exits 129.
+dir="$(new_repo ship-hup)"
+hang_script "$dir/.harness/check.sh" "$dir.log"
+git -C "$dir" commit -q -am "feature: a check that hangs"
+brief_for "$dir"
+printf 'success\n' >"$dir.log/conclusion"
+mkdir -p "$dir.log/tmp"
+set -m
+(cd "$dir" && exec env PATH="$WORK/bin:$PATH" FAKE_LOG="$dir.log" FAKE_JSON="$PASS_JSON" TMPDIR="$dir.log/tmp" \
+  HARNESS_KIT_LIMIT_GRACE_SECONDS=1 bash "$SHIP") >"$dir.log/out" 2>&1 &
+ship_pid=$!
+set +m
+for _ in $(seq 1 50); do [ -s "$dir.log/hang.child" ] && break; sleep 0.1; done
+during="$(ls -d "$dir.log/tmp"/harness-kit-ship-check.* 2>/dev/null | wc -l | tr -d ' ')"
+kill -HUP -- "-$ship_pid"
+wait "$ship_pid"
+STATUS=$?
+sleep 0.2
+OUT="$(cat "$dir.log/out")" ERR=""
+if [ "$STATUS" -eq 129 ] && [ "$during" = 1 ] && [ -z "$(left "$dir.log")" ] &&
+  [ -z "$(ls "$dir.log/tmp" | grep -v '^harness-kit-live$')" ] && [ -z "$(ls "$dir.log/tmp/harness-kit-live" 2>/dev/null)" ]; then
+  result "ship.sh: a hangup during the check removes its temporary folder and stops the check's group" yes ""
+else
+  result "ship.sh: a hangup during the check removes its temporary folder and stops the check's group" no "$(describe)
+check folders during the check: $during
+left in the temp folder: $(ls -R "$dir.log/tmp")
+still running: $(left "$dir.log")"
 fi
 
 if [ "$failures" -ne 0 ]; then

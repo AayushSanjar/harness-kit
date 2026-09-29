@@ -23,7 +23,10 @@
 #                          section says so when the branch has no brief
 # Limits, from the environment: REVIEW_MAX_TURNS (default 40), REVIEW_MAX_BUDGET_USD
 # (default 3.00) and REVIEW_MAX_INPUT_BYTES (default 250000, the most the reviewer's input
-# may hold; review-lib.sh's review_build_input says where the default comes from).
+# may hold; review-lib.sh's review_build_input says where the default comes from). And a
+# time limit on the reviewer run, REVIEW_MAX_SECONDS (default 900; time-limit.mjs): past
+# it, the run is stopped with its whole process group, nothing is appended, and review.sh
+# exits 5. The check, when it runs here, has the check limit (540 seconds).
 #
 # WHAT IS REVIEWED is the committed branch: the diff from the merge-base with the base to
 # HEAD, excluding .harness/reviews.tsv. Uncommitted changes are shown to the reviewer as
@@ -55,8 +58,10 @@
 # line, a VERDICT that does not list exactly the checklist's IDs, a PASS with an F, or HEAD
 # moving during the run: each exits 1 and appends nothing.
 #
-# Exit status: 0 PASS, 3 FIX-FIRST, 4 STOP (each appended); 1 nothing appended; 0 also
-# when the branch has no diff against its base (nothing to review, nothing appended).
+# Exit status: 0 PASS, 3 FIX-FIRST, 4 STOP (each appended); 1 nothing appended; 5 the
+# reviewer ran longer than its time limit and was stopped (nothing appended); 0 also when
+# the branch has no diff against its base (nothing to review, nothing appended). Its
+# temporary folder is removed on any exit, a signal included (hk_temp, hk_on_exit).
 set -u
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -91,8 +96,8 @@ if [ -n "$(git status --porcelain -- . ':(exclude).harness/reviews.tsv')" ]; the
   echo "harness-kit review.sh: the working tree has uncommitted changes; they are NOT part of the reviewed diff" >&2
 fi
 
-work="$(mktemp -d "${TMPDIR:-/tmp}/harness-kit-review.XXXXXX")" || die "cannot make a temporary folder"
-trap 'rm -rf "$work"' EXIT
+hk_on_exit
+hk_temp work -d harness-kit-review || die "cannot make a temporary folder"
 
 if review_saved_check "$H" "${HARNESS_KIT_CHECK_SAVED:-}" >"$work/check-section.txt"; then
   echo "harness-kit review.sh: reusing the check output ship.sh saved at this head; not running the check again" >&2
@@ -104,9 +109,14 @@ REVIEW_BRIEF_SECTION="$work/brief-section.txt"
 review_build_input "$work/input.md" "$PROJECT" "$branch" "$base_ref" "$merge_base" "$head" "$CHECKLIST" \
   "$work/check-section.txt" || die "$REVIEW_ERROR"
 
-echo "harness-kit review.sh: reviewing $branch against $base_ref (limits: $REVIEW_TURNS turns, \$$REVIEW_BUDGET)..." >&2
+echo "harness-kit review.sh: reviewing $branch against $base_ref (limits: $REVIEW_TURNS turns, \$$REVIEW_BUDGET, $(hk_limit review) seconds)..." >&2
 review_run "$PROJECT" "$work/input.md" "$work/out.json"
-review_parse "$work" "$?" "review.sh" || die "$REVIEW_ERROR"
+run_status=$?
+if [ "$run_status" -eq 124 ]; then
+  echo "harness-kit review.sh: $REVIEW_ERROR; nothing was appended to .harness/reviews.tsv" >&2
+  exit 5
+fi
+review_parse "$work" "$run_status" "review.sh" || die "$REVIEW_ERROR"
 
 cat "$work/review.txt"
 [ "$(git rev-parse HEAD)" = "$head" ] || die "HEAD moved during the review, so the verdict may not match the diff"

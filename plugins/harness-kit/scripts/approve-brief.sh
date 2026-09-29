@@ -23,6 +23,8 @@ set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=brief-lib.sh
 . "$HERE/brief-lib.sh"
+# shellcheck source=limit-lib.sh
+. "$HERE/limit-lib.sh"
 
 say() { echo "harness-kit approve-brief.sh: $*" >&2; }
 refuse() { say "REFUSED: $*"; exit 2; }
@@ -37,9 +39,10 @@ fi
 [ -t 0 ] || refuse "stdin is not a terminal, so the answer could not come from you reading the brief. Run it yourself, in your own terminal: $HERE/approve-brief.sh. Nothing was written."
 
 # What is shown is what is approved: a copy, and the copy's sha256, so a change to the
-# brief while the person reads it is not approved unseen.
-shown="$(mktemp "${TMPDIR:-/tmp}/harness-kit-brief.XXXXXX")" || { say "cannot make a temporary file. Nothing was written."; exit 1; }
-trap 'rm -f "$shown"' EXIT
+# brief while the person reads it is not approved unseen. The copy is removed on any exit,
+# a signal included (hk_temp). The prompt below waits for the person and has no time limit.
+hk_on_exit
+hk_temp shown harness-kit-brief || { say "cannot make a temporary file. Nothing was written."; exit 1; }
 cp "$PROJECT/$BRIEF" "$shown" || { say "cannot read $BRIEF. Nothing was written."; exit 1; }
 sha="$(brief_sha256 "$shown")"
 echo "=== $BRIEF (sha256 $sha) ==="

@@ -67,13 +67,24 @@
 # It never forces a push, never rewrites history, and never deletes the branch. Its own
 # commits (the index, the review line) go through the commit-msg hook like any other.
 #
+# TIME LIMITS (time-limit.mjs, through limit-lib.sh). The index command and the check run
+# under the check limit (540 seconds by default), and a TIMEOUT stops with index-timeout or
+# check-timeout, before any review; a reviewer run past its limit (review.sh exit 5) stops
+# with review-timeout. The pushes and the fetch run under the git limit (300 seconds) and
+# without prompts (hk_git_net: GIT_TERMINAL_PROMPT=0, ssh BatchMode=yes), so a push that
+# would need a password or passphrase fails at once, saying so; a TIMEOUT stops with
+# git-timeout, naming the command. CI's gh calls have their own limits (ci-lib.sh). Each
+# TIMEOUT stops the command's whole process group. Temporary files are removed on any exit,
+# a signal included (hk_temp, hk_on_exit).
+#
 # THE NOTIFICATION. On macOS, each STOPPED and the SHIPPED also show a notification
 # (osascript `display notification`), as a ship waits minutes for CI. Refusals come at once,
 # so they do not. Not on macOS (uname -s is not Darwin), nothing is shown.
 #
 # THE EVENT LOG. Each stop and each refusal (event STOPPED; a refusal's reason starts
 # "refused-", such as refused-on-base, and a stop's is short, such as check-failed,
-# review-not-pass, ci-not-green or ci-unknown), with its message, and each SHIPPED, is
+# review-not-pass, ci-not-green or ci-unknown; a TIMEOUT's is check-timeout, index-timeout,
+# review-timeout, ci-timeout or git-timeout), with its message, and each SHIPPED, is
 # appended to the local event log, .git/harness-kit/events.tsv (events.sh has the format),
 # on the branch being shipped. So is the result of the check run before the review, through events.sh's
 # harness_check_event: a CHECKED line when it differs from the branch's last recorded
@@ -101,6 +112,9 @@ POLL="${SHIP_POLL_SECONDS:-10}"
 . "$HERE/ci-lib.sh"
 # shellcheck source=brief-lib.sh
 . "$HERE/brief-lib.sh"
+# shellcheck source=limit-lib.sh
+. "$HERE/limit-lib.sh"
+hk_on_exit
 CI_TOOL=ship.sh CI_APPEAR="$APPEAR" CI_POLL="$POLL" CI_RESUME="re-run ship.sh"
 
 say() { echo "harness-kit ship.sh: $*" >&2; }
@@ -128,7 +142,7 @@ verdict_of() { [ -f "$REVIEWS" ] && awk -F'\t' -v h="$1" 'NF == 9 && $5 == h { v
 commit_with() {
   local subject="$1" body="$2" msg status
   shift 2
-  msg="$(mktemp "${TMPDIR:-/tmp}/harness-kit-ship-msg.XXXXXX")" || return 1
+  hk_temp msg harness-kit-ship-msg || return 1
   printf '%s\n\n%s\n' "$subject" "$body" >"$msg"
   git add -A -- "$@" && git commit -q -F "$msg" -- "$@"
   status=$?
@@ -176,8 +190,10 @@ refresh_index() {
   [ -n "$cmd" ] || return 0
   say "refreshing the index before the review: $cmd"
   before="$(git status --porcelain --untracked-files=all -- . ":(exclude)$REVIEWS")"
-  /bin/sh -c "$cmd" </dev/null >&2
+  hk_limited check ship.sh /bin/sh -c "$cmd" </dev/null >&2
   status=$?
+  [ "$status" -ne 124 ] ||
+    stop index-timeout "the index command did not finish within its limit of $(hk_limit check) seconds (TIMEOUT, above): $cmd. It was stopped; nothing was committed and no review was started. Find what hangs or runs slowly, then re-run ship.sh."
   [ "$status" -eq 0 ] ||
     stop index-failed "the index command failed (exit $status, above): $cmd. Nothing was committed and no review was started. Fix it, then re-run ship.sh."
   after="$(git status --porcelain --untracked-files=all -- . ":(exclude)$REVIEWS")"
@@ -207,8 +223,12 @@ finish() {
   git merge -q --ff-only "$branch" ||
     stop base-not-fast-forward "$base cannot fast-forward to $branch. You are on $base; nothing was pushed to it. Bring $branch up to date with $base, then re-run ship.sh on $branch."
   # HARNESS_KIT_SHIP=1: the pre-push hook (install-hooks.sh) lets this push of the base through.
-  HARNESS_KIT_SHIP=1 git push -q "$REMOTE" "$base" ||
-    stop push-base-failed "pushing $base failed (above). You are on $base, which is merged locally and not pushed. Fix the cause, then re-run ship.sh on $base to push it."
+  HARNESS_KIT_SHIP=1 hk_git_net ship.sh push -q "$REMOTE" "$base"
+  case $? in
+    0) ;;
+    124) stop git-timeout "git push of $base to $REMOTE did not finish within $(hk_limit git) seconds (TIMEOUT, above), and may or may not have reached $REMOTE. You are on $base, which is merged locally. Re-run ship.sh on $base to push it again." ;;
+    *) stop push-base-failed "pushing $base failed (above). You are on $base, which is merged locally and not pushed. Fix the cause, then re-run ship.sh on $base to push it." ;;
+  esac
   report="$(bash "$HERE/report-path.sh" --name "$branch")" && rm -f -- "$report"
   draft="$(bash "$HERE/report-path.sh" --name "$branch" --commit)" && rm -f -- "$draft"
   brief="$(bash "$HERE/report-path.sh" --name "$branch" --brief)" && rm -f -- "$brief" "${brief%.md}.approved"
@@ -271,13 +291,17 @@ else
       say "running the check before the review: $check"
       # Its output (stdout and stderr together) is saved with what it ran on, and review.sh
       # reuses it instead of running the check again.
-      saved="$(mktemp -d "${TMPDIR:-/tmp}/harness-kit-ship-check.XXXXXX")" || stop temp-file "cannot make a temporary folder"
-      trap 'rm -rf "$saved"' EXIT
+      hk_temp saved -d harness-kit-ship-check || stop temp-file "cannot make a temporary folder"
       printf '%s\n' "$check" >"$saved/command"
       git rev-parse HEAD >"$saved/head"
       git status --porcelain --untracked-files=all >"$saved/tree"
-      { /bin/sh -c "$check" </dev/null 2>&1; echo $? >"$saved/status"; } | tee "$saved/output"
+      { hk_limited --merge check ship.sh /bin/sh -c "$check" </dev/null 2>&1; echo $? >"$saved/status"; } | tee "$saved/output"
       status="$(cat "$saved/status")"
+      if [ "$status" -eq 124 ]; then
+        limit="$(hk_limit check)"
+        harness_check_event ship.sh "$branch" "timeout ${limit}s" <"$saved/output"
+        stop check-timeout "the check did not finish within its limit of $limit seconds (TIMEOUT, above): $check. It was stopped, and no review was started. Find what hangs or runs slowly and fix it, commit, then re-run ship.sh."
+      fi
       harness_check_event ship.sh "$branch" "$status" <"$saved/output"
       [ "$status" -eq 0 ] ||
         stop check-failed "the check failed (exit $status, above): $check. No review was started. Fix what it reports, commit, then re-run ship.sh."
@@ -288,6 +312,9 @@ else
     verdict="$(verdict_of "$hash")"
     if [ -n "$verdict" ] && [ -n "$(git status --porcelain --untracked-files=all -- "$REVIEWS")" ]; then
       commit_review "$verdict"
+    fi
+    if [ "$status" -eq 5 ]; then
+      stop review-timeout "the reviewer ran longer than its limit of $(hk_limit review) seconds (review.sh exit 5, above) and was stopped, so there is no verdict and nothing was recorded. Re-run ship.sh to review again; if it happens again, split the branch."
     fi
     if [ "$status" -ne 0 ]; then
       if [ -n "$verdict" ]; then
@@ -307,7 +334,12 @@ head="$(git rev-parse HEAD)"
 # ---------------------------------------------------------------------------------------
 # 4. Push the branch.
 # ---------------------------------------------------------------------------------------
-git push -q -u "$REMOTE" "$branch" || stop push-branch-failed "pushing $branch to $REMOTE failed (above). Fix the cause, then re-run ship.sh."
+hk_git_net ship.sh push -q -u "$REMOTE" "$branch"
+case $? in
+  0) ;;
+  124) stop git-timeout "git push of $branch to $REMOTE did not finish within $(hk_limit git) seconds (TIMEOUT, above), and may or may not have reached $REMOTE. Re-run ship.sh: pushing a pushed branch does nothing." ;;
+  *) stop push-branch-failed "pushing $branch to $REMOTE failed (above). Fix the cause, then re-run ship.sh." ;;
+esac
 say "pushed $branch ($(git rev-parse --short "$head")) to $REMOTE"
 
 # ---------------------------------------------------------------------------------------
@@ -318,7 +350,12 @@ ci_wait "$head" "$branch"
 # ---------------------------------------------------------------------------------------
 # 6. Merge into the base, push it, delete the report, the commit draft and the brief.
 # ---------------------------------------------------------------------------------------
-git fetch -q "$REMOTE" "$base" || stop fetch-failed "could not fetch $base from $REMOTE (above). Re-run ship.sh."
+hk_git_net ship.sh fetch -q "$REMOTE" "$base"
+case $? in
+  0) ;;
+  124) stop git-timeout "git fetch of $base from $REMOTE did not finish within $(hk_limit git) seconds (TIMEOUT, above). Nothing was merged. Re-run ship.sh." ;;
+  *) stop fetch-failed "could not fetch $base from $REMOTE (above). Re-run ship.sh." ;;
+esac
 for ref in "refs/remotes/$REMOTE/$base" "refs/heads/$base"; do
   if git rev-parse -q --verify "$ref" >/dev/null && ! git merge-base --is-ancestor "$ref" "$head"; then
     stop base-not-fast-forward "${ref#refs/*/} has commits that $branch does not, so $base cannot fast-forward. Bring $branch up to date with $base (it will need a new review and CI), then re-run ship.sh."

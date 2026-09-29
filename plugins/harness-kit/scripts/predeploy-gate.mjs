@@ -25,14 +25,20 @@
 // as a failure does, but says so, so nobody hunts for a test failure that is really a
 // missing tool or a network timeout. And a pass is said out loud (systemMessage, on the
 // matched command only), so a pass cannot be mistaken for the gate not running.
-import { spawnSync } from "node:child_process";
+//
+// THE TIME LIMIT. The check runs through the time-limit helper (time-limit.mjs) under the
+// check limit, and never more than HOOK_CHECK_MAX_SECONDS, 540: below the hook's own
+// timeout in hooks.json (600 s), as Claude Code killing this hook first would let the
+// deploy go ahead unchecked. Past it, the check's whole process group is stopped (SIGTERM,
+// then SIGKILL when the grace period ends) and the deploy is refused, COULD NOT RUN: timed
+// out. tests/validate.sh checks that the limit plus the grace period stays below the
+// hook's timeout.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { exitOnSignals, limitSeconds, runLimited } from "./time-limit.mjs";
 
 const MAX_OUTPUT_LINES = 40;
-// Below the hook's own timeout in hooks.json (600 s): if Claude Code killed this hook
-// first, the deploy would go ahead unchecked.
-const CHECK_TIMEOUT_MS = 540_000;
+const HOOK_CHECK_MAX_SECONDS = 540;
 
 // Emitting nothing on the pass path is deliberate: permissionDecision "allow" would
 // skip the normal permission prompts. This hook only ever adds a refusal.
@@ -236,15 +242,16 @@ if (matched === undefined) allow();
 
 // `exec 2>&1` first, so the output keeps its order and a syntax error in the check
 // itself lands in the captured text too.
-const result = spawnSync("/bin/sh", ["-c", 'exec 2>&1; eval "$1"', "harness-kit-predeploy", check], {
+const limit = Math.min(limitSeconds("check"), HOOK_CHECK_MAX_SECONDS);
+exitOnSignals();
+const result = await runLimited("/bin/sh", ["-c", 'exec 2>&1; eval "$1"', "harness-kit-predeploy", check], {
   cwd: projectDir,
-  encoding: "utf8",
   stdio: ["ignore", "pipe", "pipe"],
-  timeout: CHECK_TIMEOUT_MS,
-  maxBuffer: 64 * 1024 * 1024,
+  limit,
+  capture: true,
 });
 
-if (result.status === 0) {
+if (!result.timedOut && result.code === 0) {
   process.stdout.write(
     JSON.stringify({ systemMessage: `harness-kit predeploy-gate: \`${check}\` passed; the deploy may go ahead` }) + "\n",
   );
@@ -252,17 +259,17 @@ if (result.status === 0) {
 }
 
 let outcome;
-if (result.error?.code === "ETIMEDOUT") {
-  outcome = `COULD NOT RUN: timed out after ${CHECK_TIMEOUT_MS / 1000} s`;
+if (result.timedOut) {
+  outcome = `COULD NOT RUN: timed out after ${limit} s`;
 } else if (result.error) {
   outcome = `COULD NOT RUN: ${result.error.message}`;
 } else if (result.signal) {
   outcome = `COULD NOT RUN: killed by ${result.signal}`;
-} else if (result.status === 127 || result.status === 126) {
-  const why = result.status === 127 ? "command not found" : "not executable";
-  outcome = `COULD NOT RUN: exit ${result.status} (${why}), so the check itself never ran`;
+} else if (result.code === 127 || result.code === 126) {
+  const why = result.code === 127 ? "command not found" : "not executable";
+  outcome = `COULD NOT RUN: exit ${result.code} (${why}), so the check itself never ran`;
 } else {
-  outcome = `FAILED: exit ${result.status}`;
+  outcome = `FAILED: exit ${result.code}`;
 }
 
 const lines = `${result.stdout ?? ""}${result.stderr ?? ""}`.replace(/\n+$/, "").split(/\r?\n/);

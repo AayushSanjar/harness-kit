@@ -95,3 +95,93 @@ replay-faults: the baseline's limit is never below the floor	plugins/harness-kit
 replay-faults: a replay inside another replay runs one check at a time; its checks are told they run inside one	tests/replay-faults.test.sh
 replay-faults: a replay inside another replay runs one check at a time; its checks are told they run inside one	plugins/harness-kit/scripts/replay-faults.mjs
 replay-faults: a replay inside another replay runs one check at a time; its checks are told they run inside one	plugins/harness-kit/scripts/replay-faults.sh
+time-limit: a command past its limit is stopped, exits 124 and prints TIMEOUT with its limit	tests/time-limit.test.sh
+time-limit: a command past its limit is stopped, exits 124 and prints TIMEOUT with its limit	plugins/harness-kit/scripts/time-limit.mjs
+time-limit: a command that ignores SIGTERM is force-killed when the grace period ends	tests/time-limit.test.sh
+time-limit: a command that ignores SIGTERM is force-killed when the grace period ends	plugins/harness-kit/scripts/time-limit.mjs
+time-limit: a grandchild in the command's process group is stopped too	tests/time-limit.test.sh
+time-limit: a grandchild in the command's process group is stopped too	plugins/harness-kit/scripts/time-limit.mjs
+time-limit: a hangup, interrupt or stop signal to the helper stops the group and exits 129, 130 or 143	tests/time-limit.test.sh
+time-limit: a hangup, interrupt or stop signal to the helper stops the group and exits 129, 130 or 143	plugins/harness-kit/scripts/time-limit.mjs
+time-limit: a closed output pipe stops the group and exits 141	tests/time-limit.test.sh
+time-limit: a closed output pipe stops the group and exits 141	plugins/harness-kit/scripts/time-limit.mjs
+time-limit sweep: the group, folder and worktree of an owner that was force-killed are removed	tests/time-limit.test.sh
+time-limit sweep: the group, folder and worktree of an owner that was force-killed are removed	plugins/harness-kit/scripts/time-limit.mjs
+time-limit sweep: a live owner's records are left alone	tests/time-limit.test.sh
+time-limit sweep: a live owner's records are left alone	plugins/harness-kit/scripts/time-limit.mjs
+time-limit sweep: a record whose process id now has another start time signals nothing and is dropped	tests/time-limit.test.sh
+time-limit sweep: a record whose process id now has another start time signals nothing and is dropped	plugins/harness-kit/scripts/time-limit.mjs
+check-limits: a bare claude -p, gh run watch or check-command run fails, naming the file and line	tests/time-limit.test.sh
+check-limits: a bare claude -p, gh run watch or check-command run fails, naming the file and line	plugins/harness-kit/scripts/check-limits.mjs
+check-limits: a bare git push, fetch or ls-remote fails, naming the file and line	tests/time-limit.test.sh
+check-limits: a bare git push, fetch or ls-remote fails, naming the file and line	plugins/harness-kit/scripts/check-limits.mjs
+check-limits: a no-limit marker without a reason fails	tests/time-limit.test.sh
+check-limits: a no-limit marker without a reason fails	plugins/harness-kit/scripts/check-limits.mjs
+check-limits: a script with mktemp and no hk_on_exit fails	tests/time-limit.test.sh
+check-limits: a script with mktemp and no hk_on_exit fails	plugins/harness-kit/scripts/check-limits.mjs
+background-guard: a background Bash command that is not wrapped in the time-limit helper is denied, with the wrapped form to use	tests/background-guard.test.sh
+background-guard: a background Bash command that is not wrapped in the time-limit helper is denied, with the wrapped form to use	plugins/harness-kit/scripts/background-guard.mjs
+background-guard: a background Bash command that is not wrapped in the time-limit helper is denied, with the wrapped form to use	plugins/harness-kit/scripts/guard-lib.mjs
+stop-gate: a check that runs past its limit blocks the stop with TIMEOUT, and its process group is gone	tests/stop-gate.test.sh
+stop-gate: a check that runs past its limit blocks the stop with TIMEOUT, and its process group is gone	plugins/harness-kit/scripts/stop-gate.mjs
+stop-gate: a check that runs past its limit blocks the stop with TIMEOUT, and its process group is gone	plugins/harness-kit/scripts/time-limit.mjs
+hooks.json: the Stop hook's check limit plus the grace period is below its timeout; predeploy-gate's likewise	tests/validate.sh
+hooks.json: the Stop hook's check limit plus the grace period is below its timeout; predeploy-gate's likewise	plugins/harness-kit/hooks/hooks.json
+hooks.json: the Stop hook's check limit plus the grace period is below its timeout; predeploy-gate's likewise	plugins/harness-kit/scripts/stop-gate.mjs
+hooks.json: the Stop hook's check limit plus the grace period is below its timeout; predeploy-gate's likewise	plugins/harness-kit/scripts/predeploy-gate.mjs
+hooks.json: the Stop hook's check limit plus the grace period is below its timeout; predeploy-gate's likewise	plugins/harness-kit/scripts/time-limit.mjs
+land.sh: a check past its limit stops check-timeout; the patch IS applied; the check's group is gone	tests/ship.test.sh
+land.sh: a check past its limit stops check-timeout; the patch IS applied; the check's group is gone	plugins/harness-kit/scripts/land.sh
+land.sh: a check past its limit stops check-timeout; the patch IS applied; the check's group is gone	plugins/harness-kit/scripts/limit-lib.sh
+land.sh: a check past its limit stops check-timeout; the patch IS applied; the check's group is gone	plugins/harness-kit/scripts/time-limit.mjs
+ship.sh: a check past its limit stops check-timeout before any review	tests/ship.test.sh
+ship.sh: a check past its limit stops check-timeout before any review	plugins/harness-kit/scripts/ship.sh
+ship.sh: a check past its limit stops check-timeout before any review	plugins/harness-kit/scripts/limit-lib.sh
+ship.sh: a check past its limit stops check-timeout before any review	plugins/harness-kit/scripts/time-limit.mjs
+ship.sh: a hangup during the check removes its temporary folder and stops the check's group	tests/ship.test.sh
+ship.sh: a hangup during the check removes its temporary folder and stops the check's group	plugins/harness-kit/scripts/ship.sh
+ship.sh: a hangup during the check removes its temporary folder and stops the check's group	plugins/harness-kit/scripts/limit-lib.sh
+ship.sh: a hangup during the check removes its temporary folder and stops the check's group	plugins/harness-kit/scripts/time-limit.mjs
+release.sh: a check past its limit stops check-timeout before any push	tests/release.test.sh
+release.sh: a check past its limit stops check-timeout before any push	plugins/harness-kit/scripts/release.sh
+release.sh: a check past its limit stops check-timeout before any push	plugins/harness-kit/scripts/limit-lib.sh
+release.sh: a check past its limit stops check-timeout before any push	plugins/harness-kit/scripts/time-limit.mjs
+release.sh: a gh run watch that hangs past its limit stops ci-timeout; main and the tag are untouched	tests/release.test.sh
+release.sh: a gh run watch that hangs past its limit stops ci-timeout; main and the tag are untouched	plugins/harness-kit/scripts/ci-lib.sh
+release.sh: a gh run watch that hangs past its limit stops ci-timeout; main and the tag are untouched	plugins/harness-kit/scripts/limit-lib.sh
+release.sh: a gh run watch that hangs past its limit stops ci-timeout; main and the tag are untouched	plugins/harness-kit/scripts/time-limit.mjs
+release.sh: a git push past its limit stops git-timeout, naming the push; main and the tag are untouched	tests/release.test.sh
+release.sh: a git push past its limit stops git-timeout, naming the push; main and the tag are untouched	plugins/harness-kit/scripts/release.sh
+release.sh: a git push past its limit stops git-timeout, naming the push; main and the tag are untouched	plugins/harness-kit/scripts/limit-lib.sh
+release.sh: a git push past its limit stops git-timeout, naming the push; main and the tag are untouched	plugins/harness-kit/scripts/time-limit.mjs
+release.sh: a push that would need a prompt fails at once, and the message says it ran without prompts	tests/release.test.sh
+release.sh: a push that would need a prompt fails at once, and the message says it ran without prompts	plugins/harness-kit/scripts/release.sh
+release.sh: a push that would need a prompt fails at once, and the message says it ran without prompts	plugins/harness-kit/scripts/limit-lib.sh
+review.sh: a reviewer run past its limit exits 5 with TIMEOUT; nothing is appended	tests/review.test.sh
+review.sh: a reviewer run past its limit exits 5 with TIMEOUT; nothing is appended	plugins/harness-kit/scripts/review.sh
+review.sh: a reviewer run past its limit exits 5 with TIMEOUT; nothing is appended	plugins/harness-kit/scripts/review-lib.sh
+review.sh: a reviewer run past its limit exits 5 with TIMEOUT; nothing is appended	plugins/harness-kit/scripts/limit-lib.sh
+review.sh: a reviewer run past its limit exits 5 with TIMEOUT; nothing is appended	plugins/harness-kit/scripts/time-limit.mjs
+eval-reviewer: a run past its limit is an ERROR, timed out, and its worktree is removed	tests/eval-reviewer.test.sh
+eval-reviewer: a run past its limit is an ERROR, timed out, and its worktree is removed	plugins/harness-kit/scripts/eval-reviewer.sh
+eval-reviewer: a run past its limit is an ERROR, timed out, and its worktree is removed	plugins/harness-kit/scripts/review-lib.sh
+eval-reviewer: a run past its limit is an ERROR, timed out, and its worktree is removed	plugins/harness-kit/scripts/limit-lib.sh
+eval-reviewer: a run past its limit is an ERROR, timed out, and its worktree is removed	plugins/harness-kit/scripts/time-limit.mjs
+upgrade.sh: after the init event, the headless session's whole process group is gone	tests/upgrade.test.sh
+upgrade.sh: after the init event, the headless session's whole process group is gone	plugins/harness-kit/scripts/upgrade.sh
+upgrade.sh: after the init event, the headless session's whole process group is gone	plugins/harness-kit/scripts/time-limit.mjs
+predeploy-gate: a check past its limit is denied, COULD NOT RUN: timed out, and its group is gone	tests/predeploy-gate.test.sh
+predeploy-gate: a check past its limit is denied, COULD NOT RUN: timed out, and its group is gone	plugins/harness-kit/scripts/predeploy-gate.mjs
+predeploy-gate: a check past its limit is denied, COULD NOT RUN: timed out, and its group is gone	plugins/harness-kit/scripts/time-limit.mjs
+replay-faults: a hangup stops every check and removes every worktree	tests/replay-faults.test.sh
+replay-faults: a hangup stops every check and removes every worktree	plugins/harness-kit/scripts/replay-faults.mjs
+replay-faults: a hangup stops every check and removes every worktree	plugins/harness-kit/scripts/replay-faults.sh
+replay-faults: a hangup stops every check and removes every worktree	plugins/harness-kit/scripts/limit-lib.sh
+session-start: the time rule is printed in a git repository, and not for the reviewer	tests/session-start.test.sh
+session-start: the time rule is printed in a git repository, and not for the reviewer	plugins/harness-kit/scripts/session-start.mjs
+skills/plan/SKILL.md: the brief's eight sections in order; OPEN rules raised first; never approves itself	tests/validate.sh
+skills/plan/SKILL.md: the brief's eight sections in order; OPEN rules raised first; never approves itself	plugins/harness-kit/skills/plan/SKILL.md
+replay-faults: a run that ignores the stop signal is force-killed when its grace period ends	plugins/harness-kit/scripts/time-limit.mjs
+replay-faults: a hanging check is stopped at its time limit and reported TIMEOUT; the others still get verdicts	plugins/harness-kit/scripts/time-limit.mjs
+replay-faults: interrupted with jobs running, it stops every check and removes every worktree	plugins/harness-kit/scripts/time-limit.mjs
+replay-faults: interrupted with jobs running, it stops every check and removes every worktree	plugins/harness-kit/scripts/limit-lib.sh

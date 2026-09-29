@@ -27,17 +27,30 @@
 // one recorded for the branch; the SessionStart hook's start-up picture shows the latest.
 // A recording that fails changes nothing about the decision. When the gate is off
 // (HARNESS_KIT_EVAL, the reviewer, no check-command) nothing runs, so nothing is recorded.
+//
+// IT FAILS CLOSED ON TIME. Claude Code gives this hook 600 seconds (hooks.json), and a hook
+// that runs out of time renders no decision, which would let Claude stop unchecked. So the
+// check runs through the time-limit helper (time-limit.mjs) under the check limit, and never
+// more than HOOK_CHECK_MAX_SECONDS, 540: the hook's limit less 60 seconds, for the grace
+// period, the recording and Node's start. A check past its limit is stopped with its whole
+// process group, and the stop is BLOCKED with a TIMEOUT message, counted in the same budget
+// of 3 blocks as a failing check; it is recorded as a CHECKED FAIL with the status
+// "timeout <limit>s". tests/validate.sh checks that this limit plus the grace period stays
+// below the hook's timeout.
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { exitOnSignals, limitSeconds, runLimited } from "./time-limit.mjs";
 
 const REVIEWER = "harness-kit:reviewer";
+const HOOK_CHECK_MAX_SECONDS = 540;
 const MAX_BLOCKS = 3;
 const MAX_FEEDBACK_LINES = 50;
 const INSTRUCTION =
   "Fix the failing checks before finishing. Do not edit protected files; if a protected test is wrong, say so and stop.";
+const TIMEOUT_INSTRUCTION = "Find what hangs or runs slowly and fix it before finishing.";
 const BUDGET_LINE =
   "harness-kit: checks still failing after 3 attempts — the person must look";
 
@@ -79,19 +92,23 @@ if (!command) {
 const sessionId = String(input.session_id || "unknown").replace(/[^A-Za-z0-9_-]/g, "_");
 const countFile = join(tmpdir(), `harness-kit-stop-gate-${sessionId}.count`);
 
-const result = spawnSync(command, { cwd: projectDir, shell: true, encoding: "utf8" });
+const limit = Math.min(limitSeconds("check"), HOOK_CHECK_MAX_SECONDS);
+exitOnSignals();
+const result = await runLimited("/bin/sh", ["-c", command], { cwd: projectDir, limit, capture: true });
 const output = `${result.stdout || ""}\n${result.stderr || ""}`;
+const status = result.timedOut ? `timeout ${limit}s` : result.error ? "not run" : result.signal ? `signal ${result.signal}` : String(result.code);
 
 // Record the result (events.sh's harness_check_event decides whether it is new).
+// no-limit: events.sh's harness_check_event only reads and appends the local event log
 const recorded = spawnSync(
   "bash",
   ["-c", '. "$1" && harness_check_event stop-gate.mjs "" "$2"', "harness-kit", fileURLToPath(new URL("./events.sh", import.meta.url)),
-    result.status !== null ? String(result.status) : result.signal ? `signal ${result.signal}` : "not run"],
+    status],
   { cwd: projectDir, input: output, encoding: "utf8" },
 );
 if (recorded.stderr) process.stderr.write(recorded.stderr);
 
-if (result.status === 0) {
+if (!result.timedOut && result.code === 0) {
   rmSync(countFile, { force: true });
   process.exit(0);
 }
@@ -105,7 +122,10 @@ if (previous >= MAX_BLOCKS) {
 writeFileSync(countFile, String(previous + 1));
 
 let lines = output.split(/\r?\n/).filter((line) => /^\s*FAIL\b/.test(line));
-if (lines.length === 0) {
+if (result.timedOut) {
+  // What it printed last, to show where it hung.
+  lines = output.split(/\r?\n/).filter((line) => line.trim() !== "").slice(-MAX_FEEDBACK_LINES);
+} else if (lines.length === 0) {
   // No FAIL lines: fall back to the tail of the output so Claude sees something.
   lines = output.split(/\r?\n/).filter((line) => line.trim() !== "");
   if (result.error) lines.push(String(result.error.message));
@@ -114,12 +134,16 @@ if (lines.length === 0) {
   lines = [...lines.slice(0, MAX_FEEDBACK_LINES), `... ${lines.length - MAX_FEEDBACK_LINES} more FAIL lines`];
 }
 
-const exit = result.status === null ? `signal ${result.signal}` : `exit ${result.status}`;
-const reason = [
-  `harness-kit stop gate: \`${command}\` failed (${exit}), block ${previous + 1} of ${MAX_BLOCKS}.`,
-  ...lines.map((line) => line.slice(0, 500)),
-  INSTRUCTION,
-].join("\n");
+const exit = result.code === null ? `signal ${result.signal}` : `exit ${result.code}`;
+const reason = (
+  result.timedOut
+    ? [
+        `harness-kit stop gate: \`${command}\` did not finish within ${limit} seconds (TIMEOUT); it was stopped. Block ${previous + 1} of ${MAX_BLOCKS}.`,
+        TIMEOUT_INSTRUCTION,
+        ...(lines.length > 0 ? ["Its last output lines:", ...lines.map((line) => line.slice(0, 500))] : []),
+      ]
+    : [`harness-kit stop gate: \`${command}\` failed (${exit}), block ${previous + 1} of ${MAX_BLOCKS}.`, ...lines.map((line) => line.slice(0, 500)), INSTRUCTION]
+).join("\n");
 
 process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
 process.exit(0);

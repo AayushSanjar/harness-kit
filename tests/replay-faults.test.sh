@@ -544,6 +544,46 @@ worktrees while two ran: $worktrees_during (3 wanted); the pipe went quiet: $int
 stderr: $ERR"
 fi
 
+# P6b. A hangup while two held runs are going, sent to the runner (replay-faults.mjs) and
+# then to replay-faults.sh, as a closed terminal sends it to both: every check is stopped,
+# every worktree removed, and the exit status is 129.
+pool_start "$pool" "$WORK/hup-pipes" HARNESS_KIT_REPLAY_CPUS=2
+pids="" started=0 hup_timeout=no
+while [ "$started" -lt 2 ]; do
+  read -r -t 10 line <&3 || { hup_timeout=yes && break; }
+  set -- $line
+  [ "$1" != start ] || { started=$((started + 1)) && pids="$pids $4"; }
+done
+script_pid="$(cat "$WORK/hup-pipes/pid")"
+runner_pid="$(pgrep -P "$script_pid" -f replay-faults.mjs)"
+[ -z "$runner_pid" ] || kill -HUP "$runner_pid"
+kill -HUP "$script_pid"
+hup_status=""
+while [ -z "$hup_status" ]; do
+  read -r -t 10 line <&3 || { hup_timeout=yes && break; }
+  set -- $line
+  [ "$1" != exit ] || hup_status="$2"
+done
+outlived=""
+for p in $pids; do ! kill -0 "$p" 2>/dev/null || outlived="$outlived $p"; done
+for p in $outlived; do kill -TERM "$p" 2>/dev/null; done
+while [ -z "$hup_status" ]; do
+  read -r -t 10 line <&3 || break
+  set -- $line
+  [ "$1" != exit ] || hup_status="$2"
+done
+exec 3<&-
+ERR="$(cat "$WORK/pool.err")"
+if [ "$hup_timeout" = no ] && [ -n "$runner_pid" ] && [ "$hup_status" = 129 ] && [ -z "$outlived" ] &&
+  grep -q 'interrupted; the checks were stopped and their worktrees removed' <<<"$ERR" && clean "$pool"; then
+  result "replay-faults: a hangup stops every check and removes every worktree" yes ""
+else
+  result "replay-faults: a hangup stops every check and removes every worktree" no "exit $hup_status (129 wanted); runner: ${runner_pid:-not found}; checks alive after it ended:${outlived:- none}
+the pipe went quiet: $hup_timeout
+stderr: $ERR
+worktrees: $(git -C "$pool" worktree list)"
+fi
+
 # ---------------------------------------------------------------------------------------
 # replay-faults.sh's time limits (D2)
 # ---------------------------------------------------------------------------------------

@@ -42,6 +42,12 @@
 // and updates each or lists it in the report, so a change does not leave its descriptions
 // saying the old thing.
 //
+// THE TIME RULE. Then, in a git repository too: a command expected to take over 2 minutes is
+// estimated first, and run only if the approved brief lists it in its Verification plan
+// (otherwise Claude asks the person); and no command starts in the background without a
+// time limit, through the time-limit helper (time-limit.mjs). background-guard.mjs refuses
+// a background command that is not wrapped in it, whatever Claude reads here.
+//
 // THE START-UP PICTURE. After those lines, in a git repository, come the lines of
 // start-picture.mjs (its header says what each holds and where it comes from): the branch
 // and its brief with the goal, the last check result from the local event log with the
@@ -63,6 +69,7 @@
 // checks failing, so the person is told.
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { startPicture } from "./start-picture.mjs";
 
@@ -73,6 +80,12 @@ const EVAL_WARNING =
 const BLAST_RADIUS =
   "harness-kit: before finishing, search for every file, comment, test and document that describes behaviour you changed, " +
   "and update each or list it in the report.";
+const timeRule = (brief) =>
+  `harness-kit time rule: before you run any command you expect to take over 2 minutes, write down your estimate of its time. ` +
+  `Run it only if the approved brief (${brief}) lists it in its Verification plan; otherwise ask the person. ` +
+  `Never start a command in the background without a time limit: wrap it as ` +
+  `node ${join(dirname(fileURLToPath(import.meta.url)), "time-limit.mjs")} run --limit <seconds> -- <command>. ` +
+  `The background-guard hook refuses a background command that is not wrapped.`;
 // The report's Summary template: each heading with what goes under it, in this order.
 // BRIEF is the path of the branch's brief.
 const summaryHeadings = (brief) => [
@@ -146,6 +159,7 @@ if (input.agent_type !== REVIEWER) {
       );
     }
     lines.push(BLAST_RADIUS);
+    lines.push(timeRule(path.replace(/\.md$/, ".brief.md")));
   }
   lines.push(...startPicture(projectDir));
   if (process.env.HARNESS_KIT_EVAL) {
