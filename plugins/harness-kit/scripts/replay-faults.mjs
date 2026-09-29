@@ -50,19 +50,25 @@
 // THE JOB COUNT. At most as many checks run at once as the machine has CPUs
 // (os.availableParallelism()). HARNESS_KIT_REPLAY_JOBS, a whole number of 1 or more, lowers
 // it; it never raises it above the CPU count. HARNESS_KIT_REPLAY_CPUS stands in for the
-// CPU count, for tests only. Worktrees are made and removed one at a time, by this process,
+// CPU count, for tests only. Inside another replay (HARNESS_KIT_REPLAY_OUTER=1, which every
+// check run gets), the CPU count is taken as 1 unless HARNESS_KIT_REPLAY_CPUS says otherwise,
+// so that a project whose check runs replays (as harness-kit's own tests do) does not start
+// a pool the size of the machine inside each of the outer pool's runs. Worktrees are made and removed one at a time, by this process,
 // so that parallel jobs never race on git's worktree locks; the baseline is one job of the
 // pool, running alongside the entries.
 //
 // THE TIME LIMITS. Every check run has one; when it runs out, the run's process group is
-// sent SIGTERM and the run is a TIMEOUT. They come from the harness settings below (each
+// sent SIGTERM, then SIGKILL when the grace period ends if the run has not ended by then,
+// and the run is a TIMEOUT. When a stopped run's own process ends, anything left in its
+// process group is killed. They come from the harness settings below (each
 // overridden by the environment variable of the same name; the tests set tiny values):
 //   a fault's run    M times the baseline's measured seconds in this session, and never
 //                    less than F. A run that started before the baseline ended gets its
 //                    limit when the baseline ends (and is stopped at once if already past it).
 //   the baseline     M times the last baseline recorded in this repository's event log (the
 //                    baseline= field of the last REPLAYED line), or the fallback when there
-//                    is none. A baseline that passes its limit stops the whole session (exit 2).
+//                    is none, and never less than F. A baseline that passes its limit stops
+//                    the whole session (exit 2).
 //   the session      HARNESS_KIT_REPLAY_SESSION_SECONDS when set; otherwise the baseline's
 //                    limit (when this part runs the baseline) plus the number of rounds (the
 //                    faults' runs divided by the job count, rounded up) times the run limit.
@@ -103,6 +109,7 @@ const SETTINGS = {
   HARNESS_KIT_REPLAY_LIMIT_FLOOR_SECONDS: 120, // F: the smallest limit a fault's run has
   HARNESS_KIT_REPLAY_BASELINE_FALLBACK_SECONDS: 1200, // the baseline's limit with none recorded
   HARNESS_KIT_REPLAY_SESSION_SECONDS: null, // set: replaces the session formula
+  HARNESS_KIT_REPLAY_GRACE_SECONDS: 10, // from SIGTERM to SIGKILL, for a run being stopped
 };
 const setting = (name) => {
   const value = process.env[name] ?? "";
@@ -241,7 +248,9 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
   const mine = part === BASELINE ? [] : asked.filter((_, k) => !shard || k % Number(shard[2]) === Number(shard[1]) - 1);
   const withBaseline = part === "all" || part === BASELINE;
   const only = existsSync(join(project, ".harness/check-only"));
-  const cpus = count("HARNESS_KIT_REPLAY_CPUS") ?? availableParallelism();
+  // Inside another replay, one check at a time (THE JOB COUNT).
+  const nested = process.env.HARNESS_KIT_REPLAY_OUTER === "1" && count("HARNESS_KIT_REPLAY_CPUS") === null;
+  const cpus = count("HARNESS_KIT_REPLAY_CPUS") ?? (nested ? 1 : availableParallelism());
   const jobs = Math.min(cpus, count("HARNESS_KIT_REPLAY_JOBS") ?? cpus);
   const nodeModules = (process.env.HARNESS_KIT_REPLAY_NODE_MODULES ?? "").split("\n").filter(Boolean);
   const tree = git(["-C", project, "rev-parse", `${snapshot}^{tree}`]).stdout.trim();
@@ -267,7 +276,7 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
     die(`cannot write the results to ${out}: ${error.message}`);
   }
   if (only) say(`each entry runs only its own check (.harness/check-only): ${check} --only <check>`);
-  say(`up to ${jobs} checks at once (${cpus} CPUs)`);
+  say(`up to ${jobs} checks at once (${cpus} CPUs${nested ? ", taken as 1 inside another replay" : ""})`);
 
   // The runs, in order: the baseline first, then the entries, fragile ones left out.
   const tasks = [
@@ -280,13 +289,17 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
   const floor = setting("HARNESS_KIT_REPLAY_LIMIT_FLOOR_SECONDS");
   const fallback = setting("HARNESS_KIT_REPLAY_BASELINE_FALLBACK_SECONDS");
   const fixedSession = setting("HARNESS_KIT_REPLAY_SESSION_SECONDS");
+  const grace = setting("HARNESS_KIT_REPLAY_GRACE_SECONDS");
   const recorded = recordedBaseline(project);
   const runLimit = (baseline) => Math.max(floor, multiple * baseline);
   const runHow = (baseline) =>
     multiple * baseline >= floor
       ? `${secs(multiple)} times the baseline's ${secs(baseline)} seconds`
       : `the floor; ${secs(multiple)} times the baseline's ${secs(baseline)} seconds is less`;
-  const baselineLimit = recorded !== null ? multiple * recorded : fallback;
+  const baselineBase = recorded !== null ? multiple * recorded : fallback;
+  const baselineLimit = Math.max(floor, baselineBase);
+  const baselineBaseHow =
+    recorded !== null ? `${secs(multiple)} times the last recorded baseline's ${secs(recorded)} seconds` : `no baseline recorded: the fallback`;
   let perRun = measured !== null ? runLimit(measured) : null;
   const rounds = Math.ceil(tasks.filter((t) => t.entry).length / jobs);
   const sessionLimit = () => {
@@ -299,7 +312,9 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
   if (withBaseline) {
     say(
       `time limit for the baseline: ${secs(baselineLimit)} seconds (` +
-        (recorded !== null ? `${secs(multiple)} times the last recorded baseline's ${secs(recorded)} seconds)` : "no baseline recorded: the fallback)"),
+        (baselineBase >= floor
+          ? `${baselineBaseHow})`
+          : `the floor; ${recorded !== null ? `${secs(multiple)} times the last recorded baseline's ${secs(recorded)} seconds` : `the fallback of ${secs(fallback)} seconds`} is less)`),
     );
   }
   if (perRun !== null) say(`time limit per run: ${secs(perRun)} seconds (${runHow(measured)})`);
@@ -358,11 +373,19 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
     if (next >= tasks.length) process.exit(0);
   };
 
-  // A run that passes its limit: its process group gets SIGTERM, and it is a TIMEOUT.
+  // Stops a run: SIGTERM to its process group, then SIGKILL when the grace period ends, if
+  // its own process has not ended by then (end() kills what is left in the group when it has).
+  const terminate = (job) => {
+    job.stopped = true;
+    signalGroup(job, "SIGTERM");
+    if (job.grace === null) job.grace = setTimeout(() => signalGroup(job, "SIGKILL"), grace * 1000);
+  };
+
+  // A run that passes its limit: it is stopped, and it is a TIMEOUT.
   const overLimit = (job, limit, how) => {
     if (job.over) return;
     job.over = { kind: "run", limit, how };
-    signalGroup(job, "SIGTERM");
+    terminate(job);
   };
   const limitRun = (job, limit, how) => {
     clearTimeout(job.timer);
@@ -383,6 +406,7 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
       next = tasks.length;
       for (const job of running.values()) {
         job.over ??= { kind: "session", limit };
+        job.stopped = true;
         signalGroup(job, "SIGKILL");
       }
       done();
@@ -410,10 +434,10 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
       cwd: worktree,
       detached: true,
       stdio: ["ignore", log, log],
-      env: { ...process.env, HARNESS_KIT_REPLAY: "1" },
+      env: { ...process.env, HARNESS_KIT_REPLAY: "1", HARNESS_KIT_REPLAY_OUTER: "1" },
     });
     closeSync(log);
-    const job = { child, worktree, task, began: Date.now(), timer: null, over: null };
+    const job = { child, worktree, task, began: Date.now(), timer: null, over: null, grace: null, stopped: false };
     running.set(child.pid, job);
     if (!entry) limitRun(job, baselineLimit, "the baseline's limit");
     else if (perRun !== null) limitRun(job, perRun, runHow(measured));
@@ -421,6 +445,9 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
       if (!running.has(child.pid)) return;
       running.delete(child.pid);
       clearTimeout(job.timer);
+      clearTimeout(job.grace);
+      // A stopped run's own process has ended: what is left in its group goes too.
+      if (job.stopped) signalGroup(job, "SIGKILL");
       removeWorktree(worktree);
       finished += 1;
       const seconds = elapsed(job.began);
@@ -430,7 +457,7 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
         if (!entry) {
           baselineOver ??= job.over.kind === "run" ? `its limit of ${secs(job.over.limit)} seconds` : `the session's limit of ${secs(job.over.limit)} seconds`;
           next = tasks.length;
-          for (const other of running.values()) signalGroup(other, "SIGTERM");
+          for (const other of running.values()) terminate(other);
         }
       } else if (stopping === null) {
         writeFileSync(join(out, `${id}.status`), `${status}\n`);
@@ -464,13 +491,7 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
   const stop = (code) => {
     if (stopping !== null) return;
     stopping = code;
-    for (const { child } of running.values()) {
-      try {
-        process.kill(-child.pid, "SIGTERM");
-      } catch {
-        // Already gone.
-      }
-    }
+    for (const job of running.values()) terminate(job);
     done();
   };
   process.on("SIGINT", () => stop(130));

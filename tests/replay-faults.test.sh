@@ -30,12 +30,10 @@ export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.invalid
 # A replay of this repository runs this file with its own settings; the cases set their own.
 unset HARNESS_KIT_EVAL CLAUDE_PROJECT_DIR HARNESS_KIT_REPLAY HARNESS_KIT_REPLAY_JOBS HARNESS_KIT_REPLAY_CPUS \
   HARNESS_KIT_REPLAY_LIMIT_MULTIPLE HARNESS_KIT_REPLAY_LIMIT_FLOOR_SECONDS HARNESS_KIT_REPLAY_BASELINE_FALLBACK_SECONDS \
-  HARNESS_KIT_REPLAY_SESSION_SECONDS HARNESS_KIT_REPLAY_BASELINE_FROM
-# The fake checks run in hundredths of a second, and each replay records its baseline's
-# seconds, so the next session's baseline limit (3 times that) would be a fraction of a
-# second, which a busy machine can pass. The cases that are not about time limits use a
-# large multiple; the time-limit cases (T1 to T4) set their own.
-export HARNESS_KIT_REPLAY_LIMIT_MULTIPLE=1000
+  HARNESS_KIT_REPLAY_SESSION_SECONDS HARNESS_KIT_REPLAY_BASELINE_FROM HARNESS_KIT_REPLAY_GRACE_SECONDS
+# HARNESS_KIT_REPLAY_OUTER is kept: when a replay of this repository runs this file, its
+# replays of the fake projects are replays inside a replay, and run one check at a time.
+# The cases that need a pool say how big (HARNESS_KIT_REPLAY_CPUS).
 
 result() {
   local label="$1" ok="$2" detail="$3"
@@ -265,7 +263,7 @@ fi
 # new_pool NAME: a repository whose check.sh prints PASS or FAIL for f1 to f4 (PASS when
 # fN.txt says content), with the entries e1 to e4, each changing one of those files. Each
 # run first logs "run <what>" to $POOL_LOG, when that is set, where <what> is the changed
-# file (f1 to f4) or baseline. With $POOL_DIR set, a run is held: it makes the folder
+# file (f1 to f4) or baseline; with $POOL_OUTER_LOG set, it logs its HARNESS_KIT_REPLAY_OUTER. With $POOL_DIR set, a run is held: it makes the folder
 # running.<what> there, writes "start <what> <how many are running> <its pid>" to the pipe
 # $POOL_DIR/events, waits for a line from the pipe $POOL_DIR/go.<what>, then removes its
 # folder and finishes. Prints the repository's path.
@@ -279,6 +277,7 @@ case " $* " in *" --skip-reviewed "*) ;; *) echo "FAIL check.sh: no --skip-revie
 what=baseline
 for f in f1 f2 f3 f4; do [ "$(cat $f.txt)" = content ] || what=$f; done
 [ -z "${POOL_LOG:-}" ] || echo "run $what" >>"$POOL_LOG"
+[ -z "${POOL_OUTER_LOG:-}" ] || echo "${HARNESS_KIT_REPLAY_OUTER:-unset}" >>"$POOL_OUTER_LOG"
 if [ -n "${POOL_DIR:-}" ]; then
   mkdir "$POOL_DIR/running.$what"
   echo "start $what $(ls -d "$POOL_DIR"/running.* | wc -l | tr -d ' ') $$" >"$POOL_DIR/events"
@@ -431,6 +430,30 @@ else
 4 jobs: exit $STATUS, runs: $(tr '\n' ' ' <"$WORK/pool-4.log" 2>/dev/null)"
 fi
 
+# N1. A replay inside another replay. Every check run is told it runs inside one
+# (HARNESS_KIT_REPLAY_OUTER=1). A replay started with that set takes the CPU count as 1, so
+# a project whose check runs replays does not start a pool the size of the machine inside
+# each outer run; HARNESS_KIT_REPLAY_CPUS still sets the pool when given.
+rm -f "$WORK/outer.log"
+run_in "$pool" env -u HARNESS_KIT_REPLAY_OUTER POOL_OUTER_LOG="$WORK/outer.log" bash "$REPLAY"
+outer_status=$STATUS outer_err="$ERR"
+run_in "$pool" env HARNESS_KIT_REPLAY_OUTER=1 bash "$REPLAY"
+inner_status=$STATUS inner_out="$OUT" inner_err="$ERR"
+run_in "$pool" env HARNESS_KIT_REPLAY_OUTER=1 HARNESS_KIT_REPLAY_CPUS=3 bash "$REPLAY"
+if [ "$outer_status" -eq 0 ] && [ "$(sort -u "$WORK/outer.log" 2>/dev/null)" = 1 ] && [ "$(wc -l <"$WORK/outer.log" | tr -d ' ')" = 5 ] &&
+  ! grep -q 'inside another replay' <<<"$outer_err" &&
+  [ "$inner_status" -eq 0 ] && [ "$inner_out" = "$POOL_KILLED" ] &&
+  grep -q 'up to 1 checks at once (1 CPUs, taken as 1 inside another replay)' <<<"$inner_err" &&
+  [ "$STATUS" -eq 0 ] && grep -q 'up to 3 checks at once (3 CPUs)$' <<<"$ERR" && clean "$pool"; then
+  result "replay-faults: a replay inside another replay runs one check at a time; its checks are told they run inside one" yes ""
+else
+  result "replay-faults: a replay inside another replay runs one check at a time; its checks are told they run inside one" no "outer: exit $outer_status; its checks' HARNESS_KIT_REPLAY_OUTER: $(tr '\n' ' ' <"$WORK/outer.log" 2>/dev/null)
+$outer_err
+inside: exit $inner_status
+$inner_err
+inside, with HARNESS_KIT_REPLAY_CPUS=3: $(describe)"
+fi
+
 # P4. Parts run apart, as harness-kit's CI runs them: the baseline part and shards 1/3,
 # 2/3 and 3/3 of the mixed entries, each into its own folder (none prints a verdict). The
 # shards between them run every entry once, and --judge on the four folders prints what a
@@ -529,7 +552,9 @@ fi
 
 # new_limits NAME MUTATIONS: a repository whose check.sh prints PASS app when app.txt says
 # ok, FAIL app otherwise; when app.txt holds "hang", or the file hang-always exists, it
-# logs its pid to $LIMIT_PIDS and hangs (exec sleep 3600) until it is stopped. Prints its path.
+# logs its pid to $LIMIT_PIDS and hangs (exec sleep 3600) until it is stopped; when it holds
+# "deaf", it hangs the same way but ignores SIGTERM. The check command execs check.sh, so
+# the run's own process is the one that hangs. Prints its path.
 new_limits() {
   local dir="$WORK/$1"
   mkdir -p "$dir/.harness"
@@ -537,10 +562,11 @@ new_limits() {
   printf 'ok\n' >"$dir/app.txt"
   cat >"$dir/check.sh" <<'CHECK'
 case " $* " in *" --skip-reviewed "*) ;; *) echo "FAIL check.sh: no --skip-reviewed"; exit 1 ;; esac
+if grep -q deaf app.txt; then echo "$$" >>"${LIMIT_PIDS:-/dev/null}"; trap '' TERM; exec sleep 3600; fi
 if [ -e hang-always ] || grep -q hang app.txt; then echo "$$" >>"${LIMIT_PIDS:-/dev/null}"; exec sleep 3600; fi
 if [ "$(cat app.txt)" = ok ]; then echo "PASS app"; else echo "FAIL app"; exit 1; fi
 CHECK
-  printf 'sh check.sh --skip-reviewed\n' >"$dir/.harness/check-command"
+  printf 'exec sh check.sh --skip-reviewed\n' >"$dir/.harness/check-command"
   printf "# id\tfile\tfind\treplacement\tcheck\n$2" >"$dir/.harness/mutations.tsv"
   git -C "$dir" add -A && git -C "$dir" commit -q -m "main: initial"
   echo "$dir"
@@ -579,23 +605,34 @@ alive() {
   echo "$found"
 }
 
-# T1 (D2's test). A fault that makes the check hang is stopped at its run limit (the floor,
-# 2 seconds here, as the tiny baseline times 3 is less) and is a TIMEOUT; the other entry is
-# still KILLED, the exit status is 1, the hung check is not left running, and no worktree
-# is left.
-limits="$(new_limits limits 'h-hang\tapp.txt\tok\thang\tapp\nh-ok\tapp.txt\tok\tbad\tapp\n')"
+# T1 (D2's test). A fault that makes the check hang (and ignore SIGTERM, for T1b) is stopped
+# at its run limit (the floor, 1.5 seconds here, as the tiny baseline times 3 is less) and is
+# a TIMEOUT; the other entry is still KILLED, the exit status is 1, the hung check is not
+# left running, and no worktree is left.
+limits="$(new_limits limits 'h-hang\tapp.txt\tok\tdeaf-hang\tapp\nh-ok\tapp.txt\tok\tbad\tapp\n')"
 rm -f "$WORK/limit-pids"
-LIMIT_PIDS="$WORK/limit-pids" HARNESS_KIT_REPLAY_CPUS=2 HARNESS_KIT_REPLAY_LIMIT_MULTIPLE=3 \
-  HARNESS_KIT_REPLAY_LIMIT_FLOOR_SECONDS=2 HARNESS_KIT_REPLAY_BASELINE_FALLBACK_SECONDS=5 run_guarded "$limits"
+LIMIT_PIDS="$WORK/limit-pids" HARNESS_KIT_REPLAY_CPUS=2 HARNESS_KIT_REPLAY_LIMIT_MULTIPLE=3 HARNESS_KIT_REPLAY_GRACE_SECONDS=1 \
+  HARNESS_KIT_REPLAY_LIMIT_FLOOR_SECONDS=1.5 HARNESS_KIT_REPLAY_BASELINE_FALLBACK_SECONDS=5 run_guarded "$limits"
 left="$(alive "$WORK/limit-pids")"
 if [ "$GUARDED" = yes ] && [ "$STATUS" = 1 ] && [ -z "$left" ] && [ -s "$WORK/limit-pids" ] &&
-  grep -q '^TIMEOUT h-hang: ran longer than its limit of 2 seconds (the floor; 3 times the baseline.s [0-9.]* seconds is less); stopped after [0-9.]* seconds$' <<<"$OUT" &&
+  grep -q '^TIMEOUT h-hang: ran longer than its limit of 1.5 seconds (the floor; 3 times the baseline.s [0-9.]* seconds is less); stopped after [0-9.]* seconds$' <<<"$OUT" &&
   grep -q '^KILLED h-ok: ' <<<"$OUT" && grep -qx 'replay-faults: 2 replayed: 1 KILLED, 0 SURVIVED, 1 TIMEOUT, 0 ERROR' <<<"$OUT" &&
   clean "$limits"; then
   result "replay-faults: a hanging check is stopped at its time limit and reported TIMEOUT; the others still get verdicts" yes ""
 else
   result "replay-faults: a hanging check is stopped at its time limit and reported TIMEOUT; the others still get verdicts" no "$(describe)
 ended within the guard: $GUARDED; hung checks still running:${left:- none}"
+fi
+
+# T1b. The same run: h-hang's check ignores SIGTERM, so it is force-killed (SIGKILL to its
+# process group) when the 1-second grace period after its 1.5-second limit ends: stopped
+# after about 2.5 seconds (not before 2.3: the grace was given; not after 4), and not left.
+stopped="$(sed -n 's/^TIMEOUT h-hang: .*; stopped after \([0-9.]*\) seconds$/\1/p' <<<"$OUT")"
+if [ "$GUARDED" = yes ] && [ -n "$stopped" ] && [ -z "$left" ] && awk -v s="$stopped" 'BEGIN { exit !(s >= 2.3 && s <= 4) }'; then
+  result "replay-faults: a run that ignores the stop signal is force-killed when its grace period ends" yes ""
+else
+  result "replay-faults: a run that ignores the stop signal is force-killed when its grace period ends" no "stopped after: ${stopped:-no TIMEOUT line} seconds (2.3 to 4 wanted); hung checks still running:${left:- none}
+$(describe)"
 fi
 
 # T2. The limits as the script prints them. A first session, with no baseline recorded: the
@@ -615,8 +652,11 @@ run_guarded "$derive" --part baseline --out "$WORK/derive-parts/baseline"
 second="$ERR" second_status=$STATUS
 run_guarded "$derive" --part 1/1 --out "$WORK/derive-parts/1" --baseline-from "$WORK/derive-parts/baseline"
 shard="$ERR" shard_status=$STATUS
-export HARNESS_KIT_REPLAY_LIMIT_MULTIPLE=1000
-unset HARNESS_KIT_REPLAY_CPUS HARNESS_KIT_REPLAY_LIMIT_FLOOR_SECONDS HARNESS_KIT_REPLAY_BASELINE_FALLBACK_SECONDS
+# For B1, below: a recorded baseline of 0.5 seconds, whose 3 times is under the 3-second floor.
+printf '2026-09-29T00:00:01Z\treplay-faults.sh\tmain\tnone\tREPLAYED\tkilled=2,survived=0,timeout=0,error=0,baseline=0.50s\tall\n' >>"$derive/.git/harness-kit/events.tsv"
+run_guarded "$derive" --part baseline --out "$WORK/derive-parts/floor"
+floored="$ERR" floored_status=$STATUS
+unset HARNESS_KIT_REPLAY_CPUS HARNESS_KIT_REPLAY_LIMIT_MULTIPLE HARNESS_KIT_REPLAY_LIMIT_FLOOR_SECONDS HARNESS_KIT_REPLAY_BASELINE_FALLBACK_SECONDS
 limit_lines() { grep 'time limit' <<<"$1" | sed -E 's/harness-kit replay-faults.sh: //; s/baseline.s [0-9.]+ seconds is less/baseline'"'"'s B seconds is less/'; }
 want_first="time limit for the baseline: 5 seconds (no baseline recorded: the fallback)
 time limit per run: set when the baseline ends
@@ -646,6 +686,16 @@ wanted:
 $want_shard"
 fi
 
+# B1. The baseline's limit is never below the floor: with a recorded baseline of 0.5 s, 3
+# times that (1.5 s) is under the 3-second floor, so the baseline gets 3 seconds.
+if [ "$floored_status" = 0 ] &&
+  grep -q "time limit for the baseline: 3 seconds (the floor; 3 times the last recorded baseline's 0.5 seconds is less)" <<<"$floored"; then
+  result "replay-faults: the baseline's limit is never below the floor" yes ""
+else
+  result "replay-faults: the baseline's limit is never below the floor" no "exit $floored_status
+$(limit_lines "$floored")"
+fi
+
 # T3. The session's limit (2 seconds here, set by HARNESS_KIT_REPLAY_SESSION_SECONDS, below
 # one run's limit of 5 s) runs out with one job and three hanging entries: the one running
 # is stopped and is a TIMEOUT, and so are the two never started.
@@ -672,7 +722,7 @@ fi
 stuck="$(new_limits stuck 'h1\tapp.txt\tok\thang1\tapp\nh2\tapp.txt\tok\thang2\tapp\n')"
 touch "$stuck/hang-always"
 rm -f "$WORK/baseline-pids"
-LIMIT_PIDS="$WORK/baseline-pids" HARNESS_KIT_REPLAY_CPUS=2 HARNESS_KIT_REPLAY_LIMIT_MULTIPLE=3 HARNESS_KIT_REPLAY_LIMIT_FLOOR_SECONDS=5 \
+LIMIT_PIDS="$WORK/baseline-pids" HARNESS_KIT_REPLAY_CPUS=2 HARNESS_KIT_REPLAY_LIMIT_MULTIPLE=3 HARNESS_KIT_REPLAY_LIMIT_FLOOR_SECONDS=1 \
   HARNESS_KIT_REPLAY_BASELINE_FALLBACK_SECONDS=1 run_guarded "$stuck"
 rm -f "$stuck/hang-always"
 left="$(alive "$WORK/baseline-pids")"

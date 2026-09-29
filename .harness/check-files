@@ -86,3 +86,12 @@ replay-faults.test.sh: the pipe controller never blocks on a write	tests/replay-
 harness-metrics: a REPLAYED line's TIMEOUTs count as planted faults not caught; older lines without the field still read	tests/harness-metrics.test.sh
 harness-metrics: a REPLAYED line's TIMEOUTs count as planted faults not caught; older lines without the field still read	plugins/harness-kit/scripts/harness-metrics.mjs
 validate.yml: the CI replay is one baseline part, shards 1 to 8 each passing --part i/8, and a verdicts job that needs them all	plugins/harness-kit/scripts/replay-faults.mjs
+replay-faults: a run that ignores the stop signal is force-killed when its grace period ends	tests/replay-faults.test.sh
+replay-faults: a run that ignores the stop signal is force-killed when its grace period ends	plugins/harness-kit/scripts/replay-faults.mjs
+replay-faults: a run that ignores the stop signal is force-killed when its grace period ends	plugins/harness-kit/scripts/replay-faults.sh
+replay-faults: the baseline's limit is never below the floor	tests/replay-faults.test.sh
+replay-faults: the baseline's limit is never below the floor	plugins/harness-kit/scripts/replay-faults.mjs
+replay-faults: the baseline's limit is never below the floor	plugins/harness-kit/scripts/replay-faults.sh
+replay-faults: a replay inside another replay runs one check at a time; its checks are told they run inside one	tests/replay-faults.test.sh
+replay-faults: a replay inside another replay runs one check at a time; its checks are told they run inside one	plugins/harness-kit/scripts/replay-faults.mjs
+replay-faults: a replay inside another replay runs one check at a time; its checks are told they run inside one	plugins/harness-kit/scripts/replay-faults.sh
