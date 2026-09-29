@@ -16,6 +16,8 @@ mkdir -p "$TMPDIR"
 unset HARNESS_KIT_REGISTRY_DIR
 # The gate is off under HARNESS_KIT_EVAL; only case 6 sets it.
 unset HARNESS_KIT_EVAL
+# The budget and the pass record's age limit are the defaults unless a case sets them.
+unset HARNESS_KIT_BUDGET_CHECK_SECONDS HARNESS_KIT_STOP_GATE_PASS_HOURS HARNESS_KIT_LIMIT_CHECK_SECONDS
 failures=0
 
 result() {
@@ -181,8 +183,10 @@ new_git_project() {
 }
 # set_check DIR BODY: replace DIR's check script.
 set_check() { printf '#!/bin/sh\n%s\n' "$2" >"$1/scripts/check.sh"; }
-# checked DIR: DIR's event log as "tool branch event what detail" lines.
-checked() { cut -f2,3,5- "$1/.git/harness-kit/events.tsv" 2>/dev/null; }
+# checked DIR: DIR's CHECKED lines as "tool branch event what detail" lines.
+checked() { awk -F'\t' '$5 == "CHECKED"' "$1/.git/harness-kit/events.tsv" 2>/dev/null | cut -f2,3,5-; }
+# timed DIR: DIR's TIMED lines as "what detail" lines.
+timed() { awk -F'\t' '$5 == "TIMED"' "$1/.git/harness-kit/events.tsv" 2>/dev/null | cut -f6,7; }
 
 # 9. A failing check is recorded as FAIL with its FAIL lines' names (not its PASS lines), a
 # passing one as PASS, on the branch, with HEAD.
@@ -272,6 +276,272 @@ else
     "$(describe)
 took ${took}s; still running:${left:- none}
 log: $(checked "$dir")"
+fi
+
+# ---------------------------------------------------------------------------------------
+# THE SKIP. Each project below is a git repository whose check counts its runs in
+# $WORK/<name>.runs, so "ran" and "skipped" are read from the count, never from timing. It
+# has a tracked app.txt and a .gitignore for ignored/.
+# ---------------------------------------------------------------------------------------
+# counted_project NAME BODY [IGNORED]: that project, its check running BODY after counting;
+# IGNORED, when given, is one more line for its .gitignore. Prints its path.
+counted_project() {
+  local name="$1" dir
+  dir="$(new_project "$name" "echo run >>\"$WORK/$name.runs\"; $2")"
+  printf 'v1\n' >"$dir/app.txt"
+  printf 'ignored/\n%s\n' "${3:-}" >"$dir/.gitignore"
+  git init -q -b feat "$dir"
+  git -C "$dir" add -A && git -C "$dir" commit -q -m initial
+  echo "$dir"
+}
+# runs NAME: how many times NAME's check ran.
+runs() { if [ -f "$WORK/$1.runs" ]; then wc -l <"$WORK/$1.runs" | tr -d ' '; else echo 0; fi; }
+# pass_record DIR: DIR's pass record.
+pass_record() { echo "$1/.git/harness-kit/stop-gate-pass"; }
+# edit_record DIR JS: change DIR's pass record with JS, run on the parsed record as r.
+edit_record() {
+  node -e '
+    const fs = require("fs");
+    const [file, js] = process.argv.slice(1);
+    const r = JSON.parse(fs.readFileSync(file, "utf8"));
+    new Function("r", js)(r);
+    fs.writeFileSync(file, JSON.stringify(r) + "\n");
+  ' "$(pass_record "$1")" "$2"
+}
+PASSING='echo "PASS everything"; exit 0'
+
+# 13. A pass, then nothing changed: the second stop does not run the check; stderr says so.
+dir="$(counted_project skip "$PASSING")"
+run_gate "$dir" s-skip false
+first="$(describe)"
+run_gate "$dir" s-skip false
+if [ "$(runs skip)" = 1 ] && [ "$STATUS" -eq 0 ] && [ -z "$OUT" ] && [ -f "$(pass_record "$dir")" ] &&
+  grep -qx 'harness-kit stop gate: nothing changed since the check passed at [0-9T:.Z-]*; the check was not run' <<<"$ERR"; then
+  result "stop-gate skip: after a pass with nothing changed, the next stop does not run the check" yes ""
+else
+  result "stop-gate skip: after a pass with nothing changed, the next stop does not run the check" no "runs: $(runs skip)
+first: $first
+second: $(describe)"
+fi
+
+# 14. A pass, then an edit to a tracked file: the check runs.
+dir="$(counted_project edit "$PASSING")"
+run_gate "$dir" s-edit false
+printf 'v2\n' >"$dir/app.txt"
+run_gate "$dir" s-edit false
+if [ "$(runs edit)" = 2 ]; then
+  result "stop-gate skip: an edit to a tracked file runs the check" yes ""
+else
+  result "stop-gate skip: an edit to a tracked file runs the check" no "runs: $(runs edit)
+$(describe)"
+fi
+
+# 15. A pass, then a new untracked file: the check runs. Then a new ignored file: skipped.
+dir="$(counted_project untracked "$PASSING")"
+run_gate "$dir" s-untracked false
+printf 'new\n' >"$dir/new.txt"
+run_gate "$dir" s-untracked false
+after_new="$(runs untracked)"
+mkdir -p "$dir/ignored" && printf 'x\n' >"$dir/ignored/x.txt"
+run_gate "$dir" s-untracked false
+if [ "$after_new" = 2 ] && [ "$(runs untracked)" = 2 ]; then
+  result "stop-gate skip: a new untracked file runs the check; a new ignored file does not" yes ""
+else
+  result "stop-gate skip: a new untracked file runs the check; a new ignored file does not" no "runs after the untracked file: $after_new
+runs after the ignored file: $(runs untracked)"
+fi
+
+# 16. A pass, then another check command: the check runs. The check-command file is ignored
+# here, so that only the command field can see the change.
+dir="$(counted_project command "$PASSING" .harness/check-command)"
+run_gate "$dir" s-command false
+printf 'scripts/check.sh --another\n' >"$dir/.harness/check-command"
+run_gate "$dir" s-command false
+if [ "$(runs command)" = 2 ] && [ -z "$(git -C "$dir" status --porcelain)" ]; then
+  result "stop-gate skip: another check command runs the check" yes ""
+else
+  result "stop-gate skip: another check command runs the check" no "runs: $(runs command)
+status: $(git -C "$dir" status --porcelain)"
+fi
+
+# 17. A pass, then a new commit with the same tree: the check runs. Then a new branch: the
+# check runs.
+dir="$(counted_project refs "$PASSING")"
+run_gate "$dir" s-refs false
+git -C "$dir" commit -q --allow-empty -m empty
+run_gate "$dir" s-refs false
+after_commit="$(runs refs)"
+git -C "$dir" branch other
+run_gate "$dir" s-refs false
+if [ "$after_commit" = 2 ] && [ "$(runs refs)" = 3 ]; then
+  result "stop-gate skip: a new commit, or a new ref, runs the check" yes ""
+else
+  result "stop-gate skip: a new commit, or a new ref, runs the check" no "runs after the commit: $after_commit
+runs after the branch: $(runs refs)"
+fi
+
+# 18. A pass, then a copy of the gate whose plugin.json has another version: the check runs.
+dir="$(counted_project version "$PASSING")"
+run_gate "$dir" s-version false
+mkdir -p "$WORK/other-plugin/.claude-plugin"
+cp -R "$ROOT/plugins/harness-kit/scripts" "$WORK/other-plugin/scripts"
+printf '{ "name": "harness-kit", "version": "99.0.0" }\n' >"$WORK/other-plugin/.claude-plugin/plugin.json"
+real_gate="$GATE"
+GATE="$WORK/other-plugin/scripts/stop-gate.mjs"
+run_gate "$dir" s-version false
+GATE="$real_gate"
+if [ "$(runs version)" = 2 ]; then
+  result "stop-gate skip: another plugin version runs the check" yes ""
+else
+  result "stop-gate skip: another plugin version runs the check" no "runs: $(runs version)
+$(describe)"
+fi
+
+# 19. A failing check, then nothing changed: the check runs again and blocks again, and no
+# pass record is left.
+dir="$(counted_project failing-twice 'echo "FAIL unit"; exit 1')"
+run_gate "$dir" s-failing-twice false
+first="$(describe)"
+run_gate "$dir" s-failing-twice true
+if [ "$(runs failing-twice)" = 2 ] && is_block "$OUT" && grep -q 'block 2 of 3' <<<"$OUT" && [ ! -e "$(pass_record "$dir")" ]; then
+  result "stop-gate skip: a failing check leaves no pass record; the next stop runs it again" yes ""
+else
+  result "stop-gate skip: a failing check leaves no pass record; the next stop runs it again" no "runs: $(runs failing-twice)
+first: $first
+second: $(describe)"
+fi
+
+# 20. A check stopped at its limit leaves no pass record, even one that exits 0 when stopped:
+# while $WORK/timeout.hang exists, the check hangs and exits 0 on SIGTERM. The next stop, with
+# nothing changed but the hang gone, runs the check. Both stops use the same 1-second limit,
+# as the limit is a field.
+dir="$(counted_project timeout "if [ -e \"$WORK/timeout.hang\" ]; then trap 'exit 0' TERM; echo \"PASS lint\"; sleep 30 & wait; fi; $PASSING")"
+printf 'exec scripts/check.sh\n' >"$dir/.harness/check-command"
+git -C "$dir" commit -q -am "exec the check"
+: >"$WORK/timeout.hang"
+HARNESS_KIT_LIMIT_CHECK_SECONDS=1 HARNESS_KIT_LIMIT_GRACE_SECONDS=1 run_gate "$dir" s-timeout false
+first="$(describe)"
+first_block=no
+is_block "$OUT" && grep -q 'TIMEOUT' <<<"$OUT" && first_block=yes
+record_after_timeout=no
+[ -e "$(pass_record "$dir")" ] && record_after_timeout=yes
+rm -f "$WORK/timeout.hang"
+HARNESS_KIT_LIMIT_CHECK_SECONDS=1 HARNESS_KIT_LIMIT_GRACE_SECONDS=1 run_gate "$dir" s-timeout true
+if [ "$first_block" = yes ] && [ "$record_after_timeout" = no ] && [ "$(runs timeout)" = 2 ] && [ -z "$OUT" ]; then
+  result "stop-gate skip: a check stopped at its limit leaves no pass record, even when it exits 0; the next stop runs it" yes ""
+else
+  result "stop-gate skip: a check stopped at its limit leaves no pass record, even when it exits 0; the next stop runs it" no "runs: $(runs timeout); record after the timeout: $record_after_timeout
+first: $first
+second: $(describe)"
+fi
+
+# 21. A field that cannot be computed runs the check, and leaves no record: after a pass, a
+# git whose write-tree fails (first on PATH); and a project that is not a git repository.
+dir="$(counted_project no-tree "$PASSING")"
+run_gate "$dir" s-no-tree false
+mkdir -p "$WORK/broken-git"
+cat >"$WORK/broken-git/git" <<FAKE
+#!/bin/sh
+for arg in "\$@"; do
+  if [ "\$arg" = write-tree ]; then echo "fake git: write-tree fails" >&2; exit 1; fi
+done
+exec "$(command -v git)" "\$@"
+FAKE
+chmod +x "$WORK/broken-git/git"
+PATH="$WORK/broken-git:$PATH" run_gate "$dir" s-no-tree false
+broken_runs="$(runs no-tree)"
+broken_record=no
+[ -e "$(pass_record "$dir")" ] && broken_record=yes
+plain="$(new_project no-git "echo run >>\"$WORK/no-git.runs\"; $PASSING")"
+run_gate "$plain" s-no-git false
+run_gate "$plain" s-no-git false
+if [ "$broken_runs" = 2 ] && [ "$broken_record" = no ] && [ "$(runs no-git)" = 2 ]; then
+  result "stop-gate skip: a field that cannot be computed runs the check and leaves no record" yes ""
+else
+  result "stop-gate skip: a field that cannot be computed runs the check and leaves no record" no "runs with the broken git: $broken_runs; record left: $broken_record
+runs outside git: $(runs no-git)"
+fi
+
+# 22. A record that cannot be used runs the check: not JSON, a field missing, an extra field,
+# a field that is not text, no time, a time in the future. Each stop passes and writes a new
+# record, which the next one spoils.
+dir="$(counted_project garbled "$PASSING")"
+run_gate "$dir" s-garbled false
+log=""
+want=1
+for spoil in 'not json' 'delete r.command' 'r.extra = "x"' 'r.limit = Number(r.limit)' 'delete r.time' \
+  'r.time = new Date(Date.now() + 3600e3).toISOString()'; do
+  if [ "$spoil" = 'not json' ]; then printf 'not json\n' >"$(pass_record "$dir")"; else edit_record "$dir" "$spoil"; fi
+  run_gate "$dir" s-garbled false
+  want=$((want + 1))
+  log="$log"$'\n'"$spoil: runs $(runs garbled) (want $want)"
+done
+if [ "$(runs garbled)" = 7 ]; then
+  result "stop-gate skip: a pass record that cannot be used runs the check" yes ""
+else
+  result "stop-gate skip: a pass record that cannot be used runs the check" no "${log#?}"
+fi
+
+# 23. A pass is reused for less than 24 hours: a record 25 hours old runs the check, one 23
+# hours old does not.
+dir="$(counted_project age "$PASSING")"
+run_gate "$dir" s-age false
+edit_record "$dir" 'r.time = new Date(Date.now() - 25 * 3600e3).toISOString()'
+run_gate "$dir" s-age false
+old_runs="$(runs age)"
+edit_record "$dir" 'r.time = new Date(Date.now() - 23 * 3600e3).toISOString()'
+run_gate "$dir" s-age false
+if [ "$old_runs" = 2 ] && [ "$(runs age)" = 2 ]; then
+  result "stop-gate skip: a pass 24 hours old or older runs the check; a younger one is reused" yes ""
+else
+  result "stop-gate skip: a pass 24 hours old or older runs the check; a younger one is reused" no "runs after 25 hours: $old_runs
+runs after 23 hours: $(runs age)"
+fi
+
+# 24. A passing check that edits a tracked file while it runs leaves no record: the next stop
+# runs it.
+dir="$(counted_project busy "echo more >>app.txt; $PASSING")"
+run_gate "$dir" s-busy false
+run_gate "$dir" s-busy false
+if [ "$(runs busy)" = 2 ] && [ ! -e "$(pass_record "$dir")" ]; then
+  result "stop-gate skip: a check that changes a file while it runs leaves no pass record" yes ""
+else
+  result "stop-gate skip: a check that changes a file while it runs leaves no pass record" no "runs: $(runs busy)"
+fi
+
+# ---------------------------------------------------------------------------------------
+# THE BUDGET. The check sleeps 0.5 seconds against a budget of 0.2: the first over-budget
+# stop of a session tells the person (systemMessage), a later one in the same session does
+# not, and another session's does; each is a TIMED line marked over. Within the budget (5
+# seconds) there is no warning, and the line says within. app.txt is edited between stops so
+# that each one runs the check.
+# ---------------------------------------------------------------------------------------
+message() { node -e 'try { console.log(JSON.parse(process.argv[1]).systemMessage ?? "") } catch { console.log("") }' "$1"; }
+dir="$(counted_project budget-time "sleep 0.5; $PASSING")"
+HARNESS_KIT_BUDGET_CHECK_SECONDS=0.2 run_gate "$dir" s-budget-1 false
+first="$(message "$OUT")"
+printf 'v2\n' >"$dir/app.txt"
+HARNESS_KIT_BUDGET_CHECK_SECONDS=0.2 run_gate "$dir" s-budget-1 false
+second="$(message "$OUT")"
+printf 'v3\n' >"$dir/app.txt"
+HARNESS_KIT_BUDGET_CHECK_SECONDS=0.2 run_gate "$dir" s-budget-2 false
+other="$(message "$OUT")"
+printf 'v4\n' >"$dir/app.txt"
+HARNESS_KIT_BUDGET_CHECK_SECONDS=5 run_gate "$dir" s-budget-3 false
+within="$(message "$OUT")"
+lines="$(timed "$dir" | sed -E 's/seconds=[0-9.]+/seconds=S/')"
+want_lines="$(printf 'check\tseconds=S,budget=0.2,over\ncheck\tseconds=S,budget=0.2,over\ncheck\tseconds=S,budget=0.2,over\ncheck\tseconds=S,budget=5,within')"
+if grep -q '^harness-kit: the check took [0-9.]* seconds, over its budget of 0.2 seconds (HARNESS_KIT_BUDGET_CHECK_SECONDS); .*once per session' <<<"$first" &&
+  [ -z "$second" ] && grep -q '^harness-kit: the check took [0-9.]* seconds, over its budget of 0.2 seconds' <<<"$other" &&
+  [ -z "$within" ] && [ "$lines" = "$want_lines" ] && [ "$(runs budget-time)" = 4 ]; then
+  result "stop-gate budget: an over-budget check is said once per session and recorded every time" yes ""
+else
+  result "stop-gate budget: an over-budget check is said once per session and recorded every time" no "first: $first
+second: $second
+another session: $other
+within: $within
+TIMED lines:
+$lines"
 fi
 
 if [ "$failures" -ne 0 ]; then

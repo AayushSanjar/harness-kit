@@ -24,7 +24,7 @@ start-up picture: at most 5 failing checks are named, then and N more	tests/sess
 start-up picture: the last review is this branch's latest line in .harness/reviews.tsv, or none	tests/session-start.test.sh
 start-up picture: uncommitted changes are counted by kind in one line, or none	tests/session-start.test.sh
 start-up picture: the state file's first 10 lines, from .harness/state-file or docs/STATE.md, or none	tests/session-start.test.sh
-start-up picture: never more than 15 lines, none longer than 200 characters, a cut line ending in …	tests/session-start.test.sh
+start-up picture: never more than 16 lines, none longer than 200 characters, a cut line ending in …	tests/session-start.test.sh
 session-start: the reviewer's session gets the version line only (no report, no warning)	tests/ship.test.sh
 stop-gate: records a check in the event log: FAIL with the failing checks' names, or PASS	tests/stop-gate.test.sh
 stop-gate: records only a changed result: the same result again adds no line; PASS after FAIL, FAIL after PASS, or a different set of failing checks adds one	tests/stop-gate.test.sh
@@ -219,3 +219,61 @@ hooks.json runs plan-mode-guard.mjs on PreToolUse for EnterPlanMode	tests/plan-m
 hooks.json runs plan-mode-guard.mjs on PreToolUse for EnterPlanMode	plugins/harness-kit/hooks/hooks.json
 session-start: Claude is told to run harness-kit's .sh scripts with bash	tests/session-start.test.sh
 session-start: Claude is told to run harness-kit's .sh scripts with bash	plugins/harness-kit/scripts/session-start.mjs
+stop-gate skip: after a pass with nothing changed, the next stop does not run the check	tests/stop-gate.test.sh
+stop-gate skip: after a pass with nothing changed, the next stop does not run the check	plugins/harness-kit/scripts/stop-gate.mjs
+stop-gate skip: an edit to a tracked file runs the check	tests/stop-gate.test.sh
+stop-gate skip: an edit to a tracked file runs the check	plugins/harness-kit/scripts/stop-gate.mjs
+stop-gate skip: a new untracked file runs the check; a new ignored file does not	tests/stop-gate.test.sh
+stop-gate skip: a new untracked file runs the check; a new ignored file does not	plugins/harness-kit/scripts/stop-gate.mjs
+stop-gate skip: another check command runs the check	tests/stop-gate.test.sh
+stop-gate skip: another check command runs the check	plugins/harness-kit/scripts/stop-gate.mjs
+stop-gate skip: a new commit, or a new ref, runs the check	tests/stop-gate.test.sh
+stop-gate skip: a new commit, or a new ref, runs the check	plugins/harness-kit/scripts/stop-gate.mjs
+stop-gate skip: another plugin version runs the check	tests/stop-gate.test.sh
+stop-gate skip: another plugin version runs the check	plugins/harness-kit/scripts/stop-gate.mjs
+stop-gate skip: a failing check leaves no pass record; the next stop runs it again	tests/stop-gate.test.sh
+stop-gate skip: a failing check leaves no pass record; the next stop runs it again	plugins/harness-kit/scripts/stop-gate.mjs
+stop-gate skip: a check stopped at its limit leaves no pass record, even when it exits 0; the next stop runs it	tests/stop-gate.test.sh
+stop-gate skip: a check stopped at its limit leaves no pass record, even when it exits 0; the next stop runs it	plugins/harness-kit/scripts/stop-gate.mjs
+stop-gate skip: a field that cannot be computed runs the check and leaves no record	tests/stop-gate.test.sh
+stop-gate skip: a field that cannot be computed runs the check and leaves no record	plugins/harness-kit/scripts/stop-gate.mjs
+stop-gate skip: a pass record that cannot be used runs the check	tests/stop-gate.test.sh
+stop-gate skip: a pass record that cannot be used runs the check	plugins/harness-kit/scripts/stop-gate.mjs
+stop-gate skip: a pass 24 hours old or older runs the check; a younger one is reused	tests/stop-gate.test.sh
+stop-gate skip: a pass 24 hours old or older runs the check; a younger one is reused	plugins/harness-kit/scripts/stop-gate.mjs
+stop-gate skip: a check that changes a file while it runs leaves no pass record	tests/stop-gate.test.sh
+stop-gate skip: a check that changes a file while it runs leaves no pass record	plugins/harness-kit/scripts/stop-gate.mjs
+stop-gate budget: an over-budget check is said once per session and recorded every time	tests/stop-gate.test.sh
+stop-gate budget: an over-budget check is said once per session and recorded every time	plugins/harness-kit/scripts/stop-gate.mjs
+brief-guard: a denial of the pass record names the Stop hook	tests/brief-guard.test.sh
+brief-guard: a denial of the pass record names the Stop hook	plugins/harness-kit/scripts/guard-lib.mjs
+brief-guard: a denial of the pass record names the Stop hook	plugins/harness-kit/scripts/brief-guard.mjs
+brief-guard: a denial of the pass record names the Stop hook	plugins/harness-kit/scripts/git-guard.mjs
+brief-guard: Write, Edit, MultiEdit and NotebookEdit of the Stop hook's pass record in the real tree are denied	tests/brief-guard.test.sh
+brief-guard: Write, Edit, MultiEdit and NotebookEdit of the Stop hook's pass record in the real tree are denied	plugins/harness-kit/scripts/guard-lib.mjs
+brief-guard: Write, Edit, MultiEdit and NotebookEdit of the Stop hook's pass record in the real tree are denied	plugins/harness-kit/scripts/brief-guard.mjs
+brief-guard: Write, Edit, MultiEdit and NotebookEdit of the Stop hook's pass record in the real tree are denied	plugins/harness-kit/scripts/git-guard.mjs
+brief-guard: the pass record in a scratch copy, and files only named like it, are allowed	tests/brief-guard.test.sh
+brief-guard: the pass record in a scratch copy, and files only named like it, are allowed	plugins/harness-kit/scripts/guard-lib.mjs
+brief-guard: the pass record in a scratch copy, and files only named like it, are allowed	plugins/harness-kit/scripts/brief-guard.mjs
+brief-guard: the pass record in a scratch copy, and files only named like it, are allowed	plugins/harness-kit/scripts/git-guard.mjs
+git-guard: a shell command naming the Stop hook's pass record in the real tree is denied	tests/brief-guard.test.sh
+git-guard: a shell command naming the Stop hook's pass record in the real tree is denied	plugins/harness-kit/scripts/guard-lib.mjs
+git-guard: a shell command naming the Stop hook's pass record in the real tree is denied	plugins/harness-kit/scripts/brief-guard.mjs
+git-guard: a shell command naming the Stop hook's pass record in the real tree is denied	plugins/harness-kit/scripts/git-guard.mjs
+git-guard: the pass record in a scratch copy, and a message that mentions it, are allowed	tests/brief-guard.test.sh
+git-guard: the pass record in a scratch copy, and a message that mentions it, are allowed	plugins/harness-kit/scripts/guard-lib.mjs
+git-guard: the pass record in a scratch copy, and a message that mentions it, are allowed	plugins/harness-kit/scripts/brief-guard.mjs
+git-guard: the pass record in a scratch copy, and a message that mentions it, are allowed	plugins/harness-kit/scripts/git-guard.mjs
+start-up picture: the last full fault replay's age, with the command to run one from 7 days on or with none	tests/session-start.test.sh
+start-up picture: the last full fault replay's age, with the command to run one from 7 days on or with none	plugins/harness-kit/scripts/start-picture.mjs
+release.sh: its check and its whole run are timed against their budgets, and an overrun is said once each	tests/release.test.sh
+release.sh: its check and its whole run are timed against their budgets, and an overrun is said once each	plugins/harness-kit/scripts/release.sh
+release.sh: its check and its whole run are timed against their budgets, and an overrun is said once each	plugins/harness-kit/scripts/events.sh
+replay-faults: each finished run is timed against the replay budget, and an overrun is said once	tests/replay-faults.test.sh
+replay-faults: each finished run is timed against the replay budget, and an overrun is said once	plugins/harness-kit/scripts/replay-faults.sh
+replay-faults: each finished run is timed against the replay budget, and an overrun is said once	plugins/harness-kit/scripts/events.sh
+ship.sh: every run is timed against the ship budget, and an overrun is said once	tests/ship.test.sh
+ship.sh: every run is timed against the ship budget, and an overrun is said once	plugins/harness-kit/scripts/ship.sh
+ship.sh: every run is timed against the ship budget, and an overrun is said once	plugins/harness-kit/scripts/events.sh
+stop-gate budget: an over-budget check is said once per session and recorded every time	plugins/harness-kit/scripts/time-limit.mjs

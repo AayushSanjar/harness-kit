@@ -1,6 +1,6 @@
 // Shared by git-guard.mjs (Bash) and brief-guard.mjs (Write, Edit, MultiEdit, NotebookEdit),
 // the PreToolUse hooks that keep Claude out of the person's steps: what a scratch copy is,
-// and which files are a brief's approval. And by git-guard.mjs and background-guard.mjs
+// and which files are a brief's approval or the Stop hook's pass record. And by git-guard.mjs and background-guard.mjs
 // (Bash): reading a shell command as the shell reads it (tokenize, then parse), below.
 //
 // A SCRATCH COPY is a folder strictly under the OS temp folder: os.tmpdir() (TMPDIR), /tmp,
@@ -13,6 +13,10 @@
 // A BRIEF'S APPROVAL is any file whose name ends in ".brief.approved"
 // (.reports/<branch>.brief.approved, brief-lib.sh). Only approve-brief.sh, run by the person
 // in their own terminal, writes it; Claude never does, in the real working tree.
+//
+// THE STOP HOOK'S PASS RECORD is any file named "stop-gate-pass"
+// (<git dir>/harness-kit/stop-gate-pass, stop-gate.mjs's THE SKIP). Only the Stop hook
+// writes it, after the check passes; a record Claude wrote would let a stop skip the check.
 import { realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
@@ -36,6 +40,13 @@ export const isScratch = (dir) => dir !== null && TEMP_ROOTS.some((root) => real
 
 // True when NAME, a file name or a path, names a brief's approval.
 export const isApproval = (name) => /\.brief\.approved$/.test(name);
+
+// True when NAME, a file name or a path, names the Stop hook's pass record.
+export const isPassRecord = (name) => /(?:^|\/)stop-gate-pass$/.test(name);
+
+export const PASS_REASON =
+  "it is the Stop hook's pass record (<git dir>/harness-kit/stop-gate-pass), which only the Stop hook writes, after the check passes; " +
+  "a record written by anything else would let a stop skip the check. To have the check run, just finish: the Stop hook runs it.";
 
 export const APPROVAL_REASON =
   "it is a brief's approval (.reports/<branch>.brief.approved), which only approve-brief.sh writes, run by the person in their own terminal " +

@@ -32,7 +32,8 @@ export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.invalid
 # A replay of this repository runs this file with its own settings; the cases set their own.
 unset HARNESS_KIT_EVAL CLAUDE_PROJECT_DIR HARNESS_KIT_REPLAY HARNESS_KIT_REPLAY_JOBS HARNESS_KIT_REPLAY_CPUS \
   HARNESS_KIT_REPLAY_LIMIT_MULTIPLE HARNESS_KIT_REPLAY_LIMIT_FLOOR_SECONDS HARNESS_KIT_REPLAY_BASELINE_FALLBACK_SECONDS \
-  HARNESS_KIT_REPLAY_SESSION_SECONDS HARNESS_KIT_REPLAY_BASELINE_FROM HARNESS_KIT_REPLAY_GRACE_SECONDS
+  HARNESS_KIT_REPLAY_SESSION_SECONDS HARNESS_KIT_REPLAY_BASELINE_FROM HARNESS_KIT_REPLAY_GRACE_SECONDS \
+  HARNESS_KIT_BUDGET_REPLAY_SECONDS
 # HARNESS_KIT_REPLAY_OUTER is kept: when a replay of this repository runs this file, its
 # replays of the fake projects are replays inside a replay, and run one check at a time.
 # The cases that need a pool say how big (HARNESS_KIT_REPLAY_CPUS).
@@ -196,7 +197,7 @@ fi
 # line with its counts, its baseline's seconds (compared apart: they vary) and the ids asked
 # for; the refusals left none (P6 has the interrupted run). A run of every entry says "all".
 run_in "$dir" bash "$REPLAY"
-logged="$(cut -f2,5-7 "$dir/.git/harness-kit/events.tsv" 2>/dev/null)"
+logged="$(grep -v $'\tTIMED\t' "$dir/.git/harness-kit/events.tsv" 2>/dev/null | cut -f2,5-7)"
 got="$(sed -E 's/,baseline=[0-9]+\.[0-9]{2}s//' <<<"$logged")"
 want="$(printf '%s\tREPLAYED\t%s\t%s\n' \
   replay-faults.sh killed=1,survived=0,timeout=0,error=0 "ids: m-killed" \
@@ -215,6 +216,22 @@ log:
 $logged
 wanted (without the baseline field, which every line must have):
 $want"
+fi
+
+# 7b2. THE TIME. Each REPLAYED line is followed by a TIMED line for "replay", within the
+# default budget of 180 seconds. With a budget of 0.001 seconds, a run's TIMED line is marked
+# over, and the warning is said once on stderr.
+timed_ok=yes
+[ "$(awk -F'\t' '$5 == "REPLAYED" { r++ } $5 == "TIMED" && prev == "REPLAYED" && $6 == "replay" && $7 ~ /^seconds=[0-9.]+,budget=180,within$/ { t++ } { prev = $5 } END { print r "/" t }' "$dir/.git/harness-kit/events.tsv")" = 6/6 ] || timed_ok=no
+HARNESS_KIT_BUDGET_REPLAY_SECONDS=0.001 run_in "$dir" bash "$REPLAY" m-killed
+over_line="$(tail -n 1 "$dir/.git/harness-kit/events.tsv" | cut -f2,5,6,7 | sed -E 's/seconds=[0-9.]+/seconds=S/')"
+if [ "$timed_ok" = yes ] && [ "$STATUS" -eq 0 ] && [ "$over_line" = "$(printf 'replay-faults.sh\tTIMED\treplay\tseconds=S,budget=0.001,over')" ] &&
+  [ "$(grep -c '^harness-kit: the fault replay took [0-9.]* seconds, over its budget of 0.001 seconds (HARNESS_KIT_BUDGET_REPLAY_SECONDS)' <<<"$ERR")" = 1 ]; then
+  result "replay-faults: each finished run is timed against the replay budget, and an overrun is said once" yes ""
+else
+  result "replay-faults: each finished run is timed against the replay budget, and an overrun is said once" no "every REPLAYED line followed by a TIMED line within 180 seconds: $timed_ok
+last line: $over_line
+$(describe)"
 fi
 
 # 7c. A fragile entry, whose text to find holds a version or a date, is an ERROR and is not

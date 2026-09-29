@@ -34,7 +34,7 @@ export GIT_COMMITTER_NAME=test GIT_COMMITTER_EMAIL=test@example.invalid
 unset HARNESS_KIT_EVAL CLAUDE_PROJECT_DIR
 # ship.sh: runs appear at once in the fake gh, so never sleep.
 export SHIP_POLL_SECONDS=0 SHIP_CI_APPEAR_SECONDS=0 SHIP_GH_RETRY_SECONDS=0
-unset SHIP_GH_TRIES
+unset SHIP_GH_TRIES HARNESS_KIT_BUDGET_SHIP_SECONDS
 
 result() {
   local label="$1" ok="$2" detail="$3"
@@ -238,10 +238,11 @@ run_session() {
 }
 
 rev() { git -C "$1" rev-parse "$2" 2>/dev/null; }
-# events DIR: DIR's local event log as "tool branch event what" lines, tab-separated.
-events() { cut -f2,3,5,6 "$1/.git/harness-kit/events.tsv" 2>/dev/null; }
-# event_detail DIR N: the detail of the Nth line of DIR's event log.
-event_detail() { sed -n "${2}p" "$1/.git/harness-kit/events.tsv" 2>/dev/null | cut -f7; }
+# events DIR: DIR's local event log as "tool branch event what" lines, tab-separated, without
+# its TIMED lines (the times; case 23b checks them).
+events() { grep -v $'\tTIMED\t' "$1/.git/harness-kit/events.tsv" 2>/dev/null | cut -f2,3,5,6; }
+# event_detail DIR N: the detail of the Nth of those lines.
+event_detail() { grep -v $'\tTIMED\t' "$1/.git/harness-kit/events.tsv" 2>/dev/null | sed -n "${2}p" | cut -f7; }
 remote_rev() { git --git-dir="$1.git" rev-parse -q --verify "refs/heads/$2" 2>/dev/null; }
 
 # ---------------------------------------------------------------------------------------
@@ -311,7 +312,7 @@ if [ "$STATUS" -eq 0 ] &&
   grep -qF "write your final report to $dir/.reports/feature.md" <<<"$line2" &&
   grep -qF '"## Summary"' <<<"$line2" && grep -q 'at most 15 lines' <<<"$line2" &&
   grep -q 'Never commit it' <<<"$line2" &&
-  [ "$(grep -vc '^harness-kit start-up: ' <<<"$OUT")" = 7 ] && [ "$(grep -c '^harness-kit start-up: ' <<<"$OUT")" = 5 ] &&
+  [ "$(grep -vc '^harness-kit start-up: ' <<<"$OUT")" = 7 ] && [ "$(grep -c '^harness-kit start-up: ' <<<"$OUT")" = 6 ] &&
   grep -q 'removed the stale report .reports/gone.md' <<<"$ERR" &&
   grep -q 'removed the stale report .reports/old.md' <<<"$ERR" &&
   grep -q 'removed the stale commit draft .reports/gone.commit.txt' <<<"$ERR" &&
@@ -822,6 +823,26 @@ else
   result "ship.sh: each stop, with its reason, and each SHIPPED is a line in .git/harness-kit/events.tsv" no \
     "$(for d in ship-main ship-dirty ship-fix ship-check-red ship-red ship-green ship-resume; do
       printf '%s:\n%s\n' "$d" "$(cat "$WORK/$d/.git/harness-kit/events.tsv" 2>/dev/null)"; done)"
+fi
+
+# 23b. THE TIME. Every ship.sh run above, the refusals included, left one TIMED line for
+# "ship" within the default budget of 600 seconds. A green ship with a budget of 0.001
+# seconds is marked over, and the warning is said once on stderr.
+timed_ok=yes
+for d in ship-main ship-dirty ship-fix ship-check-red ship-green; do
+  [ "$(awk -F'\t' '$5 == "TIMED" && $2 == "ship.sh" && $6 == "ship" && $7 ~ /^seconds=[0-9.]+,budget=600,within$/' "$WORK/$d/.git/harness-kit/events.tsv" 2>/dev/null | wc -l | tr -d ' ')" = 1 ] ||
+    timed_ok="no ($d)"
+done
+dir="$(new_repo ship-timed)"
+HARNESS_KIT_BUDGET_SHIP_SECONDS=0.001 run_ship "$dir" "$PASS_JSON" success
+over_line="$(awk -F'\t' '$5 == "TIMED"' "$dir/.git/harness-kit/events.tsv" | cut -f2,6,7 | sed -E 's/seconds=[0-9.]+/seconds=S/')"
+if [ "$timed_ok" = yes ] && [ "$STATUS" -eq 0 ] && [ "$over_line" = "$(printf 'ship.sh\tship\tseconds=S,budget=0.001,over')" ] &&
+  [ "$(grep -c '^harness-kit: ship.sh took [0-9.]* seconds, over its budget of 0.001 seconds (HARNESS_KIT_BUDGET_SHIP_SECONDS)' <<<"$ERR")" = 1 ]; then
+  result "ship.sh: every run is timed against the ship budget, and an overrun is said once" yes ""
+else
+  result "ship.sh: every run is timed against the ship budget, and an overrun is said once" no "earlier runs each with one TIMED line within 600 seconds: $timed_ok
+TIMED: $over_line
+$(describe)"
 fi
 
 # 24. The check runs once: ship.sh saves its output before the review, and review.sh reuses

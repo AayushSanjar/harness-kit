@@ -90,6 +90,12 @@
 # harness_check_event: a CHECKED line when it differs from the branch's last recorded
 # result. Outside a git repository nothing is recorded.
 #
+# THE TIME (events.sh's harness_timed_event). The whole run, from its start to its exit on
+# any path (a refusal, a stop, a signal or the ship), is a TIMED line for "ship" against the
+# ship budget (600 seconds by default; time-limit.mjs's BUDGETS), on the branch checked out
+# at the exit. A time over the budget adds a TIMED line marked over and one warning line on
+# stderr; it stops nothing.
+#
 # RESUMABLE. Re-running after a stop continues where it stopped. Steps 1-5 are worked out
 # from git and GitHub again each time and cost nothing when already done: a recorded PASS
 # is not reviewed again (nor is its brief checked again), pushing a pushed branch does
@@ -114,7 +120,10 @@ POLL="${SHIP_POLL_SECONDS:-10}"
 . "$HERE/brief-lib.sh"
 # shellcheck source=limit-lib.sh
 . "$HERE/limit-lib.sh"
-hk_on_exit
+# The whole run's time, recorded on any exit (THE TIME).
+STARTED="$(harness_clock)"
+timed_exit() { harness_timed_event ship.sh ship "$(harness_seconds_since "$STARTED")" "$(node "$HK_LIMIT_JS" budget ship)"; }
+hk_on_exit timed_exit
 CI_TOOL=ship.sh CI_APPEAR="$APPEAR" CI_POLL="$POLL" CI_RESUME="re-run ship.sh"
 
 say() { echo "harness-kit ship.sh: $*" >&2; }

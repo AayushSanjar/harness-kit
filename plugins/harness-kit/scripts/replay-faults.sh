@@ -107,6 +107,12 @@
 # for, to the local event log, .git/harness-kit/events.tsv (events.sh has the format). A
 # refused or interrupted run, and a --part run, append nothing.
 #
+# THE TIME (events.sh's harness_timed_event). Next to its REPLAYED line, a run that writes
+# one also writes a TIMED line for "replay": the seconds from its start (a whole run's, or a
+# --judge run's own) against the replay budget (180 seconds by default; time-limit.mjs's
+# BUDGETS). A time over the budget is marked over, with one warning line on stderr; it
+# changes no verdict and no exit status.
+#
 # Exit status: 0 every entry KILLED (--part: every run ended); 1 any SURVIVED, TIMEOUT or
 # ERROR; 2 nothing was replayed or judged (usage, no or unusable mutations.tsv, an unknown
 # ID, no usable check command, results that are not one whole replay of this working tree,
@@ -119,6 +125,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=limit-lib.sh
 . "$HERE/limit-lib.sh"
 NAME="replay-faults.sh"
+STARTED="$(harness_clock)"
 USAGE="usage: $NAME [ID...] | --part baseline|I/N --out DIR [--baseline-from BDIR] [ID...] | --judge DIR..."
 say() { echo "harness-kit $NAME: $*" >&2; }
 refuse() { say "$*. Nothing was replayed."; exit 2; }
@@ -194,6 +201,7 @@ judge() {
   status=$?
   if [ "$status" -ne 2 ]; then
     harness_event "$NAME" "" REPLAYED "$(sed -n 1p "$scratch/counts")" "$(sed -n 2p "$scratch/counts")"
+    harness_timed_event "$NAME" replay "$(harness_seconds_since "$STARTED")" "$(node "$HK_LIMIT_JS" budget replay)"
   fi
   rm -rf "$scratch"
   return "$status"

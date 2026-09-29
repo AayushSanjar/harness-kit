@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Tests for the guards that keep Claude from writing a brief's approval
-# (.reports/<branch>.brief.approved, which only approve-brief.sh writes): brief-guard.mjs on
-# Write, Edit, MultiEdit and NotebookEdit, and git-guard.mjs on Bash.
+# (.reports/<branch>.brief.approved, which only approve-brief.sh writes) or the Stop hook's
+# pass record (<git dir>/harness-kit/stop-gate-pass, which only the Stop hook writes):
+# brief-guard.mjs on Write, Edit, MultiEdit and NotebookEdit, and git-guard.mjs on Bash.
 #
 # Each call is given to the hook as Claude Code gives it (JSON on stdin, with a cwd);
 # nothing is run. The "real working tree" is a path outside the temp folder that need not
@@ -115,6 +116,27 @@ expect_bash "git-guard: the brief, mentions in a message and approvals in a scra
   'git commit -m "approve-brief.sh writes .reports/feature.brief.approved"' \
   "cd $WORK && echo x > f.brief.approved" "echo x > $WORK/r/.reports/f.brief.approved" \
   $'cat <<EOF\n.reports/f.brief.approved\nEOF'
+
+# 6. The Stop hook's pass record (<git dir>/harness-kit/stop-gate-pass), which only the Stop
+# hook writes: the file tools and shell commands that name it in the real tree are denied,
+# with a reason naming the Stop hook; in a scratch copy they are allowed.
+reason="$(decide "$BRIEF_GUARD" Write "$REAL" "$(file_call Write .git/harness-kit/stop-gate-pass)")"
+reason_ok=no
+grep -qx deny <<<"$(head -n 1 <<<"$reason")" &&
+  grep -qF "BLOCKED by harness-kit brief-guard: Write of $REAL/.git/harness-kit/stop-gate-pass, not a scratch copy" <<<"$reason" &&
+  grep -qF "it is the Stop hook's pass record" <<<"$reason" && reason_ok=yes
+result "brief-guard: a denial of the pass record names the Stop hook" "$reason_ok" "$reason"
+expect_file "brief-guard: Write, Edit, MultiEdit and NotebookEdit of the Stop hook's pass record in the real tree are denied" deny "$REAL" \
+  "Write:$REAL/.git/harness-kit/stop-gate-pass" "Write:.git/harness-kit/stop-gate-pass" "Edit:.git/harness-kit/stop-gate-pass" \
+  "MultiEdit:$REAL/.git/worktrees/w/harness-kit/stop-gate-pass" "NotebookEdit:$REAL/.git/harness-kit/stop-gate-pass"
+expect_file "brief-guard: the pass record in a scratch copy, and files only named like it, are allowed" allow "$REAL" \
+  "Write:$WORK/clone/.git/harness-kit/stop-gate-pass" "Write:$REAL/stop-gate-pass.md" "Edit:$REAL/notes/stop-gate-passes"
+expect_bash "git-guard: a shell command naming the Stop hook's pass record in the real tree is denied" deny "$REAL" \
+  'echo "{}" > .git/harness-kit/stop-gate-pass' 'cp /tmp/x .git/harness-kit/stop-gate-pass' \
+  'printf x | tee .git/harness-kit/stop-gate-pass' 'P=.git/harness-kit/stop-gate-pass' \
+  "cd $WORK && echo x > $REAL/.git/harness-kit/stop-gate-pass"
+expect_bash "git-guard: the pass record in a scratch copy, and a message that mentions it, are allowed" allow "$REAL" \
+  "echo x > $WORK/r/.git/harness-kit/stop-gate-pass" 'git commit -m "the Stop hook writes .git/harness-kit/stop-gate-pass"'
 
 # 5. Other tools pass silently; unreadable input exits 1 (the call goes ahead, the person
 # sees the line).

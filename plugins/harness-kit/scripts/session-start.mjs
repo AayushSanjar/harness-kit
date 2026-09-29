@@ -55,10 +55,12 @@
 // THE START-UP PICTURE. After those lines, in a git repository, come the lines of
 // start-picture.mjs (its header says what each holds and where it comes from): the branch
 // and its brief with the goal, the last check result from the local event log with the
-// failing checks, the branch's last review verdict from .harness/reviews.tsv, the
+// failing checks, the last full fault replay's age from the same log (with the command that
+// runs one from 7 days on), the branch's last review verdict from .harness/reviews.tsv, the
 // uncommitted changes, and the first lines of the project's state file (.harness/state-file,
-// default docs/STATE.md). At most 15 lines, none longer than 200 characters; a missing source
-// is shown as "none" with the reason. Outside a git repository there is no picture.
+// default docs/STATE.md). At most 16 lines, none longer than 200 characters but for the
+// replay line's command, which is never cut; a missing source is shown as "none" with the
+// reason. Outside a git repository there is no picture.
 //
 // THE REVIEWER. review.sh and eval-reviewer.sh start the reviewer with `claude --agent
 // harness-kit:reviewer`, and SessionStart input carries `agent_type`, "present when you

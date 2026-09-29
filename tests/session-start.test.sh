@@ -58,7 +58,8 @@ run_session() {
   PIC="$(grep '^harness-kit start-up: ' <<<"$OUT" | sed 's/^harness-kit start-up: //')"
 }
 
-# line N: the picture's Nth line (1 brief, 2 check, 3 review, 4 uncommitted, 5 state).
+# line N: the picture's Nth line (1 brief, 2 check, 3 replay, 4 review, 5 uncommitted, 6
+# state).
 line() { sed -n "${1}p" <<<"$PIC"; }
 
 # event DIR DATE TOOL BRANCH HEAD EVENT WHAT DETAIL: append one line to DIR's event log.
@@ -177,16 +178,16 @@ fi
 dir="$(new_repo review)"
 head="$(git -C "$dir" rev-parse HEAD)"
 run_session "$dir"
-no_file="$(line 3)"
+no_file="$(line 4)"
 review "$dir" 2026-09-01T09:00:00Z other "$head" PASS R1=P
 run_session "$dir"
-no_line="$(line 3)"
+no_line="$(line 4)"
 review "$dir" 2026-09-02T09:00:00Z feat-x 0123456789abcdef0123456789abcdef01234567 PASS "R1=P,R2=P"
 review "$dir" 2026-09-03T09:00:00Z feat-x "$head" FIX-FIRST "R1=F,R2=P"
 review "$dir" 2026-09-04T09:00:00Z other "$head" STOP "R1=F,R2=F"
 printf 'not a review line\n' >>"$dir/.harness/reviews.tsv"
 run_session "$dir"
-latest="$(line 3)"
+latest="$(line 4)"
 if [ "$no_file" = "last review: none (there is no .harness/reviews.tsv)" ] &&
   [ "$no_line" = "last review: none (.harness/reviews.tsv has no line for feat-x)" ] &&
   [ "$latest" = "last review: FIX-FIRST (R1=F,R2=P) on 2026-09-03T09:00:00Z, for head ${head:0:12} (the current HEAD)" ]; then
@@ -206,14 +207,14 @@ dir="$(new_repo changes)"
 printf 'b\n' >"$dir/b.txt" && printf 'c\n' >"$dir/c.txt"
 git -C "$dir" add -A && git -C "$dir" commit -q -m "b and c"
 run_session "$dir"
-clean="$(line 4)"
+clean="$(line 5)"
 printf 'hello again\n' >"$dir/app.txt"
 git -C "$dir" rm -q b.txt
 git -C "$dir" mv c.txt d.txt
 printf 'e\n' >"$dir/e.txt" && git -C "$dir" add e.txt
 mkdir -p "$dir/u" && printf 'f\n' >"$dir/f.txt" && printf '1\n' >"$dir/u/1" && printf '2\n' >"$dir/u/2"
 run_session "$dir"
-dirty="$(line 4)"
+dirty="$(line 5)"
 if [ "$clean" = "uncommitted: none" ] &&
   [ "$dirty" = "uncommitted: 7 paths (1 modified, 1 added, 1 deleted, 1 renamed, 3 untracked)" ] &&
   [ "$(grep -c '^uncommitted:' <<<"$PIC")" = 1 ]; then
@@ -231,26 +232,26 @@ fi
 # ---------------------------------------------------------------------------------------
 dir="$(new_repo state)"
 run_session "$dir"
-default_missing="$(sed -n '5,$p' <<<"$PIC")"
+default_missing="$(sed -n '6,$p' <<<"$PIC")"
 mkdir -p "$dir/docs" && : >"$dir/docs/STATE.md"
 run_session "$dir"
-empty="$(sed -n '5,$p' <<<"$PIC")"
+empty="$(sed -n '6,$p' <<<"$PIC")"
 for i in $(seq 1 25); do printf 'state line %s\n' "$i"; done >"$dir/docs/STATE.md"
 run_session "$dir"
-default_long="$(sed -n '5,$p' <<<"$PIC")"
+default_long="$(sed -n '6,$p' <<<"$PIC")"
 want_long="state: docs/STATE.md, its first 10 of 25 lines:
 $(for i in $(seq 1 10); do printf '> state line %s\n' "$i"; done)"
 mkdir -p "$dir/.harness" "$dir/notes" && printf 'notes/NOW.md\n' >"$dir/.harness/state-file"
 printf 'now 1\n\nnow 3\n' >"$dir/notes/NOW.md"
 run_session "$dir"
-configured="$(sed -n '5,$p' <<<"$PIC")"
+configured="$(sed -n '6,$p' <<<"$PIC")"
 printf 'notes/GONE.md\n' >"$dir/.harness/state-file"
 run_session "$dir"
-configured_missing="$(sed -n '5,$p' <<<"$PIC")"
+configured_missing="$(sed -n '6,$p' <<<"$PIC")"
 printf '../outside.md\n' >"$dir/.harness/state-file"
 printf 'secret\n' >"$WORK/outside.md"
 run_session "$dir"
-outside="$(sed -n '5,$p' <<<"$PIC")"
+outside="$(sed -n '6,$p' <<<"$PIC")"
 if [ "$default_missing" = "state: none (docs/STATE.md does not exist)" ] &&
   [ "$empty" = "state: none (docs/STATE.md is empty)" ] &&
   [ "$default_long" = "$want_long" ] &&
@@ -271,7 +272,7 @@ outside: $outside"
 fi
 
 # ---------------------------------------------------------------------------------------
-# 7. The limits, whatever the sources hold: never more than 15 picture lines, none longer
+# 7. The limits, whatever the sources hold: never more than 16 picture lines, none longer
 # than 200 characters (the prefix included), and a line that was cut ends in "…".
 # ---------------------------------------------------------------------------------------
 dir="$(new_repo limits)"
@@ -293,14 +294,59 @@ lengths="$(node -e '
 count="$(sed -n 1p <<<"$lengths")"
 longest="$(sed -n 2p <<<"$lengths")"
 uncut="$(sed -n 3p <<<"$lengths")"
-if [ "$STATUS" -eq 0 ] && [ "$count" = 15 ] && [ "$longest" = 200 ] && [ "$uncut" = 0 ] &&
+if [ "$STATUS" -eq 0 ] && [ "$count" = 16 ] && [ "$longest" = 200 ] && [ "$uncut" = 0 ] &&
   grep -q '^harness-kit start-up: state: docs/STATE.md, its first 10 of 40 lines:$' <<<"$OUT" &&
   grep -q '^harness-kit start-up: > state 1 é xxx.*…$' <<<"$OUT"; then
-  result "start-up picture: never more than 15 lines, none longer than 200 characters, a cut line ending in …" yes ""
+  result "start-up picture: never more than 16 lines, none longer than 200 characters, a cut line ending in …" yes ""
 else
-  result "start-up picture: never more than 15 lines, none longer than 200 characters, a cut line ending in …" no \
+  result "start-up picture: never more than 16 lines, none longer than 200 characters, a cut line ending in …" no \
     "lines: $count; longest: $longest; at 200 without …: $uncut
 $(describe)"
+fi
+
+# ---------------------------------------------------------------------------------------
+# 7b. The last full fault replay: the latest REPLAYED line whose detail is "all", on any
+# branch, with its age in whole days; from 7 days on, and with none, the command that runs
+# one (never cut); a replay of chosen ids is not full; no .harness/mutations.tsv, no command.
+# ---------------------------------------------------------------------------------------
+replay_cmd="bash $(cd "$ROOT/plugins/harness-kit/scripts" && pwd)/replay-faults.sh"
+ago() { node -e 'console.log(new Date(Date.now() - Number(process.argv[1]) * 3600e3).toISOString().replace(/\.\d+Z$/, "Z"))' "$1"; }
+dir="$(new_repo replay)"
+head="$(git -C "$dir" rev-parse HEAD)"
+run_session "$dir"
+no_mutations="$(line 3)"
+mkdir -p "$dir/.harness" && printf 'id\tapp.txt\thello\tbye\tunit\n' >"$dir/.harness/mutations.tsv"
+run_session "$dir"
+no_log="$(line 3)"
+partial_at="$(ago 1)"
+event "$dir" "$partial_at" replay-faults.sh feat-x "$head" REPLAYED "killed=2,survived=0,timeout=0,error=0,baseline=3.00s" "ids: a b"
+run_session "$dir"
+partial="$(line 3)"
+six_at="$(ago 150)"
+event "$dir" "$six_at" replay-faults.sh other "$head" REPLAYED "killed=40,survived=1,timeout=0,error=2,baseline=300.00s" "all"
+event "$dir" "$(ago 2)" replay-faults.sh feat-x "$head" REPLAYED "killed=2,survived=0,timeout=0,error=0,baseline=3.00s" "ids: a b"
+run_session "$dir"
+six="$(line 3)"
+seven_at="$(ago 170)"
+dir7="$(new_repo replay-old)"
+mkdir -p "$dir7/.harness" && cp "$dir/.harness/mutations.tsv" "$dir7/.harness/"
+event "$dir7" "$(ago 400)" replay-faults.sh feat-x "$head" REPLAYED "killed=9,survived=0,error=0" "all"
+event "$dir7" "$seven_at" replay-faults.sh main "$head" REPLAYED "killed=45,survived=0,timeout=0,error=0,baseline=310.00s" "all"
+run_session "$dir7"
+seven="$(line 3)"
+if [ "$no_mutations" = "last full fault replay: none (there is no .harness/mutations.tsv)" ] &&
+  [ "$no_log" = "last full fault replay: none (the local event log has no full replay); run one with $replay_cmd" ] &&
+  [ "$partial" = "last full fault replay: none (the local event log has no full replay); run one with $replay_cmd" ] &&
+  [ "$six" = "last full fault replay: 6 days ago ($six_at, branch other, 40 KILLED, 1 SURVIVED, 0 TIMEOUT, 2 ERROR)" ] &&
+  [ "$seven" = "last full fault replay: 7 days ago ($seven_at, branch main, 45 KILLED, 0 SURVIVED, 0 TIMEOUT, 0 ERROR); over 7 days: run one with $replay_cmd" ]; then
+  result "start-up picture: the last full fault replay's age, with the command to run one from 7 days on or with none" yes ""
+else
+  result "start-up picture: the last full fault replay's age, with the command to run one from 7 days on or with none" no \
+    "no mutations.tsv: $no_mutations
+no log: $no_log
+only a partial replay: $partial
+6 days: $six
+7 days: $seven"
 fi
 
 # ---------------------------------------------------------------------------------------
@@ -312,18 +358,20 @@ bare="$PIC"
 bare_out="$OUT"
 want_bare="branch feat-x; brief: none (there is no .reports/feat-x.brief.md)
 last check: none (there is no local event log, .git/harness-kit/events.tsv)
+last full fault replay: none (there is no .harness/mutations.tsv)
 last review: none (there is no .harness/reviews.tsv)
 uncommitted: none
 state: none (docs/STATE.md does not exist)"
 git -C "$dir" checkout -q --detach
 head="$(git -C "$dir" rev-parse HEAD)"
 run_session "$dir"
-detached="$(sed -n '1,3p' <<<"$PIC")"
+detached="$(sed -n '1,4p' <<<"$PIC")"
 want_detached="branch: none (detached HEAD at ${head:0:12}); brief: none (HEAD is not on a branch)
 last check: none (HEAD is not on a branch)
+last full fault replay: none (there is no .harness/mutations.tsv)
 last review: none (HEAD is not on a branch)"
 if [ "$bare" = "$want_bare" ] && [ "$detached" = "$want_detached" ] &&
-  [ "$(grep -c '^harness-kit start-up: ' <<<"$bare_out")" = 5 ]; then
+  [ "$(grep -c '^harness-kit start-up: ' <<<"$bare_out")" = 6 ]; then
   result "start-up picture: a bare repository shows none on every line" yes ""
 else
   result "start-up picture: a bare repository shows none on every line" no "bare:

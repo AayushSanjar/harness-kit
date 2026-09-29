@@ -2,7 +2,7 @@
 // where the branch stands, after its other lines. startPicture(projectDir) returns the lines;
 // outside a git repository there are none. Every line starts "harness-kit start-up:".
 //
-// THE LINES, in this order (at most 5 + STATE_LINES = 15):
+// THE LINES, in this order (at most 6 + STATE_LINES = 16):
 //   1. The branch and its brief. The brief's state comes from brief-lib.sh's brief_load, the
 //      code ship.sh judges the approval with: approved, not approved, changed since it was
 //      approved, or none. With a brief, the goal is its "# Brief:" title line. On a detached
@@ -13,21 +13,30 @@
 //      is written only when the result changes, so its date is shown as "since", and its
 //      head is where the result changed, not where the check last ran. For FAIL it names the
 //      first FAILING_NAMES failing checks, then "and N more".
-//   3. The last review: the latest line for the branch in the working tree's
+//   3. The last full fault replay: the latest REPLAYED line in the same event log whose
+//      detail is "all" (replay-faults.sh's whole replay of every entry; a replay of chosen ids
+//      is not full), on any branch: how many whole days ago it ran, rounded down, its date,
+//      branch and counts. From REPLAY_DAYS days on, and when there is none, it gives the
+//      command that runs one: bash <this plugin's scripts/replay-faults.sh>, never cut (the
+//      one exception to MAX_LINE, below: a cut command is no command). Only this clone's
+//      replays count: CI's are not in its event log. With no .harness/mutations.tsv there is
+//      nothing to replay, so it says none and gives no command.
+//   4. The last review: the latest line for the branch in the working tree's
 //      .harness/reviews.tsv (review.sh has the format), with its verdict, items, date and
 //      head.
-//   4. Uncommitted changes: the number of paths git status shows (untracked files one by
+//   5. Uncommitted changes: the number of paths git status shows (untracked files one by
 //      one), by kind: modified, added, deleted, renamed, copied, unmerged, untracked. Paths
 //      are not listed.
-//   5. The state file: a line naming it, then its first STATE_LINES lines, each after
+//   6. The state file: a line naming it, then its first STATE_LINES lines, each after
 //      "harness-kit start-up: > ". The file is the first line of .harness/state-file, a path
 //      from the project root, or DEFAULT_STATE when that file does not exist or its first
 //      line is empty.
-// A source that is missing (no brief, no event log or no CHECKED line for the branch, no
-// reviews.tsv or no line for the branch, git status failing, no state file, an empty one, or
+// A source that is missing (no brief, no event log or no CHECKED line for the branch, no full
+// replay, no reviews.tsv or no line for the branch, git status failing, no state file, an empty one, or
 // a path outside the project) is shown as "none" with the reason; nothing is guessed.
 //
-// Every line, its prefix included, is cut to MAX_LINE characters, the last of which is "…".
+// Every line, its prefix included, is cut to MAX_LINE characters, the last of which is "…";
+// the replay line's command, after its text, is never cut.
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
@@ -42,6 +51,9 @@ const REVIEWS = ".harness/reviews.tsv";
 const STATE_FILE = ".harness/state-file";
 const BRIEF_LIB = fileURLToPath(new URL("./brief-lib.sh", import.meta.url));
 const TOOL_NAMES = { "stop-gate.mjs": "the Stop hook" };
+const REPLAY_DAYS = 7;
+const REPLAY_SCRIPT = fileURLToPath(new URL("./replay-faults.sh", import.meta.url));
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const git = (args, cwd) => {
   const r = spawnSync("git", args, { cwd, encoding: "utf8" });
@@ -119,7 +131,26 @@ const checkLine = (top, branch, head) => {
     `failing: ${names.slice(0, FAILING_NAMES).join("; ")}${more}`;
 };
 
-// 3. The last review.
+// 3. The last full fault replay: { text, command }, the command "" when there is none.
+const replayLine = (top, now = Date.now()) => {
+  const run = `run one with bash ${REPLAY_SCRIPT}`;
+  if (!existsSync(join(top, ".harness", "mutations.tsv"))) return { text: "last full fault replay: none (there is no .harness/mutations.tsv)", command: "" };
+  const none = { text: "last full fault replay: none (the local event log has no full replay)", command: `; ${run}` };
+  const common = git(["rev-parse", "--path-format=absolute", "--git-common-dir"], top)?.trim();
+  const text = common ? readText(join(common, "harness-kit", "events.tsv")) : null;
+  if (text === null) return none;
+  const e = tsvRows(text).filter((f) => f.length === 7 && f[1] === "replay-faults.sh" && f[4] === "REPLAYED" && f[6] === "all").at(-1);
+  const when = e ? Date.parse(e[0]) : NaN;
+  if (!e || !Number.isFinite(when)) return none;
+  const [date, , branch, , , what] = e;
+  const n = /^killed=(\d+),survived=(\d+)(?:,timeout=(\d+))?,error=(\d+)/.exec(what);
+  const counts = n ? `${n[1]} KILLED, ${n[2]} SURVIVED, ${n[3] ?? 0} TIMEOUT, ${n[4]} ERROR` : what;
+  const days = Math.max(0, Math.floor((now - when) / DAY_MS));
+  const said = `last full fault replay: ${plural(days, "day", "days")} ago (${date}, branch ${branch}, ${counts})`;
+  return { text: said, command: days >= REPLAY_DAYS ? `; over ${REPLAY_DAYS} days: ${run}` : "" };
+};
+
+// 4. The last review.
 const reviewLine = (top, branch, head) => {
   if (!branch) return "last review: none (HEAD is not on a branch)";
   const text = readText(join(top, REVIEWS));
@@ -130,7 +161,7 @@ const reviewLine = (top, branch, head) => {
   return `last review: ${verdict} (${items}) on ${date}, for head ${headNote(sha, head)}`;
 };
 
-// 4. Uncommitted changes.
+// 5. Uncommitted changes.
 const KINDS = ["modified", "added", "deleted", "renamed", "copied", "unmerged", "untracked"];
 const kindOf = (xy) => {
   if (xy === "??") return "untracked";
@@ -160,7 +191,7 @@ const changesLine = (top) => {
   return `uncommitted: ${plural(total, "path", "paths")} (${KINDS.filter((k) => counts.has(k)).map((k) => `${counts.get(k)} ${k}`).join(", ")})`;
 };
 
-// 5. The state file.
+// 6. The state file.
 const stateLines = (top) => {
   const configured = (readText(join(top, STATE_FILE)) ?? "").split(/\r?\n/)[0].trim();
   const name = configured || DEFAULT_STATE;
@@ -185,11 +216,13 @@ export const startPicture = (projectDir) => {
   if (!top) return [];
   const branch = git(["symbolic-ref", "--short", "-q", "HEAD"], top)?.trim() || "";
   const head = git(["rev-parse", "-q", "--verify", "HEAD"], top)?.trim() || "";
+  const replay = replayLine(top);
   return [
     briefLine(top, branch, head),
     checkLine(top, branch, head),
+    replay,
     reviewLine(top, branch, head),
     changesLine(top),
     ...stateLines(top),
-  ].map((line) => cut(PREFIX + line));
+  ].map((line) => (line === replay ? cut(PREFIX + line.text) + line.command : cut(PREFIX + line)));
 };

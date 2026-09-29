@@ -22,7 +22,11 @@
 //     rm or even cat. Only approve-brief.sh, the person's, writes an approval; Claude reads
 //     one with the Read tool. A word with whitespace in it (a commit message that mentions
 //     one) is not a path. brief-guard.mjs denies the same files to Write, Edit, MultiEdit
-//     and NotebookEdit.
+//     and NotebookEdit;
+//   - the same, for a word naming the Stop hook's pass record, a file named
+//     "stop-gate-pass" (<git dir>/harness-kit/stop-gate-pass, guard-lib.mjs): only the Stop
+//     hook writes it, and a record written by anything else would let a stop skip the
+//     check.
 // Everything else is left alone: nothing is printed, so the normal permission flow
 // decides. `git commit` is allowed.
 //
@@ -53,7 +57,7 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
-import { APPROVAL_REASON, TEMP_ROOTS, isApproval, isScratch, parse, tokenize } from "./guard-lib.mjs";
+import { APPROVAL_REASON, PASS_REASON, TEMP_ROOTS, isApproval, isPassRecord, isScratch, parse, tokenize } from "./guard-lib.mjs";
 
 const SCRIPTS = new Set(["land.sh", "ship.sh", "release.sh", "upgrade.sh", "approve-protected.sh", "approve-brief.sh"]);
 const SHELLS = new Set(["bash", "sh", "zsh", "dash", "ksh"]);
@@ -210,6 +214,7 @@ const REASONS = {
   destructive: "it throws work away in the real working tree. If it is needed, put the exact command in the report's \"Your commands\" for the person to run.",
   script: "it is the person's step, run in their own terminal. Put the exact command in the report's \"Your commands\".",
   approval: APPROVAL_REASON,
+  pass: PASS_REASON,
 };
 
 const deny = (rule, what, dirs, text) => {
@@ -234,15 +239,17 @@ const runCommand = (element, dirs, vars, inPipeline) => {
   const values = args.map((t) => valueOf(t.word, dirs, vars));
   const text = values.map((v) => (v === UNKNOWN ? "?" : v)).join(" ");
 
-  // A word naming a brief's approval (an argument, a redirection's target, an assignment's
-  // value), anywhere but a scratch copy.
+  // A word naming a brief's approval or the Stop hook's pass record (an argument, a
+  // redirection's target, an assignment's value), anywhere but a scratch copy.
   for (const token of element.words) {
     const whole = valueOf(token.word, dirs, vars);
     const value = whole !== UNKNOWN && ASSIGNMENT.test(whole) ? whole.replace(ASSIGNMENT, "") : whole;
     const name = baseOf(token.word, value);
-    if (name === UNKNOWN || /\s/.test(name) || (value !== UNKNOWN && /\s/.test(value)) || !isApproval(name)) continue;
+    if (name === UNKNOWN || /\s/.test(name) || (value !== UNKNOWN && /\s/.test(value))) continue;
+    const rule = isApproval(name) ? "approval" : isPassRecord(name) ? "pass" : null;
+    if (rule === null) continue;
     const paths = resolveIn(dirs, value);
-    if (![...paths].every(isScratch)) deny("approval", `a command naming ${value === UNKNOWN ? `.../${name}` : value}`, paths, text);
+    if (![...paths].every(isScratch)) deny(rule, `a command naming ${value === UNKNOWN ? `.../${name}` : value}`, paths, text);
   }
 
   // NAME=value alone (or export NAME=value): remembered.

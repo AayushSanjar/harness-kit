@@ -108,6 +108,8 @@ run_release() {
 }
 
 rev() { git -C "$1" rev-parse -q --verify "$2" 2>/dev/null; }
+# logged DIR: DIR's event log without its TIMED lines (the times; the last case checks them).
+logged() { grep -v $'\tTIMED\t' "$1/.git/harness-kit/events.tsv" 2>/dev/null; }
 remote() { git --git-dir="$1.git" rev-parse -q --verify "$2" 2>/dev/null; }
 
 # 1. Green: the check runs once, the branch is pushed, CI is waited for, main is
@@ -124,7 +126,7 @@ if [ "$STATUS" -eq 0 ] && grep -q 'RELEASED: next' <<<"$ERR" && [ "$(wc -l <"$di
   [ "$(remote "$dir" 'refs/tags/v1.2.3^{commit}')" = "$head" ] && [ "$(rev "$dir" main)" = "$head" ] &&
   [ "$(git -C "$dir" symbolic-ref --short HEAD)" = main ] && grep -q "run list --commit $head" "$dir.log/gh-calls" &&
   grep -q 'harness-kit release.sh RELEASED: v1.2.3' "$dir.log/osascript-calls" &&
-  [ "$(cut -f2,3,5,6 "$dir/.git/harness-kit/events.tsv")" = "$(printf 'release.sh\tnext\tCHECKED\tPASS\nrelease.sh\tnext\tRELEASED\tv1.2.3')" ]; then
+  [ "$(logged "$dir" | cut -f2,3,5,6)" = "$(printf 'release.sh\tnext\tCHECKED\tPASS\nrelease.sh\tnext\tRELEASED\tv1.2.3')" ]; then
   released=yes
 else
   released="$(describe)"
@@ -151,8 +153,8 @@ if [ "$STATUS" -eq 1 ] && grep -q 'STOPPED: the check failed (exit 1, above): sh
   grep -q '^FAIL unit: 1 failed' <<<"$ERR" && [ -z "$(remote "$dir" refs/heads/next)" ] && [ ! -e "$dir.log/gh-calls" ] &&
   [ "$(remote "$dir" refs/heads/main)" = "$main_before" ] && [ -z "$(rev "$dir" refs/tags/v1.2.3)" ] &&
   grep -q 'STOPPED: the check failed' "$dir.log/osascript-calls" &&
-  [ "$(cut -f2,3,5-7 "$dir/.git/harness-kit/events.tsv" | sed -n 1p)" = "$(printf 'release.sh\tnext\tCHECKED\tFAIL\texit 1: unit: 1 failed')" ] &&
-  [ "$(cut -f5,6 "$dir/.git/harness-kit/events.tsv" | sed -n 2p)" = "$(printf 'STOPPED\tcheck-failed')" ]; then
+  [ "$(logged "$dir" | cut -f2,3,5-7 | sed -n 1p)" = "$(printf 'release.sh\tnext\tCHECKED\tFAIL\texit 1: unit: 1 failed')" ] &&
+  [ "$(logged "$dir" | cut -f5,6 | sed -n 2p)" = "$(printf 'STOPPED\tcheck-failed')" ]; then
   result "release.sh: a failing check stops it before any push" yes ""
 else
   result "release.sh: a failing check stops it before any push" no "$(describe)"
@@ -356,7 +358,7 @@ sleep 0.2
 if [ "$STATUS" -eq 1 ] && ! alive "$dir.log/watch.pid" &&
   grep -qF 'STOPPED: CI run 4242 did not finish within its limit of 1 seconds (TIMEOUT, above): https://ci.example.invalid/runs/4242. The watch was stopped. Nothing was merged, pushed to the base branch or tagged. re-run release.sh v9.0.1 to keep waiting.' <<<"$ERR" &&
   [ "$(remote "$dir" refs/heads/main)" = "$main_before" ] && [ -z "$(remote "$dir" refs/tags/v9.0.1)" ] &&
-  [ "$(cut -f5,6 "$dir/.git/harness-kit/events.tsv" | tail -n 1)" = "$(printf 'STOPPED\tci-timeout')" ]; then
+  [ "$(logged "$dir" | cut -f5,6 | tail -n 1)" = "$(printf 'STOPPED\tci-timeout')" ]; then
   result "release.sh: a gh run watch that hangs past its limit stops ci-timeout; main and the tag are untouched" yes ""
 else
   result "release.sh: a gh run watch that hangs past its limit stops ci-timeout; main and the tag are untouched" no "$(describe)"
@@ -405,6 +407,37 @@ else
   result "release.sh: a push that would need a prompt fails at once, and the message says it ran without prompts" no "$(describe)
 took ${took}s; ssh calls:
 $calls"
+fi
+
+# THE TIMES. A green release with budgets of 0.001 seconds: its check is a TIMED line for
+# "check" and the whole run one for "release", both marked over, each with its warning line
+# once on stderr; a refused run (on main) is timed too. With the default budgets, both are
+# within and nothing is said.
+dir="$(new_repo timed)"
+HARNESS_KIT_BUDGET_CHECK_SECONDS=0.001 HARNESS_KIT_BUDGET_RELEASE_SECONDS=0.001 run_release "$dir" success v1.0.0
+over_err="$ERR"
+over_status=$STATUS
+over_lines="$(awk -F'\t' '$5 == "TIMED"' "$dir/.git/harness-kit/events.tsv" | cut -f2,3,6,7 | sed -E 's/seconds=[0-9.]+/seconds=S/')"
+HARNESS_KIT_BUDGET_RELEASE_SECONDS=0.001 run_release "$dir" success v1.0.1
+refused_status=$STATUS
+refused_line="$(awk -F'\t' '$5 == "TIMED"' "$dir/.git/harness-kit/events.tsv" | tail -n 1 | cut -f2,3,6,7 | sed -E 's/seconds=[0-9.]+/seconds=S/')"
+within="$(new_repo timed-within)"
+run_release "$within" success v1.0.0
+within_lines="$(awk -F'\t' '$5 == "TIMED"' "$within/.git/harness-kit/events.tsv" | cut -f6,7 | sed -E 's/seconds=[0-9.]+/seconds=S/')"
+if [ "$over_status" -eq 0 ] &&
+  [ "$over_lines" = "$(printf 'release.sh\tnext\tcheck\tseconds=S,budget=0.001,over\nrelease.sh\tmain\trelease\tseconds=S,budget=0.001,over')" ] &&
+  [ "$(grep -c '^harness-kit: the check took [0-9.]* seconds, over its budget of 0.001 seconds (HARNESS_KIT_BUDGET_CHECK_SECONDS)' <<<"$over_err")" = 1 ] &&
+  [ "$(grep -c '^harness-kit: release.sh took [0-9.]* seconds, over its budget of 0.001 seconds (HARNESS_KIT_BUDGET_RELEASE_SECONDS)' <<<"$over_err")" = 1 ] &&
+  [ "$refused_status" -eq 2 ] && [ "$refused_line" = "$(printf 'release.sh\tmain\trelease\tseconds=S,budget=0.001,over')" ] &&
+  [ "$within_lines" = "$(printf 'check\tseconds=S,budget=120,within\nrelease\tseconds=S,budget=600,within')" ]; then
+  result "release.sh: its check and its whole run are timed against their budgets, and an overrun is said once each" yes ""
+else
+  result "release.sh: its check and its whole run are timed against their budgets, and an overrun is said once each" no "over (exit $over_status):
+$over_lines
+stderr: $over_err
+refused (exit $refused_status): $refused_line
+within:
+$within_lines"
 fi
 
 if [ "$failures" -ne 0 ]; then

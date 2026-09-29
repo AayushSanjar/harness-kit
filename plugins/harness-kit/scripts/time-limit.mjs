@@ -17,6 +17,13 @@
 //       COMMAND's group, which the terminal does not signal.
 //   node time-limit.mjs limit NAME
 //       Prints NAME's limit in seconds.
+//   node time-limit.mjs budget NAME
+//       Prints NAME's budget in seconds (THE BUDGETS).
+//   node time-limit.mjs over NAME SECONDS BUDGET
+//       Exits 0, printing the warning line, when SECONDS is over BUDGET for the budget NAME;
+//       exits 1, printing nothing, when it is not; 2 on a bad argument. events.sh's
+//       harness_timed_event judges with it, so the bash scripts and the Stop hook share one
+//       comparison (overBudget).
 //   node time-limit.mjs register --owner PID path PATH
 //   node time-limit.mjs register --owner PID worktree REPO PATH
 //       Records a temporary folder or file, or a git worktree of REPO, as in use by the
@@ -47,6 +54,18 @@
 //                                                         claude plugin update (upgrade.sh)
 //   init            120  UPGRADE_INIT_SECONDS             the headless session (upgrade.sh)
 //   the grace period 10  HARNESS_KIT_LIMIT_GRACE_SECONDS  from SIGTERM to SIGKILL
+//
+// THE BUDGETS, in seconds, each overridden by its environment variable (a number above 0).
+// A budget stops nothing: a step that goes over it is recorded as over in the local event
+// log (events.sh's TIMED line) and warned about, once per session for each kind (the Stop
+// hook: once per Claude session; ship.sh, release.sh and replay-faults.sh: once per run).
+// The values are the person's, in the v0.19.0 brief (.reports/inc-speed-a.brief.md, New
+// thresholds).
+//   check     120  HARNESS_KIT_BUDGET_CHECK_SECONDS    the Stop hook's check, and
+//                                                     release.sh's check
+//   replay    180  HARNESS_KIT_BUDGET_REPLAY_SECONDS   one whole replay-faults.sh run
+//   ship      600  HARNESS_KIT_BUDGET_SHIP_SECONDS     one ship.sh run, start to exit
+//   release   600  HARNESS_KIT_BUDGET_RELEASE_SECONDS  one release.sh run, start to exit
 //
 // THE REGISTRY, in the folder HARNESS_KIT_REGISTRY_DIR names (an absolute path), else in
 // $TMPDIR/harness-kit-live/: one JSON record per process group this helper runs, and per
@@ -102,6 +121,28 @@ export const limitSeconds = (limit) => {
   return seconds;
 };
 export const graceSeconds = () => positive(process.env[GRACE.env]) ?? GRACE.seconds;
+
+export const BUDGETS = {
+  check: { env: "HARNESS_KIT_BUDGET_CHECK_SECONDS", seconds: 120, what: "the check" },
+  replay: { env: "HARNESS_KIT_BUDGET_REPLAY_SECONDS", seconds: 180, what: "the fault replay" },
+  ship: { env: "HARNESS_KIT_BUDGET_SHIP_SECONDS", seconds: 600, what: "ship.sh" },
+  release: { env: "HARNESS_KIT_BUDGET_RELEASE_SECONDS", seconds: 600, what: "release.sh" },
+};
+
+// A budget's seconds: its environment variable, else its default. Throws for an unknown name.
+export const budgetSeconds = (name) => {
+  const budget = BUDGETS[name];
+  if (!budget) throw new Error(`"${name}" is not a budget's name (${Object.keys(BUDGETS).join(", ")})`);
+  return positive(process.env[budget.env]) ?? budget.seconds;
+};
+
+// The one comparison: SECONDS is over BUDGET.
+export const overBudget = (seconds, budget) => seconds > budget;
+
+// The warning for the budget NAME, SECONDS against BUDGET.
+export const budgetWarning = (name, seconds, budget) =>
+  `harness-kit: ${BUDGETS[name].what} took ${secs(seconds)} seconds, over its budget of ${budget} seconds ` +
+  `(${BUDGETS[name].env}); every overrun is recorded as a TIMED line in the local event log, .git/harness-kit/events.tsv`;
 
 // Seconds as printed: at most one decimal.
 const secs = (n) => String(Math.round(n * 10) / 10);
@@ -455,6 +496,8 @@ const cli = async (argv) => {
     process.stderr.write(
       "usage: time-limit.mjs run --limit NAME|SECONDS [--name LABEL] [--merge] -- COMMAND ARGS...\n" +
         "       time-limit.mjs limit NAME\n" +
+        "       time-limit.mjs budget NAME\n" +
+        "       time-limit.mjs over NAME SECONDS BUDGET\n" +
         "       time-limit.mjs register --owner PID path PATH | worktree REPO PATH\n" +
         "       time-limit.mjs sweep\n",
     );
@@ -473,6 +516,23 @@ const cli = async (argv) => {
       process.stderr.write(`harness-kit time-limit: ${error.message}\n`);
       return 2;
     }
+    return 0;
+  }
+  if (sub === "budget") {
+    if (rest.length !== 1) usage();
+    try {
+      process.stdout.write(`${budgetSeconds(rest[0])}\n`);
+    } catch (error) {
+      process.stderr.write(`harness-kit time-limit: ${error.message}\n`);
+      return 2;
+    }
+    return 0;
+  }
+  if (sub === "over") {
+    const [name, seconds, budget] = rest;
+    if (rest.length !== 3 || !BUDGETS[name] || positive(budget) === null || !/^[0-9]+(\.[0-9]+)?$/.test(seconds ?? "")) usage();
+    if (!overBudget(Number(seconds), Number(budget))) return 1;
+    process.stdout.write(`${budgetWarning(name, Number(seconds), Number(budget))}\n`);
     return 0;
   }
   if (sub === "register") {

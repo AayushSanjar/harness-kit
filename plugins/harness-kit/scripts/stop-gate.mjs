@@ -37,12 +37,47 @@
 // of 3 blocks as a failing check; it is recorded as a CHECKED FAIL with the status
 // "timeout <limit>s". tests/validate.sh checks that this limit plus the grace period stays
 // below the hook's timeout.
+//
+// THE SKIP. In a git repository, the check is not run again when nothing has changed since
+// it last passed. After a pass, the hook writes the pass record, <git dir>/harness-kit/
+// stop-gate-pass (the worktree's own git directory, so worktrees never share one), holding
+// these fields and the time it was written:
+//   tree     the working tree's tree id: every tracked file as it is on disk and every
+//            untracked file .gitignore does not ignore, from a copy of the index (git add -A,
+//            then git write-tree, with GIT_INDEX_FILE), so the real index is never touched
+//   head     HEAD's commit (a check can read history)
+//   refs     the sha256 of `git for-each-ref` (a check can compare with the base)
+//   command  the check command
+//   version  the plugin's version, from its plugin.json
+//   node     Node's version
+//   limit    the check limit this stop uses, in seconds
+// A stop skips the check only when the record can be used, every field computed now equals
+// the record's, and the record is younger than PASS_HOURS (24 hours). A skip clears the
+// block count, as a pass does, prints one line on stderr and records nothing: no CHECKED
+// line (the result did not change) and no TIMED line (nothing ran). Anything the hook cannot
+// read runs the check, and nothing is recorded: a field that cannot be computed (no git
+// repository, a git error, an index that cannot be copied, an unreadable plugin.json), or a
+// record that cannot be used (unreadable, not JSON, a field missing or extra, a field that is
+// not text, or a time missing or in the future). The record is written only for a check that
+// ended by itself (not stopped at its limit) with exit 0, and only when the fields computed
+// after it equal those before it, so a check that changes a file while it runs leaves none;
+// any other check removes it. Ignored files (node_modules, .env, build output) are not in the
+// tree: an `npm install` after a pass is not seen until something else changes or the pass
+// is 24 hours old. git-guard.mjs and brief-guard.mjs deny Claude writing the record.
+//
+// THE BUDGET. Each check run is timed and recorded, with the check budget (120 seconds by
+// default; time-limit.mjs's BUDGETS), as a TIMED line in the event log, at every run, through
+// events.sh's harness_timed_event, in the same bash call as the CHECKED line. The first time
+// in a Claude session that a check is over its budget, the person is told through
+// systemMessage (on a pass or a block); the session's marker is a file in the OS temp folder,
+// beside the block count. Later overruns in the session are recorded, not said again.
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { exitOnSignals, limitSeconds, runLimited } from "./time-limit.mjs";
+import { budgetSeconds, budgetWarning, exitOnSignals, limitSeconds, overBudget, runLimited } from "./time-limit.mjs";
 
 const REVIEWER = "harness-kit:reviewer";
 const HOOK_CHECK_MAX_SECONDS = 540;
@@ -53,6 +88,11 @@ const INSTRUCTION =
 const TIMEOUT_INSTRUCTION = "Find what hangs or runs slowly and fix it before finishing.";
 const BUDGET_LINE =
   "harness-kit: checks still failing after 3 attempts — the person must look";
+// THE SKIP's age limit: a pass older than this runs the check again.
+const PASS_HOURS = { env: "HARNESS_KIT_STOP_GATE_PASS_HOURS", hours: 24 };
+const PASS_FIELDS = ["tree", "head", "refs", "command", "version", "node", "limit"];
+const PASS_KEYS = [...PASS_FIELDS, "time"].sort().join(",");
+const PLUGIN_JSON = new URL("../.claude-plugin/plugin.json", import.meta.url);
 
 function readInput() {
   try {
@@ -93,30 +133,162 @@ const sessionId = String(input.session_id || "unknown").replace(/[^A-Za-z0-9_-]/
 const countFile = join(tmpdir(), `harness-kit-stop-gate-${sessionId}.count`);
 
 const limit = Math.min(limitSeconds("check"), HOOK_CHECK_MAX_SECONDS);
+
+// THE SKIP.
+// git ARGS [INDEX]: git's stdout, run in the project (with GIT_INDEX_FILE=INDEX when given),
+// or null when it fails. Only local commands that read the repository.
+const git = (args, index) => {
+  const r = spawnSync("git", args, {
+    cwd: projectDir,
+    encoding: "utf8",
+    maxBuffer: 256 * 1024 * 1024,
+    env: index ? { ...process.env, GIT_INDEX_FILE: index } : process.env,
+  });
+  return r.status === 0 && !r.error ? r.stdout : null;
+};
+const trimmed = (text) => (text === null ? null : text.trim() || null);
+const sha256 = (text) => (text === null ? null : createHash("sha256").update(text).digest("hex"));
+const positive = (value) => (/^[0-9]+(\.[0-9]+)?$/.test(value ?? "") && Number(value) > 0 ? Number(value) : null);
+const passMaxMs = (positive(process.env[PASS_HOURS.env]) ?? PASS_HOURS.hours) * 60 * 60 * 1000;
+
+// The working tree's tree id, from a copy of the index; null when it cannot be computed.
+const workingTree = () => {
+  const real = trimmed(git(["rev-parse", "--path-format=absolute", "--git-path", "index"]));
+  if (real === null) return null;
+  let folder = null;
+  try {
+    folder = mkdtempSync(join(tmpdir(), "harness-kit-stop-gate-index."));
+    const index = join(folder, "index");
+    if (existsSync(real)) copyFileSync(real, index);
+    if (git(["add", "-A"], index) === null) return null;
+    return trimmed(git(["write-tree"], index));
+  } catch {
+    return null;
+  } finally {
+    if (folder !== null) rmSync(folder, { recursive: true, force: true });
+  }
+};
+
+const pluginVersion = () => {
+  try {
+    const version = JSON.parse(readFileSync(PLUGIN_JSON, "utf8")).version;
+    return typeof version === "string" && version !== "" ? version : null;
+  } catch {
+    return null;
+  }
+};
+
+// The fields, computed now; a field that cannot be computed is null.
+const passFields = () => ({
+  tree: workingTree(),
+  head: trimmed(git(["rev-parse", "-q", "--verify", "HEAD"])),
+  refs: sha256(git(["for-each-ref", "--format=%(objectname) %(refname)"])),
+  command: command,
+  version: pluginVersion(),
+  node: process.version,
+  limit: String(limit),
+});
+
+// A field matches only when it was computed and equals the record's.
+const same = (now, recorded) => now !== null && now === recorded;
+
+// Whether RECORD, as parsed, can be used: an object with exactly the fields and the time,
+// each one text, and a time that is a date, not in the future.
+const usable = (record) =>
+  record !== null &&
+  typeof record === "object" &&
+  !Array.isArray(record) &&
+  Object.keys(record).sort().join(",") === PASS_KEYS &&
+  Object.values(record).every((value) => typeof value === "string") &&
+  Date.parse(record.time) <= Date.now();
+
+const gitDir = trimmed(git(["rev-parse", "--path-format=absolute", "--git-dir"]));
+const passFile = gitDir === null ? null : join(gitDir, "harness-kit", "stop-gate-pass");
+
+// The pass record, or null when there is none or it cannot be used.
+const readPass = () => {
+  if (passFile === null) return null;
+  let record;
+  try {
+    record = JSON.parse(readFileSync(passFile, "utf8"));
+  } catch {
+    return null;
+  }
+  if (!usable(record)) return null;
+  return record;
+};
+
+const tooOld = (record) => Date.now() - Date.parse(record.time) >= passMaxMs;
+const before = passFile === null ? null : passFields();
+const pass = readPass();
+if (before !== null && pass !== null && !tooOld(pass) && PASS_FIELDS.every((field) => same(before[field], pass[field]))) {
+  rmSync(countFile, { force: true });
+  process.stderr.write(`harness-kit stop gate: nothing changed since the check passed at ${pass.time}; the check was not run\n`);
+  process.exit(0);
+}
+
 exitOnSignals();
 const result = await runLimited("/bin/sh", ["-c", command], { cwd: projectDir, limit, capture: true });
 const output = `${result.stdout || ""}\n${result.stderr || ""}`;
 const status = result.timedOut ? `timeout ${limit}s` : result.error ? "not run" : result.signal ? `signal ${result.signal}` : String(result.code);
+const seconds = result.seconds ?? 0;
+const budget = budgetSeconds("check");
 
-// Record the result (events.sh's harness_check_event decides whether it is new).
-// no-limit: events.sh's harness_check_event only reads and appends the local event log
+// Record the result (events.sh's harness_check_event decides whether it is new) and its time
+// (harness_timed_event, at every run; quiet, as the warning is said below, once a session).
+// no-limit: events.sh's harness_check_event and harness_timed_event only read and append the local event log
 const recorded = spawnSync(
   "bash",
-  ["-c", '. "$1" && harness_check_event stop-gate.mjs "" "$2"', "harness-kit", fileURLToPath(new URL("./events.sh", import.meta.url)),
-    status],
+  ["-c", '. "$1" && { harness_check_event stop-gate.mjs "" "$2"; harness_timed_event stop-gate.mjs check "$3" "$4" quiet </dev/null; }', "harness-kit",
+    fileURLToPath(new URL("./events.sh", import.meta.url)), status, seconds.toFixed(2), String(budget)],
   { cwd: projectDir, input: output, encoding: "utf8" },
 );
 if (recorded.stderr) process.stderr.write(recorded.stderr);
 
+// THE BUDGET: said once per Claude session.
+const warnedFile = join(tmpdir(), `harness-kit-stop-gate-${sessionId}.budget-check`);
+let warning = null;
+if (overBudget(seconds, budget) && !existsSync(warnedFile)) {
+  warning = `${budgetWarning("check", seconds, budget)}. This is said once per session.`;
+  try {
+    writeFileSync(warnedFile, "");
+  } catch {
+    // A marker that cannot be written costs only a repeated warning.
+  }
+}
+
+// THE SKIP's record: kept only for a check that ended by itself with exit 0 and changed
+// nothing while it ran; any other check removes it.
+let keep = before !== null;
+if (result.timedOut) keep = false; // a check stopped at its limit proved nothing
+if (result.code !== 0) keep = false; // a failing check
+if (keep) {
+  const after = passFields();
+  keep = PASS_FIELDS.every((field) => same(after[field], before[field]));
+}
+if (passFile !== null) {
+  try {
+    if (keep) {
+      mkdirSync(dirname(passFile), { recursive: true });
+      writeFileSync(passFile, `${JSON.stringify({ ...before, time: new Date().toISOString() })}\n`);
+    } else {
+      rmSync(passFile, { force: true });
+    }
+  } catch {
+    // A record that cannot be written or removed costs only a skip: the next stop checks.
+  }
+}
+
 if (!result.timedOut && result.code === 0) {
   rmSync(countFile, { force: true });
+  if (warning !== null) process.stdout.write(JSON.stringify({ systemMessage: warning }) + "\n");
   process.exit(0);
 }
 
 const previous = input.stop_hook_active === true ? readCount(countFile) : 0;
 if (previous >= MAX_BLOCKS) {
   process.stderr.write(`${BUDGET_LINE}\n`);
-  process.stdout.write(JSON.stringify({ systemMessage: BUDGET_LINE }) + "\n");
+  process.stdout.write(JSON.stringify({ systemMessage: warning === null ? BUDGET_LINE : `${BUDGET_LINE}\n${warning}` }) + "\n");
   process.exit(0);
 }
 writeFileSync(countFile, String(previous + 1));
@@ -145,5 +317,5 @@ const reason = (
     : [`harness-kit stop gate: \`${command}\` failed (${exit}), block ${previous + 1} of ${MAX_BLOCKS}.`, ...lines.map((line) => line.slice(0, 500)), INSTRUCTION]
 ).join("\n");
 
-process.stdout.write(JSON.stringify({ decision: "block", reason }) + "\n");
+process.stdout.write(JSON.stringify({ decision: "block", reason, ...(warning === null ? {} : { systemMessage: warning }) }) + "\n");
 process.exit(0);

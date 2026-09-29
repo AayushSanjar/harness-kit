@@ -58,6 +58,14 @@
 # result in step 2, through events.sh's harness_check_event: a CHECKED line when it differs
 # from the branch's last recorded result.
 #
+# THE TIMES (events.sh's harness_timed_event). The check in step 2 is timed on its own, a
+# TIMED line for "check" against the check budget (120 seconds by default; time-limit.mjs's
+# BUDGETS): run by the person with nothing else, it is the check's time measured alone. The
+# whole run, from its start to its exit on any path (a refusal, a stop, a signal or the
+# release), is a TIMED line for "release" against the release budget (600 seconds). A time
+# over its budget adds a TIMED line marked over and one warning line on stderr; it stops
+# nothing.
+#
 # Exit status: 0 released; 1 stopped (re-run after doing what the message says); 2 refused.
 set -u
 
@@ -70,7 +78,10 @@ REMOTE=origin
 . "$HERE/ci-lib.sh"
 # shellcheck source=limit-lib.sh
 . "$HERE/limit-lib.sh"
-hk_on_exit
+# The whole run's time, recorded on any exit (THE TIMES).
+STARTED="$(harness_clock)"
+timed_exit() { harness_timed_event release.sh release "$(harness_seconds_since "$STARTED")" "$(node "$HK_LIMIT_JS" budget release)"; }
+hk_on_exit timed_exit
 CI_TOOL=release.sh CI_APPEAR="${SHIP_CI_APPEAR_SECONDS:-180}" CI_POLL="${SHIP_POLL_SECONDS:-10}"
 
 say() { echo "harness-kit release.sh: $*" >&2; }
@@ -115,8 +126,10 @@ check="$( { [ -f .harness/check-command ] && head -n 1 .harness/check-command; }
 say "running the check: $check"
 hk_temp work -d harness-kit-release-check || stop temp-file "cannot make a temporary folder for the check's output. Nothing was pushed."
 check_out="$work/output"
+check_started="$(harness_clock)"
 { hk_limited --merge check release.sh /bin/sh -c "$check" </dev/null 2>&1; echo $? >"$check_out.status"; } | tee "$check_out" >&2
 status="$(cat "$check_out.status")"
+harness_timed_event release.sh check "$(harness_seconds_since "$check_started")" "$(node "$HK_LIMIT_JS" budget check)"
 if [ "$status" -eq 124 ]; then
   limit="$(hk_limit check)"
   harness_check_event release.sh "$branch" "timeout ${limit}s" <"$check_out"
