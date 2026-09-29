@@ -32,8 +32,9 @@
 //      Misleading: only defects recorded with the record-defect skill are counted, so a low
 //      number can mean escaped bugs went unrecorded rather than that fewer escaped.
 //   2. Planted faults caught: the KILLED count of the last replay-faults.sh run of every
-//      entry dated in the period, out of the entries it replayed, from the local event log
-//      (the last run of some entries when there is no full one, and it says so). Labelled
+//      entry dated in the period, out of the entries it replayed (a SURVIVED, TIMEOUT or
+//      ERROR entry is one not caught), from the local event log (the last run of some
+//      entries when there is no full one, and it says so). Labelled
 //      "local record, this machine only". The source also gives the count planted now in
 //      .harness/mutations.tsv. No log, or no run in the period: NOT FOUND.
 //      Misleading: the log holds only this machine's runs since it was added, so the last
@@ -208,7 +209,9 @@ const escapedDefects = (src, when) => {
 // ---------------------------------------------------------------------------------------
 // 2. Planted faults caught.
 // ---------------------------------------------------------------------------------------
-const REPLAYED = /^killed=(\d+),survived=(\d+),error=(\d+)$/;
+// A REPLAYED line's counts: "killed=K,survived=S,timeout=T,error=E,baseline=Bs" since
+// v0.16.0, "killed=K,survived=S,error=E" before (no TIMEOUT then: read as timeout=0).
+const REPLAYED = /^killed=(\d+),survived=(\d+)(?:,timeout=(\d+))?,error=(\d+)(?:,baseline=\d+(?:\.\d+)?s)?$/;
 const plantedFaults = (src, when, log) => {
   const text = src.read(MUTATIONS);
   let planted = `${MUTATIONS} did not exist${src.where}`;
@@ -226,10 +229,12 @@ const plantedFaults = (src, when, log) => {
   }
   const full = runs.filter((e) => e.detail === "all");
   const last = (full.length > 0 ? full : runs)[(full.length > 0 ? full : runs).length - 1];
-  const [killed, survived, errors] = REPLAYED.exec(last.what).slice(1).map(Number);
-  const missed = [survived ? `${survived} SURVIVED` : "", errors ? `${errors} ERROR` : ""].filter(Boolean).join(", ");
+  const [killed, survived, timeouts, errors] = REPLAYED.exec(last.what).slice(1).map((n) => Number(n ?? 0));
+  const missed = [survived ? `${survived} SURVIVED` : "", timeouts ? `${timeouts} TIMEOUT` : "", errors ? `${errors} ERROR` : ""]
+    .filter(Boolean)
+    .join(", ");
   return {
-    value: `${killed} of ${killed + survived + errors} caught${missed ? ` (${missed})` : ""}`,
+    value: `${killed} of ${killed + survived + timeouts + errors} caught${missed ? ` (${missed})` : ""}`,
     source:
       `${LOCAL}: the last ${full.length > 0 ? "full " : ""}replay-faults.sh run in ${log.shown} dated ${when.label} ` +
       `(${last.date}, head ${last.head.slice(0, 12)}${full.length > 0 ? "" : `, ${last.detail}; no run of every entry in the period`})` +

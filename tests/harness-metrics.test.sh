@@ -345,4 +345,20 @@ gh_not_found "gh printing garbage: first CI runs are NOT FOUND, not a number" 'g
 FAKE_GH_RUNS="$WORK/not-runs.json" run gh-broken
 gh_not_found "a gh list with entries that are not runs: first CI runs are NOT FOUND, not 0 of 0" 'gh run list printed 1 entry that is not a run'
 
+# 20. REPLAYED lines since v0.16.0 have a TIMEOUT count and the baseline's seconds: a
+# TIMEOUT is a planted fault not caught. The records of case 1 (older lines, without those
+# fields, which still read) plus a later full run with 1 TIMEOUT.
+new_repo timeouts
+fill timeouts
+printf '%s	%s	%s	h	REPLAYED	%s	%s
+' \
+  2026-09-14T11:00:00Z replay-faults.sh feat-a killed=2,survived=0,timeout=1,error=0,baseline=204.35s all >>"$WORK/timeouts/.git/harness-kit/events.tsv"
+run timeouts
+if [ "$STATUS" -eq 0 ] &&
+  row 2 | grep -qE '^2 +planted faults caught +2 of 3 caught \(1 TIMEOUT\) +local record, this machine only: the last full replay-faults\.sh run in .* \(2026-09-14T11:00:00Z, head h\)'; then
+  result "harness-metrics: a REPLAYED line's TIMEOUTs count as planted faults not caught; older lines without the field still read" yes ""
+else
+  result "harness-metrics: a REPLAYED line's TIMEOUTs count as planted faults not caught; older lines without the field still read" no "$(describe)"
+fi
+
 [ "$failures" -eq 0 ]

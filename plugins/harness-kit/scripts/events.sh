@@ -17,7 +17,9 @@
 #           STOPPED; replay-faults.sh: REPLAYED; land.sh, ship.sh, release.sh and
 #           stop-gate.mjs: CHECKED (harness_check_event, below)
 #   what    STOPPED: a short reason, such as check-failed or no-brief (ship.sh's and
-#           release.sh's refusals start "refused-"); REPLAYED: "killed=K,survived=S,error=E";
+#           release.sh's refusals start "refused-"); REPLAYED:
+#           "killed=K,survived=S,timeout=T,error=E,baseline=Bs" (B: the baseline's seconds;
+#           before v0.16.0, "killed=K,survived=S,error=E");
 #           LANDED: "-"; SHIPPED: the base; RELEASED: the tag; CHECKED: PASS or FAIL
 #   detail  STOPPED: the message printed after "STOPPED:" or "REFUSED:"; REPLAYED: "all", or
 #           "ids:" and the ids asked for; LANDED: the patch's path; SHIPPED and RELEASED: what

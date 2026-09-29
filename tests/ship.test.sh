@@ -826,17 +826,20 @@ fi
 
 # 24. The check runs once: ship.sh saves its output before the review, and review.sh reuses
 # it (the reviewer's input says so, with the same output) instead of running it again.
+# ship.sh gets a temp folder of its own, the only place searched for a folder it left: in a
+# parallel fault replay, other runs make harness-kit-ship-check.* folders in the shared one.
 dir="$(new_repo ship-check-once)"
 printf 'echo run >>"$CHECK_RUNS"\necho "check: 1 passed"\n' >"$dir/.harness/check.sh"
 git -C "$dir" commit -q -am "feature: count check runs"
-CHECK_RUNS="$dir.log/check-runs" run_ship "$dir" "$PASS_JSON" success
+mkdir -p "$dir.log/tmp"
+TMPDIR="$dir.log/tmp" CHECK_RUNS="$dir.log/check-runs" run_ship "$dir" "$PASS_JSON" success
 input="$(cat "$dir.log/claude-stdin" 2>/dev/null)"
 section="$(sed -n '/^=== CHECK COMMAND ===$/,/^=== GIT LOG ===$/p' <<<"$input")"
 if [ "$STATUS" -eq 0 ] && [ "$(wc -l <"$dir.log/check-runs" | tr -d ' ')" = 1 ] &&
   grep -q '^check: 1 passed$' <<<"$OUT" && grep -q 'reusing the check output ship.sh saved' <<<"$ERR" &&
   grep -q '^reused: ship.sh ran this command just before starting the review' <<<"$section" &&
   grep -qx 'exit status: 0' <<<"$section" && grep -qx 'check: 1 passed' <<<"$section" &&
-  [ -z "$(find "${TMPDIR:-/tmp}" -maxdepth 1 -name 'harness-kit-ship-check.*' -newer "$dir.log/check-runs" -print 2>/dev/null)" ]; then
+  [ -z "$(find "$dir.log/tmp" -maxdepth 1 -name 'harness-kit-ship-check.*' -print 2>/dev/null)" ]; then
   result "ship.sh: the check runs once; review.sh reuses ship.sh's saved output and says so" yes ""
 else
   result "ship.sh: the check runs once; review.sh reuses ship.sh's saved output and says so" no "$(describe)

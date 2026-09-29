@@ -7,20 +7,50 @@
 #                                             so there is no review check to skip. The flag
 #                                             is accepted so that .harness/check-command can
 #                                             carry it, as land.sh and replay-faults.sh
-#                                             require. Any other argument is refused.
+#                                             require.
+#   bash tests/validate.sh --only NAME        only the test files (tests/*.test.sh) that
+#                                             .harness/check-files lists for the check NAME,
+#                                             exiting non-zero if any fails: what a targeted
+#                                             replay runs (replay-faults.sh, with
+#                                             .harness/check-only, which this repository does
+#                                             not have, so its replays run every check). For a
+#                                             NAME with no test file there, every check runs.
+# Any other argument is refused.
 set -u
 
-for arg in "$@"; do
-  case "$arg" in
+only=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
     --skip-reviewed) ;;
+    --only)
+      [ "$#" -ge 2 ] && [ -n "$2" ] || { echo "validate.sh: --only needs a check's name" >&2; exit 2; }
+      only="$2"
+      shift
+      ;;
     *)
-      echo "validate.sh: unknown argument \"$arg\"; the only one is --skip-reviewed" >&2
+      echo "validate.sh: unknown argument \"$1\"; the only ones are --skip-reviewed and --only NAME" >&2
       exit 2
       ;;
   esac
+  shift
 done
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# --only NAME: the test files check-files lists for NAME (its other files are the code the
+# check covers, not tests), each run as the whole check runs it.
+if [ -n "$only" ]; then
+  tests="$(awk -F'\t' -v name="$only" '!/^#/ && NF == 2 && $1 == name && $2 ~ /^tests\/[^\/]+\.test\.sh$/ { print $2 }' \
+    "$ROOT/.harness/check-files" 2>/dev/null | sort -u)"
+  if [ -n "$tests" ]; then
+    status=0
+    for test in $tests; do
+      bash "$ROOT/$test" </dev/null || status=1
+    done
+    exit "$status"
+  fi
+  echo "validate.sh: .harness/check-files lists no test file for \"$only\", so the whole check runs" >&2
+fi
 PLUGIN="$ROOT/plugins/harness-kit"
 failures=0
 
@@ -48,7 +78,7 @@ check "claude plugin validate --strict (plugin: plugins/harness-kit)" "$out" $?
 # empty folder outside any git repository, so there is no report line, no start-up picture
 # and no .reports/ folder is made here, and without HARNESS_KIT_EVAL, so there is no warning (tests/ship.test.sh
 # covers both).
-expected="harness-kit 0.15.1 loaded"
+expected="harness-kit 0.16.0 loaded"
 empty="$(mktemp -d)"
 out="$(cd "$empty" && env -u HARNESS_KIT_EVAL -u CLAUDE_PROJECT_DIR GIT_CEILING_DIRECTORIES="$(dirname "$empty")" \
   node "$PLUGIN/scripts/session-start.mjs" </dev/null 2>&1)"
@@ -148,8 +178,9 @@ bash "$ROOT/tests/upgrade.test.sh"
 check "tests/upgrade.test.sh (all cases)" "" $?
 
 # (p) replay-faults.sh's and land.sh's replay cases (fake checks in temporary repositories):
-# fragile entries, .harness/check-only (timed both ways), and entries a patch adds or
-# changes, one per line.
+# fragile entries, .harness/check-only, entries a patch adds or changes, runs in parallel
+# (held on named pipes, never timed), parts judged together, and this script's --only, one
+# per line.
 bash "$ROOT/tests/replay-faults.test.sh"
 check "tests/replay-faults.test.sh (all cases)" "" $?
 
@@ -191,6 +222,63 @@ check "tests/session-start.test.sh (all cases)" "" $?
 # skip it.
 out="$(cd "$ROOT" && node "$PLUGIN/scripts/check-defects.mjs" 2>&1)"
 check "this repository's .harness/defects.tsv passes check-defects.mjs (append-only, well-formed lines)" "$out" $?
+
+# (z) The CI fault replay's shape in .github/workflows/validate.yml: a replay-baseline job
+# running the baseline part; a replay-shard job that needs it, whose matrix lists exactly the
+# shards 1 to 8 (the person's choice), each running --part <shard>/8 with the baseline's
+# results (--baseline-from); and a replay-verdicts job that needs both and judges. A shard
+# missing from the matrix would leave its entries unreplayed. And the time limits: each
+# replay job's timeout-minutes is above the harness's baseline fallback (read from
+# replay-faults.mjs), and the workflow's HARNESS_KIT_REPLAY_SESSION_SECONDS is below every
+# replay job's timeout, so that the harness reports a hang as TIMEOUT before GitHub cancels.
+out="$(node -e '
+  const text = require("fs").readFileSync(process.argv[1], "utf8");
+  const jobs = {};
+  let name = null;
+  for (const line of text.split("\n")) {
+    const header = /^  ([A-Za-z0-9_-]+):\s*$/.exec(line);
+    if (header) { name = header[1]; jobs[name] = ""; continue; }
+    if (/^\S/.test(line)) name = null;
+    if (name) jobs[name] += line + "\n";
+  }
+  const problems = [];
+  const baseline = jobs["replay-baseline"], shard = jobs["replay-shard"], verdicts = jobs["replay-verdicts"];
+  if (!baseline) problems.push("no replay-baseline job");
+  else if (!/replay-faults\.sh --part baseline --out /.test(baseline)) problems.push("replay-baseline does not run replay-faults.sh --part baseline --out");
+  if (!shard) problems.push("no replay-shard job");
+  else {
+    const shardNeeds = /^\s+needs: \[([^\]]*)\]/m.exec(shard)?.[1].split(",").map((n) => n.trim()) ?? [];
+    if (!shardNeeds.includes("replay-baseline")) problems.push("replay-shard does not need replay-baseline");
+    if (!/--baseline-from /.test(shard)) problems.push("replay-shard does not pass --baseline-from");
+    const listed = /^\s+shard: \[([0-9, ]*)\]\s*$/m.exec(shard);
+    const part = /replay-faults\.sh --part \$\{\{ matrix\.shard \}\}\/([0-9]+) --out /.exec(shard);
+    if (!part) problems.push("replay-shard does not run replay-faults.sh --part ${{ matrix.shard }}/N --out");
+    else if (part[1] !== "8") problems.push(`replay-shard runs --part <shard>/${part[1]}, not /8`);
+    const want = Array.from({ length: 8 }, (_, i) => i + 1).join(",");
+    const got = listed ? listed[1].split(",").map((n) => n.trim()).join(",") : "(no shard: [...] line)";
+    if (got !== want) problems.push(`replay-shard matrix shards are ${got}, not ${want}`);
+  }
+  if (!verdicts) problems.push("no replay-verdicts job");
+  else {
+    const needs = /^\s+needs: \[([^\]]*)\]/m.exec(verdicts)?.[1].split(",").map((n) => n.trim()) ?? [];
+    for (const job of ["replay-baseline", "replay-shard"]) if (!needs.includes(job)) problems.push(`replay-verdicts does not need ${job}`);
+    if (!/replay-faults\.sh --judge /.test(verdicts)) problems.push("replay-verdicts does not run replay-faults.sh --judge");
+  }
+  const fallback = Number(/HARNESS_KIT_REPLAY_BASELINE_FALLBACK_SECONDS: ([0-9]+)/.exec(require("fs").readFileSync(process.argv[2], "utf8"))?.[1]);
+  if (!(fallback > 0)) problems.push("no HARNESS_KIT_REPLAY_BASELINE_FALLBACK_SECONDS default in replay-faults.mjs");
+  const topEnv = /^env:\n((?:[ #].*\n|\n)*)/m.exec(text)?.[1] ?? "";
+  const session = Number(/^\s+HARNESS_KIT_REPLAY_SESSION_SECONDS: ([0-9]+)\s*$/m.exec(topEnv)?.[1]);
+  if (!(session > 0)) problems.push("the workflow env: sets no HARNESS_KIT_REPLAY_SESSION_SECONDS");
+  for (const [name, job] of [["replay-baseline", baseline], ["replay-shard", shard], ["replay-verdicts", verdicts]]) {
+    if (!job) continue;
+    const minutes = Number(/^\s+timeout-minutes: ([0-9]+)/m.exec(job)?.[1]);
+    if (!(minutes > 0)) { problems.push(`${name} has no timeout-minutes`); continue; }
+    if (minutes * 60 <= fallback) problems.push(`${name} times out at ${minutes} minutes, not above the baseline fallback of ${fallback} seconds`);
+    if (session > 0 && session >= minutes * 60) problems.push(`the session limit of ${session} seconds is not below the timeout of ${name}, ${minutes} minutes`);
+  }
+  if (problems.length > 0) { console.log(problems.join("\n")); process.exit(1); }
+' "$ROOT/.github/workflows/validate.yml" "$PLUGIN/scripts/replay-faults.mjs" 2>&1)"
+check "validate.yml: the CI replay is one baseline part, shards 1 to 8 each passing --part i/8, and a verdicts job that needs them all" "$out" $?
 
 # (r) The record-defect and plan skills are started only by the person: their frontmatter
 # turns off model invocation.

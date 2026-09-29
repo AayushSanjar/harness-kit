@@ -45,3 +45,44 @@ harness-metrics: a gh list with entries that are not runs: first CI runs are NOT
 this repository's .harness/defects.tsv passes check-defects.mjs (append-only, well-formed lines)	tests/validate.sh
 this repository's .harness/defects.tsv passes check-defects.mjs (append-only, well-formed lines)	plugins/harness-kit/scripts/check-defects.mjs
 this repository's .harness/defects.tsv passes check-defects.mjs (append-only, well-formed lines)	.harness/defects.tsv
+replay-faults: entries run in parallel, never more at once than the CPU count, verdicts in file order	tests/replay-faults.test.sh
+replay-faults: entries run in parallel, never more at once than the CPU count, verdicts in file order	plugins/harness-kit/scripts/replay-faults.mjs
+replay-faults: entries run in parallel, never more at once than the CPU count, verdicts in file order	plugins/harness-kit/scripts/replay-faults.sh
+replay-faults: in parallel, the same verdict lines, totals and exit status as one at a time	tests/replay-faults.test.sh
+replay-faults: in parallel, the same verdict lines, totals and exit status as one at a time	plugins/harness-kit/scripts/replay-faults.mjs
+replay-faults: in parallel, the same verdict lines, totals and exit status as one at a time	plugins/harness-kit/scripts/replay-faults.sh
+replay-faults: one baseline run per session, whatever the job count	tests/replay-faults.test.sh
+replay-faults: one baseline run per session, whatever the job count	plugins/harness-kit/scripts/replay-faults.mjs
+replay-faults: one baseline run per session, whatever the job count	plugins/harness-kit/scripts/replay-faults.sh
+replay-faults: --part 1/3 to 3/3 cover every entry once, and --judge with the baseline part prints what one whole run prints	tests/replay-faults.test.sh
+replay-faults: --part 1/3 to 3/3 cover every entry once, and --judge with the baseline part prints what one whole run prints	plugins/harness-kit/scripts/replay-faults.mjs
+replay-faults: --part 1/3 to 3/3 cover every entry once, and --judge with the baseline part prints what one whole run prints	plugins/harness-kit/scripts/replay-faults.sh
+replay-faults: --judge refuses parts from another snapshot; an entry with no result is an ERROR	tests/replay-faults.test.sh
+replay-faults: --judge refuses parts from another snapshot; an entry with no result is an ERROR	plugins/harness-kit/scripts/replay-faults.mjs
+replay-faults: --judge refuses parts from another snapshot; an entry with no result is an ERROR	plugins/harness-kit/scripts/replay-faults.sh
+replay-faults: interrupted with jobs running, it stops every check and removes every worktree	tests/replay-faults.test.sh
+replay-faults: interrupted with jobs running, it stops every check and removes every worktree	plugins/harness-kit/scripts/replay-faults.mjs
+replay-faults: interrupted with jobs running, it stops every check and removes every worktree	plugins/harness-kit/scripts/replay-faults.sh
+validate.sh --only NAME runs only the test file .harness/check-files names for it; a name with none runs the whole check	tests/replay-faults.test.sh
+validate.sh --only NAME runs only the test file .harness/check-files names for it; a name with none runs the whole check	tests/validate.sh
+replay-faults: without .harness/check-only every entry runs the whole check; with it, only its own	tests/replay-faults.test.sh
+replay-faults: without .harness/check-only every entry runs the whole check; with it, only its own	plugins/harness-kit/scripts/replay-faults.mjs
+validate.yml: the CI replay is one baseline part, shards 1 to 8 each passing --part i/8, and a verdicts job that needs them all	tests/validate.sh
+validate.yml: the CI replay is one baseline part, shards 1 to 8 each passing --part i/8, and a verdicts job that needs them all	.github/workflows/validate.yml
+replay-faults: a SURVIVED fault exits non-zero	plugins/harness-kit/scripts/replay-faults.mjs
+replay-faults: a hanging check is stopped at its time limit and reported TIMEOUT; the others still get verdicts	tests/replay-faults.test.sh
+replay-faults: a hanging check is stopped at its time limit and reported TIMEOUT; the others still get verdicts	plugins/harness-kit/scripts/replay-faults.mjs
+replay-faults: a hanging check is stopped at its time limit and reported TIMEOUT; the others still get verdicts	plugins/harness-kit/scripts/replay-faults.sh
+replay-faults: a run's limit is the multiple of this session's baseline, never under the floor; the baseline's own is the multiple of the last recorded baseline, or the fallback	tests/replay-faults.test.sh
+replay-faults: a run's limit is the multiple of this session's baseline, never under the floor; the baseline's own is the multiple of the last recorded baseline, or the fallback	plugins/harness-kit/scripts/replay-faults.mjs
+replay-faults: a run's limit is the multiple of this session's baseline, never under the floor; the baseline's own is the multiple of the last recorded baseline, or the fallback	plugins/harness-kit/scripts/replay-faults.sh
+replay-faults: when the session's limit runs out, every run still going and every entry not started is TIMEOUT	tests/replay-faults.test.sh
+replay-faults: when the session's limit runs out, every run still going and every entry not started is TIMEOUT	plugins/harness-kit/scripts/replay-faults.mjs
+replay-faults: when the session's limit runs out, every run still going and every entry not started is TIMEOUT	plugins/harness-kit/scripts/replay-faults.sh
+replay-faults: a baseline that passes its limit stops the session with exit 2 and no verdicts	tests/replay-faults.test.sh
+replay-faults: a baseline that passes its limit stops the session with exit 2 and no verdicts	plugins/harness-kit/scripts/replay-faults.mjs
+replay-faults: a baseline that passes its limit stops the session with exit 2 and no verdicts	plugins/harness-kit/scripts/replay-faults.sh
+replay-faults.test.sh: the pipe controller never blocks on a write	tests/replay-faults.test.sh
+harness-metrics: a REPLAYED line's TIMEOUTs count as planted faults not caught; older lines without the field still read	tests/harness-metrics.test.sh
+harness-metrics: a REPLAYED line's TIMEOUTs count as planted faults not caught; older lines without the field still read	plugins/harness-kit/scripts/harness-metrics.mjs
+validate.yml: the CI replay is one baseline part, shards 1 to 8 each passing --part i/8, and a verdicts job that needs them all	plugins/harness-kit/scripts/replay-faults.mjs

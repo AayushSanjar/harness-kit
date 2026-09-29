@@ -45,7 +45,8 @@
 # check-files line starts a replay only through its entries' own files; land.sh names it
 # in a note. An entry the patch adds to .harness/mutations.tsv, or changes (any field, id
 # kept), is replayed too: a new or edited entry is proved before it lands. Replays run the
-# check once per entry plus once without a fault, locally, never in CI (replay-faults.sh).
+# check once per entry plus once without a fault, in parallel up to the CPU count, locally,
+# never in CI (replay-faults.sh).
 #
 # Exit status: 0 landed and checked; 1 stopped (the message says whether the patch is
 # applied); 2 usage.

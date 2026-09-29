@@ -3,9 +3,19 @@ name: validate
 on:
   push:
   pull_request:
+  # By hand, to run the fault replays on a branch: gh workflow run validate.yml --ref <branch>
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+env:
+  # The fault replay's session limit (replay-faults.sh's THE TIME LIMITS), 25 minutes: below
+  # the replay jobs' 30-minute timeout, so that the harness stops a hung replay and reports
+  # TIMEOUT itself, with 5 minutes left for the job's setup and its upload, before GitHub
+  # would cancel the job. The person's decision (.reports/inc-replay-speed.brief.md). The
+  # validate job never runs a real replay, and tests/replay-faults.test.sh unsets it.
+  HARNESS_KIT_REPLAY_SESSION_SECONDS: 1500
 
 jobs:
   validate:
@@ -40,25 +50,37 @@ jobs:
 
   # Fault replays: each entry of .harness/mutations.tsv puts back a break an earlier
   # increment proved, and the validate.sh case named for it must FAIL (replay-faults.sh).
-  # It runs the whole of tests/validate.sh once per entry, plus once without a fault, so it
-  # is kept out of consumer projects' CI (their repositories may be private, and pay for
-  # minutes). This repository is public, and docs.github.com/en/billing/concepts/
+  # Each entry runs the whole of tests/validate.sh, plus one run without a fault (the
+  # baseline), so it is kept out of consumer projects' CI (their repositories may be
+  # private, and pay for minutes). This repository is public, and docs.github.com/en/billing/concepts/
   # product-billing/github-actions (read 2026-09-27) says: "GitHub Actions usage is free
   # for self-hosted runners and for public repositories that use standard GitHub-hosted
   # runners." ubuntu-24.04 is a standard runner (the table quoted above); larger runners
   # "are always charged for, even when used by public repositories", so none is used.
   #
-  # It runs only for pushes to main: a branch push or a pull request runs validate alone.
-  # release.sh (this repository's) and ship.sh (a consumer's) wait for the branch's runs, so
-  # a fault a merged change let SURVIVE shows up here, after the merge, as a red run on main.
-  replay-faults:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  # The replay is one session in parts: replay-baseline runs the baseline once; then
+  # replay-shard runs the entries in 8 shards side by side (each shard's runs in parallel, up
+  # to the runner's CPUs), each taking its run limit from that baseline's measured seconds
+  # (--baseline-from); and replay-verdicts judges every part's results against that one
+  # baseline, printing what a whole run prints. A missing part's entries are ERRORs, and
+  # parts from another commit are refused. The 8 shards are the person's choice
+  # (.reports/inc-replay-speed.brief.md), and so are the jobs' 30-minute timeouts: above the
+  # harness's own limits (the baseline's, 20 minutes on a fresh runner with none recorded;
+  # the session's, 25 minutes, set above), so that a hang is reported as TIMEOUT by the
+  # harness, not cancelled by GitHub.
+  #
+  # They run for pushes to main, and by hand (workflow_dispatch): a branch push or a pull
+  # request runs validate alone. release.sh (this repository's) and ship.sh (a consumer's)
+  # wait for the branch's runs, so a fault a merged change let SURVIVE shows up here, after
+  # the merge, as a red run on main.
+  replay-baseline:
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
     needs: validate
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 30 # above the harness's limits (THE TIME LIMITS in replay-faults.sh)
     steps:
-      # The full history: replay-faults.sh runs tests/validate.sh, and so check-defects.mjs,
-      # in worktrees of this repository, for its baseline and for every fault.
+      # The full history: the baseline runs tests/validate.sh, and so check-defects.mjs, in a
+      # worktree of this repository.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -72,5 +94,74 @@ jobs:
           curl -fsSL https://claude.ai/install.sh | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Run replay-faults.sh
-        run: bash plugins/harness-kit/scripts/replay-faults.sh
+      # The results go outside the checkout, so they never change the working tree replayed.
+      - name: Run the baseline part
+        run: bash plugins/harness-kit/scripts/replay-faults.sh --part baseline --out "$RUNNER_TEMP/replay"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: replay-baseline
+          path: ${{ runner.temp }}/replay
+          if-no-files-found: error
+
+  replay-shard:
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    needs: [validate, replay-baseline]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      # Every shard runs to the end, so one red shard does not hide another's results.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Claude Code
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # The baseline part's results: its measured seconds set this shard's run limit.
+      - uses: actions/download-artifact@v4
+        with:
+          name: replay-baseline
+          path: ${{ runner.temp }}/baseline
+
+      - name: Run shard ${{ matrix.shard }} of 8
+        run: bash plugins/harness-kit/scripts/replay-faults.sh --part ${{ matrix.shard }}/8 --out "$RUNNER_TEMP/replay" --baseline-from "$RUNNER_TEMP/baseline"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: replay-shard-${{ matrix.shard }}
+          path: ${{ runner.temp }}/replay
+          if-no-files-found: error
+
+  replay-verdicts:
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    needs: [replay-baseline, replay-shard]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      # The same commit, to check the parts were run on it and to read .harness/mutations.tsv.
+      # Judging runs no check, so Claude Code is not installed.
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: replay-*
+          path: ${{ runner.temp }}/replay
+          merge-multiple: true
+
+      - name: Judge the parts
+        run: bash plugins/harness-kit/scripts/replay-faults.sh --judge "$RUNNER_TEMP/replay"
