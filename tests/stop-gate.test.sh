@@ -12,6 +12,8 @@ trap 'rm -rf "$WORK"' EXIT
 # runs never see each other's counts.
 export TMPDIR="$WORK/tmp"
 mkdir -p "$TMPDIR"
+# The helper's registry follows this test's TMPDIR, not a replay run's own registry.
+unset HARNESS_KIT_REGISTRY_DIR
 # The gate is off under HARNESS_KIT_EVAL; only case 6 sets it.
 unset HARNESS_KIT_EVAL
 failures=0

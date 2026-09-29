@@ -22,6 +22,8 @@ trap 'rm -rf "$WORK"' EXIT
 # whether any worktree folder was left behind.
 export TMPDIR="$WORK/tmp"
 mkdir -p "$TMPDIR"
+# The helper's registry follows this test's TMPDIR, not a replay run's own registry.
+unset HARNESS_KIT_REGISTRY_DIR
 failures=0
 
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
@@ -773,6 +775,64 @@ if [ "$GUARDED" = yes ] && [ "$STATUS" = 2 ] && [ -z "$left" ] && [ "$(wc -l <"$
 else
   result "replay-faults: a baseline that passes its limit stops the session with exit 2 and no verdicts" no "$(describe)
 ended within the guard: $GUARDED; hung checks still running:${left:- none}"
+fi
+
+# ---------------------------------------------------------------------------------------
+# Each run's own time-limit registry (D4)
+# ---------------------------------------------------------------------------------------
+
+# R1. Each run's helper has its own registry (HARNESS_KIT_REGISTRY_DIR), not this
+# replay's: the check writes down the folder it was given and where register records a
+# path. Three runs (the baseline and two entries): three different folders, none the
+# replay's own, each record in its run's folder, and no folder left after.
+reg="$(new_limits registry 'r-one\tapp.txt\tok\tbad\tapp\nr-two\tapp.txt\tok\tworse\tapp\n')"
+printf 'echo "$HARNESS_KIT_REGISTRY_DIR $(node "$REG_TL" register --owner $$ path "$PWD/x")" >>"$REG_LOG"\nexec sh check.sh "$@"\n' >"$reg/reg.sh"
+printf 'exec sh reg.sh --skip-reviewed\n' >"$reg/.harness/check-command"
+git -C "$reg" add -A && git -C "$reg" commit -q -m "check: log the registry"
+rm -f "$WORK/reg.log"
+REG_TL="$SCRIPTS/time-limit.mjs" REG_LOG="$WORK/reg.log" HARNESS_KIT_REPLAY_CPUS=3 run_guarded "$reg"
+folders="$(cut -d' ' -f1 "$WORK/reg.log" 2>/dev/null | sort -u)"
+misplaced="$(while read -r folder record; do [ "$(dirname "$record")" = "$folder" ] || echo "$record"; done <"$WORK/reg.log")"
+if [ "$GUARDED" = yes ] && [ "$STATUS" = 0 ] && [ "$(wc -l <"$WORK/reg.log" | tr -d ' ')" = 3 ] &&
+  [ "$(grep -c . <<<"$folders")" = 3 ] && ! grep -qx "$TMPDIR/harness-kit-live" <<<"$folders" && [ -z "$misplaced" ] &&
+  [ -z "$(find "$TMPDIR" -maxdepth 1 -name 'harness-kit-replay-live.*' -print)" ] && clean "$reg"; then
+  result "replay-faults: each run has its own time-limit registry, not the replay's, and it is gone afterwards" yes ""
+else
+  result "replay-faults: each run has its own time-limit registry, not the replay's, and it is gone afterwards" no "$(describe)
+ended within the guard: $GUARDED
+logged (folder, record): $(cat "$WORK/reg.log" 2>/dev/null)
+left: $(find "$TMPDIR" -maxdepth 1 -name 'harness-kit-replay-live.*' -print)"
+fi
+
+# R2. A run stopped at its limit has its own registry swept when it ends: the fault makes
+# the check start a group through the helper (a sleep that ignores SIGTERM), then hang. The
+# run is stopped at its 1.5-second limit, which kills that helper (SIGKILL, with its run's
+# group) before it can stop its own group; the sweep of the run's registry then stops it.
+spawn="$(new_limits spawn 's-spawn\tapp.txt\tok\tspawn\tapp\n')"
+cat >"$spawn/spawn.sh" <<'CHECK'
+if grep -q spawn app.txt; then
+  node "$SPAWN_TL" run --limit 60 -- sh -c 'trap "" TERM; echo $$ >>"$SPAWN_PIDS"; exec sleep 60' &
+  i=0
+  while [ ! -s "$SPAWN_PIDS" ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
+  exec sleep 3600
+fi
+exec sh check.sh "$@"
+CHECK
+printf 'exec sh spawn.sh --skip-reviewed\n' >"$spawn/.harness/check-command"
+git -C "$spawn" add -A && git -C "$spawn" commit -q -m "check: spawn a group"
+rm -f "$WORK/spawn-pids"
+SPAWN_TL="$SCRIPTS/time-limit.mjs" SPAWN_PIDS="$WORK/spawn-pids" HARNESS_KIT_LIMIT_GRACE_SECONDS=1 HARNESS_KIT_REPLAY_CPUS=2 \
+  HARNESS_KIT_REPLAY_LIMIT_MULTIPLE=3 HARNESS_KIT_REPLAY_GRACE_SECONDS=1 HARNESS_KIT_REPLAY_LIMIT_FLOOR_SECONDS=1.5 \
+  HARNESS_KIT_REPLAY_BASELINE_FALLBACK_SECONDS=5 run_guarded "$spawn"
+sleep 0.2
+left="$(alive "$WORK/spawn-pids")"
+for p in $left; do kill -9 "$p" 2>/dev/null; done
+if [ "$GUARDED" = yes ] && [ "$STATUS" = 1 ] && [ -s "$WORK/spawn-pids" ] && [ -z "$left" ] &&
+  grep -q '^TIMEOUT s-spawn: ' <<<"$OUT" && [ -z "$(find "$TMPDIR" -maxdepth 1 -name 'harness-kit-replay-live.*' -print)" ] && clean "$spawn"; then
+  result "replay-faults: a run stopped at its limit has its own registry swept: groups it started are stopped" yes ""
+else
+  result "replay-faults: a run stopped at its limit has its own registry swept: groups it started are stopped" no "$(describe)
+ended within the guard: $GUARDED; the group's sleep still running:${left:- none}"
 fi
 
 # C1. The pipe controller never blocks on a write: in this file, the one write to a

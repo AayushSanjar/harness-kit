@@ -63,7 +63,9 @@
 // group is killed. The stopping is the time-limit helper's (time-limit.mjs's startLimited),
 // which also records each run's process group, and this process records each worktree, in
 // the helper's registry: a replay that is force-killed leaves them to the helper's sweep,
-// which runs when a replay (or any other use of the helper) next starts. They come from the harness settings below (each
+// which runs when a replay (or any other use of the helper) next starts. Each run has a
+// registry of its own (HARNESS_KIT_REGISTRY_DIR), swept and removed when the run ends, so
+// that a fault in the helper, replayed in one run, cannot stop another run's check (D4). They come from the harness settings below (each
 // overridden by the environment variable of the same name; the tests set tiny values):
 //   a fault's run    M times the baseline's measured seconds in this session, and never
 //                    less than F. A run that started before the baseline ended gets its
@@ -98,7 +100,7 @@ import { spawnSync } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
-import { register, startLimited, sweep, unregister } from "./time-limit.mjs";
+import { REGISTRY, register, startLimited, sweep, unregister } from "./time-limit.mjs";
 
 const FIELDS = ["id", "file", "find", "replacement", "check"];
 const VERSION = /v?\d+\.\d+\.\d+/;
@@ -344,6 +346,26 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
     records.delete(worktree);
   };
 
+  // Each run's own time-limit registry (HARNESS_KIT_REGISTRY_DIR in its environment), so
+  // that nothing a run's helper records or sweeps reaches the other runs or this process's
+  // registry (D4). Recorded in this process's registry as a registry folder; when the run
+  // ends, what its records left is swept, then the folder is removed.
+  const newRegistry = () => {
+    const registry = mkdtempSync(join(tmpdir(), "harness-kit-replay-live."));
+    try {
+      records.set(registry, register("registry", registry));
+    } catch {
+      // A registry that cannot be written costs only the sweep.
+    }
+    return registry;
+  };
+  const removeRegistry = (registry) => {
+    sweep(registry);
+    rmSync(registry, { recursive: true, force: true });
+    if (records.has(registry)) unregister(records.get(registry));
+    records.delete(registry);
+  };
+
   // A fresh worktree of the snapshot, with a symlink to each of the project's node_modules
   // folders; returns its path, or throws with why.
   const newWorktree = () => {
@@ -420,12 +442,15 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
     if (entry) say(`replaying ${id} (${task.n} of ${asked.length}): ${entry.file}, which "${entry.check}" must catch`);
     else say(`running the check without any fault: ${check}`);
     let worktree;
+    let registry;
     try {
       worktree = newWorktree();
+      registry = newRegistry();
       const problem = entry ? apply(entry, worktree) : null;
       if (problem !== null) throw new Error(problem);
     } catch (error) {
       if (worktree) removeWorktree(worktree);
+      if (registry) removeRegistry(registry);
       writeFileSync(join(out, `${id}.error`), `${error.message}\n`);
       finished += 1;
       return;
@@ -435,7 +460,7 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
     const handle = startLimited("/bin/sh", ["-c", targeted ? `${check} --only "$1"` : check, "harness-kit-replay", ...(targeted ? [entry.check] : [])], {
       cwd: worktree,
       stdio: ["ignore", log, log],
-      env: { ...process.env, HARNESS_KIT_REPLAY: "1", HARNESS_KIT_REPLAY_OUTER: "1" },
+      env: { ...process.env, HARNESS_KIT_REPLAY: "1", HARNESS_KIT_REPLAY_OUTER: "1", [REGISTRY]: registry },
       grace,
     });
     closeSync(log);
@@ -448,6 +473,7 @@ const run = ([path, out, project, snapshot, part, check, ...ids]) => {
       running.delete(id);
       clearTimeout(job.timer);
       removeWorktree(worktree);
+      removeRegistry(registry);
       finished += 1;
       const seconds = elapsed(job.began);
       if (stopping === null && job.over !== null) {

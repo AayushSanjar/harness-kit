@@ -832,7 +832,7 @@ dir="$(new_repo ship-check-once)"
 printf 'echo run >>"$CHECK_RUNS"\necho "check: 1 passed"\n' >"$dir/.harness/check.sh"
 git -C "$dir" commit -q -am "feature: count check runs"
 mkdir -p "$dir.log/tmp"
-TMPDIR="$dir.log/tmp" CHECK_RUNS="$dir.log/check-runs" run_ship "$dir" "$PASS_JSON" success
+TMPDIR="$dir.log/tmp" HARNESS_KIT_REGISTRY_DIR="$dir.log/tmp/harness-kit-live" CHECK_RUNS="$dir.log/check-runs" run_ship "$dir" "$PASS_JSON" success
 input="$(cat "$dir.log/claude-stdin" 2>/dev/null)"
 section="$(sed -n '/^=== CHECK COMMAND ===$/,/^=== GIT LOG ===$/p' <<<"$input")"
 if [ "$STATUS" -eq 0 ] && [ "$(wc -l <"$dir.log/check-runs" | tr -d ' ')" = 1 ] &&
@@ -1271,7 +1271,7 @@ printf 'success\n' >"$dir.log/conclusion"
 mkdir -p "$dir.log/tmp"
 set -m
 (cd "$dir" && exec env PATH="$WORK/bin:$PATH" FAKE_LOG="$dir.log" FAKE_JSON="$PASS_JSON" TMPDIR="$dir.log/tmp" \
-  HARNESS_KIT_LIMIT_GRACE_SECONDS=1 bash "$SHIP") >"$dir.log/out" 2>&1 &
+  HARNESS_KIT_REGISTRY_DIR="$dir.log/tmp/harness-kit-live" HARNESS_KIT_LIMIT_GRACE_SECONDS=1 bash "$SHIP") >"$dir.log/out" 2>&1 &
 ship_pid=$!
 set +m
 for _ in $(seq 1 50); do [ -s "$dir.log/hang.child" ] && break; sleep 0.1; done

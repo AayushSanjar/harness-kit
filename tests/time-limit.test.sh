@@ -13,6 +13,8 @@ TL="$SCRIPTS/time-limit.mjs"
 WORK="$(cd "$(mktemp -d)" && pwd -P)"
 export TMPDIR="$WORK/tmp"
 mkdir -p "$TMPDIR"
+# The helper's registry follows this test's TMPDIR, not a replay run's own registry.
+unset HARNESS_KIT_REGISTRY_DIR
 export HARNESS_KIT_LIMIT_GRACE_SECONDS=1
 failures=0
 PIDS=""
@@ -114,6 +116,28 @@ else
   result "time-limit: a closed output pipe stops the group and exits 141" no "exit $status; the command is $(alive "$WORK/pipe.pid" && echo alive || echo gone)"
 fi
 
+# 5b. A process outside the command's group (a detached child) holding its output open
+# does not hold the helper (D5): once the command's first process has ended, the helper
+# waits for the output at most one grace period (3 seconds here), says so, and returns the
+# command's status. The command ended before its 1-second limit, so there is no TIMEOUT.
+# Without the bound, the helper waits for the child's 30 seconds and reports a TIMEOUT.
+began=$SECONDS
+HARNESS_KIT_LIMIT_GRACE_SECONDS=3 node "$TL" run --limit 1 --name test -- node -e '
+const c = require("child_process").spawn("sleep", ["30"], { detached: true, stdio: ["ignore", "inherit", "inherit"] });
+require("fs").writeFileSync(process.argv[1], String(c.pid));
+c.unref();' "$WORK/held.pid" 2>"$WORK/held.err" | cat >/dev/null
+status="${PIPESTATUS[0]}"
+took=$((SECONDS - began))
+for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s "$WORK/held.pid" ] && break; sleep 0.1; done
+PIDS="$PIDS $(cat "$WORK/held.pid" 2>/dev/null)"
+err="$(cat "$WORK/held.err")"
+if [ "$status" -eq 0 ] && [ "$took" -le 6 ] && [ "$(grep -c . <<<"$err")" -eq 1 ] && ! grep -q TIMEOUT <<<"$err" &&
+  grep -q 'ended, but a process outside its process group still held its output open; stopped waiting for it after 3 seconds$' <<<"$err"; then
+  result "time-limit: a command whose first process ended finishes within the grace period even when a process outside its group holds its output" yes ""
+else
+  result "time-limit: a command whose first process ended finishes within the grace period even when a process outside its group holds its output" no "exit $status after ${took}s; stderr: $err"
+fi
+
 # ---------------------------------------------------------------------------------------
 # The registry and the sweep.
 # ---------------------------------------------------------------------------------------
@@ -188,6 +212,113 @@ if alive "$WORK/reused.pid" && [ ! -e "$LIVE/group.reused.json" ] && [ -z "$out"
 else
   result "time-limit sweep: a record whose process id now has another start time signals nothing and is dropped" no \
     "the process is $(alive "$WORK/reused.pid" && echo alive || echo gone); record: $(ls "$LIVE"); sweep: $out"
+fi
+
+# Helpers for 9 to 11. group NAME: a process leading its own group, sleeping 30 seconds,
+# its pid in $WORK/NAME.pid. lstart PID: its start time as the helper reads it. plant DIR
+# NAME OWNER PGID LEADER_START: a group record in DIR, owned by OWNER (a dead pid, with a
+# start time from 1970), for the group PGID.
+group() {
+  (python3 -c 'import os, sys, time; os.setsid(); open(sys.argv[1], "w").write(str(os.getpid())); time.sleep(30)' "$WORK/$1.pid" &)
+  for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s "$WORK/$1.pid" ] && break; sleep 0.1; done
+  PIDS="$PIDS $(cat "$WORK/$1.pid")"
+}
+lstart() { ps -o lstart= -p "$1" | sed 's/^ *//; s/ *$//'; }
+plant() {
+  mkdir -p "$1"
+  printf '{"kind":"group","owner":%s,"ownerStart":"Thu Jan  1 00:00:00 1970","pgid":%s,"leaderStart":"%s","command":"sleep"}\n' \
+    "$3" "$4" "$5" >"$1/group.$2.json"
+}
+
+# 9. HARNESS_KIT_REGISTRY_DIR names the registry: a sweep reads only that folder (a dead
+# owner's record for a live group in the default folder is left alone), register writes in
+# it, and a relative path is refused. The default sweep then stops that group, so the
+# record was one it would act on.
+group named
+plant "$LIVE" named "$gone" "$(cat "$WORK/named.pid")" "$(lstart "$(cat "$WORK/named.pid")")"
+out="$(HARNESS_KIT_REGISTRY_DIR="$WORK/named-reg" node "$TL" sweep 2>&1)"
+rec="$(HARNESS_KIT_REGISTRY_DIR="$WORK/named-reg" node "$TL" register --owner $$ path "$WORK/named-path" 2>&1)"
+rel="$(HARNESS_KIT_REGISTRY_DIR=relative/reg node "$TL" sweep 2>&1)"
+left="$(alive "$WORK/named.pid" && [ -e "$LIVE/group.named.json" ] && echo yes)"
+node "$TL" sweep >/dev/null 2>&1
+sleep 0.2
+if [ "$left" = yes ] && [ -z "$out" ] && [ "$(dirname "$rec")" = "$WORK/named-reg" ] && ! alive "$WORK/named.pid" &&
+  [ "$rel" = 'harness-kit time-limit: nothing was swept: HARNESS_KIT_REGISTRY_DIR must be an absolute path, not "relative/reg"' ]; then
+  result "time-limit: HARNESS_KIT_REGISTRY_DIR names the registry; the sweep reads only that folder" yes ""
+else
+  result "time-limit: HARNESS_KIT_REGISTRY_DIR names the registry; the sweep reads only that folder" no \
+    "left alone by the named folder's sweep: ${left:-no}; its output: $out; record: $rec; relative: $rel; stopped by the default sweep: $(alive "$WORK/named.pid" && echo no || echo yes)"
+fi
+
+# 10. A start time that cannot be read counts as alive, and nothing is signalled: with a ps
+# that fails, a live helper's record and group are left alone (a failed read is not another
+# process); and a record whose group's first process start time was never read signals
+# nothing, even when that first process is gone and the rest of its group lives on.
+mkdir -p "$WORK/fakeps" && printf '#!/bin/sh\nexit 1\n' >"$WORK/fakeps/ps" && chmod +x "$WORK/fakeps/ps"
+node "$TL" run --limit 60 -- sh -c "echo \$\$ >'$WORK/unread.pid'; sleep 60" &
+helper=$!
+PIDS="$PIDS $helper"
+for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s "$WORK/unread.pid" ] && break; sleep 0.1; done
+before="$(ls "$LIVE" | wc -l | tr -d ' ')"
+out="$(PATH="$WORK/fakeps:$PATH" node "$TL" sweep 2>&1)"
+after="$(ls "$LIVE" | wc -l | tr -d ' ')"
+unread_alive="$(alive "$WORK/unread.pid" && echo yes)"
+kill -TERM "$helper" 2>/dev/null
+wait "$helper" 2>/dev/null
+(python3 -c 'import os, sys, time
+os.setsid()
+if os.fork() == 0:
+    open(sys.argv[1], "w").write(str(os.getpid())); time.sleep(30)
+else:
+    open(sys.argv[2], "w").write(str(os.getpid()))' "$WORK/member.pid" "$WORK/leader.pid" &)
+for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s "$WORK/member.pid" ] && [ -s "$WORK/leader.pid" ] && break; sleep 0.1; done
+PIDS="$PIDS $(cat "$WORK/member.pid")"
+sleep 0.3
+plant "$LIVE" unread "$gone" "$(cat "$WORK/leader.pid")" ""
+out2="$(node "$TL" sweep 2>&1)"
+sleep 0.2
+if [ "$unread_alive" = yes ] && [ "$before" = "$after" ] && [ -z "$out" ] && alive "$WORK/member.pid" &&
+  [ ! -e "$LIVE/group.unread.json" ] && [ -z "$out2" ]; then
+  result "time-limit sweep: a start time that cannot be read counts as alive; nothing is signalled" yes ""
+else
+  result "time-limit sweep: a start time that cannot be read counts as alive; nothing is signalled" no \
+    "with ps failing: the group is $([ "$unread_alive" = yes ] && echo alive || echo gone), records $before before and $after after, sweep: $out
+first process never read: the member is $(alive "$WORK/member.pid" && echo alive || echo gone), record: $(ls "$LIVE"), sweep: $out2"
+fi
+
+# 11. The registry folder is owner-only: made 0700, and one of this user's made 0755 is
+# tightened to 0700. The sweep refuses a folder that is a symbolic link (a dead owner's
+# record for a live group behind it is not acted on) or belongs to another user (/usr,
+# root's), in one line, and register refuses it too.
+mode() { node -e 'console.log((require("fs").lstatSync(process.argv[1]).mode & 0o777).toString(8))' "$1"; }
+HARNESS_KIT_REGISTRY_DIR="$WORK/own-new" node "$TL" register --owner $$ path "$WORK/own-path" >/dev/null 2>&1
+mkdir "$WORK/own-old" && chmod 755 "$WORK/own-old"
+HARNESS_KIT_REGISTRY_DIR="$WORK/own-old" node "$TL" register --owner $$ path "$WORK/own-path" >/dev/null 2>&1
+modes="$(mode "$WORK/own-new") $(mode "$WORK/own-old")"
+group linked
+mkdir -m 700 "$WORK/own-real"
+plant "$WORK/own-real" linked "$gone" "$(cat "$WORK/linked.pid")" "$(lstart "$(cat "$WORK/linked.pid")")"
+ln -s "$WORK/own-real" "$WORK/own-link"
+link_out="$(HARNESS_KIT_REGISTRY_DIR="$WORK/own-link" node "$TL" sweep 2>&1)"
+link_left="$(alive "$WORK/linked.pid" && [ -e "$WORK/own-real/group.linked.json" ] && echo yes)"
+HARNESS_KIT_REGISTRY_DIR="$WORK/own-real" node "$TL" sweep >/dev/null 2>&1
+sleep 0.2
+usr_ok=yes usr_out="" usr_reg=""
+if [ "$(id -u)" != 0 ]; then
+  usr_out="$(HARNESS_KIT_REGISTRY_DIR=/usr node "$TL" sweep 2>&1)"
+  usr_reg="$(HARNESS_KIT_REGISTRY_DIR=/usr node "$TL" register --owner $$ path "$WORK/own-path" 2>&1)"
+  usr_status=$?
+  usr_line="the registry folder /usr is not used: it belongs to user id $(node -e 'console.log(require("fs").statSync("/usr").uid)'), not to this user ($(id -u))"
+  [ "$usr_out" = "harness-kit time-limit: $usr_line; nothing was swept" ] && [ "$usr_status" -ne 0 ] &&
+    grep -qxF "harness-kit time-limit: not recorded: $usr_line" <<<"$usr_reg" || usr_ok=no
+fi
+if [ "$modes" = "700 700" ] && [ "$link_left" = yes ] && ! alive "$WORK/linked.pid" && [ "$usr_ok" = yes ] &&
+  [ "$link_out" = "harness-kit time-limit: the registry folder $WORK/own-link is not used: it is a symbolic link; nothing was swept" ]; then
+  result "time-limit: the registry folder is owner-only, and the sweep refuses one that is a symlink or not this user's" yes ""
+else
+  result "time-limit: the registry folder is owner-only, and the sweep refuses one that is a symlink or not this user's" no \
+    "modes (new, made 0755): $modes; symlink: left alone ${link_left:-no}, stopped through the real folder: $(alive "$WORK/linked.pid" && echo no || echo yes), sweep: $link_out
+/usr: sweep: $usr_out; register: $usr_reg"
 fi
 
 # ---------------------------------------------------------------------------------------

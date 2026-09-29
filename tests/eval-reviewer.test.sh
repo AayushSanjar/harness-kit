@@ -150,7 +150,7 @@ run_eval() {
   shift
   mkdir -p "$dir.log" "$dir.tmp"
   rm -f "$dir.log"/*
-  OUT="$(cd "$dir" && PATH="$WORK/bin:$PATH" TMPDIR="$dir.tmp" FAKE_LOG="$dir.log" bash "$EVAL" "$@" 2>"$WORK/stderr")"
+  OUT="$(cd "$dir" && PATH="$WORK/bin:$PATH" TMPDIR="$dir.tmp" HARNESS_KIT_REGISTRY_DIR="$dir.tmp/harness-kit-live" FAKE_LOG="$dir.log" bash "$EVAL" "$@" 2>"$WORK/stderr")"
   STATUS=$?
   ERR="$(cat "$WORK/stderr")"
 }

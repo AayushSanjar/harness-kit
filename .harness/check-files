@@ -185,3 +185,17 @@ replay-faults: a run that ignores the stop signal is force-killed when its grace
 replay-faults: a hanging check is stopped at its time limit and reported TIMEOUT; the others still get verdicts	plugins/harness-kit/scripts/time-limit.mjs
 replay-faults: interrupted with jobs running, it stops every check and removes every worktree	plugins/harness-kit/scripts/time-limit.mjs
 replay-faults: interrupted with jobs running, it stops every check and removes every worktree	plugins/harness-kit/scripts/limit-lib.sh
+time-limit: HARNESS_KIT_REGISTRY_DIR names the registry; the sweep reads only that folder	tests/time-limit.test.sh
+time-limit: HARNESS_KIT_REGISTRY_DIR names the registry; the sweep reads only that folder	plugins/harness-kit/scripts/time-limit.mjs
+time-limit sweep: a start time that cannot be read counts as alive; nothing is signalled	tests/time-limit.test.sh
+time-limit sweep: a start time that cannot be read counts as alive; nothing is signalled	plugins/harness-kit/scripts/time-limit.mjs
+time-limit: the registry folder is owner-only, and the sweep refuses one that is a symlink or not this user's	tests/time-limit.test.sh
+time-limit: the registry folder is owner-only, and the sweep refuses one that is a symlink or not this user's	plugins/harness-kit/scripts/time-limit.mjs
+time-limit: a command whose first process ended finishes within the grace period even when a process outside its group holds its output	tests/time-limit.test.sh
+time-limit: a command whose first process ended finishes within the grace period even when a process outside its group holds its output	plugins/harness-kit/scripts/time-limit.mjs
+replay-faults: each run has its own time-limit registry, not the replay's, and it is gone afterwards	tests/replay-faults.test.sh
+replay-faults: each run has its own time-limit registry, not the replay's, and it is gone afterwards	plugins/harness-kit/scripts/replay-faults.mjs
+replay-faults: each run has its own time-limit registry, not the replay's, and it is gone afterwards	plugins/harness-kit/scripts/time-limit.mjs
+replay-faults: a run stopped at its limit has its own registry swept: groups it started are stopped	tests/replay-faults.test.sh
+replay-faults: a run stopped at its limit has its own registry swept: groups it started are stopped	plugins/harness-kit/scripts/replay-faults.mjs
+replay-faults: a run stopped at its limit has its own registry swept: groups it started are stopped	plugins/harness-kit/scripts/time-limit.mjs

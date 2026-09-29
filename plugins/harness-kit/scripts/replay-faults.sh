@@ -25,7 +25,8 @@
 # project's CI: a private repository pays for its Actions minutes.
 #
 # IN PARALLEL. The runs (the baseline and each entry's) go side by side, each in its own
-# worktree, with at most as many at once as the machine has CPUs. HARNESS_KIT_REPLAY_JOBS
+# worktree and with its own time-limit registry (HARNESS_KIT_REGISTRY_DIR, time-limit.mjs),
+# with at most as many at once as the machine has CPUs. HARNESS_KIT_REPLAY_JOBS
 # (a whole number of 1 or more) lowers that, and never raises it above the CPU count;
 # HARNESS_KIT_REPLAY_JOBS=1 runs them one at a time. The verdicts, the totals, the exit
 # status and the event-log line do not depend on the number of jobs: the verdicts are

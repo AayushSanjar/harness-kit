@@ -29,7 +29,9 @@
 // THE HARD STOP. When a limit runs out, the process's whole group is sent SIGTERM; if the
 // group's first process has not ended when the grace period ends, the whole group is sent
 // SIGKILL. When the first process ends, for any reason, anything left in its group is killed
-// (SIGKILL), so nothing it started outlives it.
+// (SIGKILL), so nothing it started outlives it, and its limit no longer runs. A process that
+// left the group can still hold the command's output open: the helper waits for it at most
+// one grace period, then stops waiting, says so in one line on stderr, and returns (D5).
 //
 // THE LIMITS, in seconds, each overridden by its environment variable (a number above 0;
 // the tests set tiny ones). The values and their evidence are in the v0.17.0 brief
@@ -46,23 +48,34 @@
 //   init            120  UPGRADE_INIT_SECONDS             the headless session (upgrade.sh)
 //   the grace period 10  HARNESS_KIT_LIMIT_GRACE_SECONDS  from SIGTERM to SIGKILL
 //
-// THE REGISTRY, in $TMPDIR/harness-kit-live/: one JSON record per process group this helper
-// runs, and per temporary folder or worktree a harness script has in use, each naming its
-// owner (the process that must clean it up) by process id and start time (`ps -o lstart=`),
-// and a group's first process by process id and start time. A record is deleted when its
-// owner has cleaned up.
+// THE REGISTRY, in the folder HARNESS_KIT_REGISTRY_DIR names (an absolute path), else in
+// $TMPDIR/harness-kit-live/: one JSON record per process group this helper runs, and per
+// temporary folder, worktree or registry folder a harness script has in use, each naming
+// its owner (the process that must clean it up) by process id and start time
+// (`ps -o lstart=`), and a group's first process by process id and start time. A record is
+// deleted when its owner has cleaned up. The folder is this user's alone: it is made
+// owner-only (0700), and one that is a symbolic link or belongs to another user is refused:
+// nothing is recorded in it, and the sweep signals and removes nothing from it, saying so
+// in one line on stderr. A fault replay gives each run its own registry
+// (replay-faults.mjs), so that nothing one run does to its registry reaches another's.
 //
-// THE SWEEP, each time the helper starts: every record whose owner is gone (no such process,
-// or its process id now has another start time) was left by a run that was force-killed.
-// Its group is stopped (SIGTERM, the grace period, then SIGKILL), unless the group's first
-// process is alive with another start time (its process id was reused, so the group is
-// gone); its folder is removed (only under the OS temp folder), or its worktree (git
-// worktree remove --force, then prune); and the record is deleted. One line on stderr says
-// what was cleaned up. A record whose owner is alive is never touched.
+// THE SWEEP, each time the helper starts: every record whose owner is gone was left by a
+// run that was force-killed. An owner is gone only when there is no such process, or when
+// its start time is read and differs from the recorded one (its process id was reused). A
+// start time that cannot be read, now or when it was recorded, counts as the same process:
+// the sweep signals nothing it is not sure of. A gone owner's group is stopped (SIGTERM,
+// the grace period, then SIGKILL), unless its first process's start time was never read,
+// or the first process is alive with another start time (its process id was reused, so
+// the group is gone); its folder is removed (only under the OS temp folder), or its
+// worktree (git worktree remove --force, then prune), or its registry folder (swept, then
+// removed); and the record is deleted. One line on stderr says what was cleaned up. A
+// record whose owner is alive is never touched. What the sweep cannot tell apart: a
+// group whose first process and owner are both gone, from an unrelated group that has
+// since taken the same id and whose own first process has also exited.
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { constants, tmpdir } from "node:os";
-import { join, resolve, sep } from "node:path";
+import { isAbsolute, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const LIMITS = {
@@ -96,9 +109,49 @@ const secs = (n) => String(Math.round(n * 10) / 10);
 // ---------------------------------------------------------------------------------------
 // The registry and the sweep.
 // ---------------------------------------------------------------------------------------
-const LIVE = () => join(tmpdir(), "harness-kit-live");
+export const REGISTRY = "HARNESS_KIT_REGISTRY_DIR";
 
-// A process's start time as ps prints it, or "" when there is no such process.
+// The registry folder. Throws when HARNESS_KIT_REGISTRY_DIR is set to a relative path.
+export const registryDir = () => {
+  const named = process.env[REGISTRY];
+  if (named === undefined || named === "") return join(tmpdir(), "harness-kit-live");
+  if (!isAbsolute(named)) throw new Error(`${REGISTRY} must be an absolute path, not "${named}"`);
+  return named;
+};
+
+// Why the registry folder DIR cannot be used, or null when it can: it must be a real
+// folder (not a symbolic link) of this user's; one of this user's is made owner-only.
+// With make, a missing folder is made (0700); without it, a missing folder is "missing".
+const unusable = (dir, make) => {
+  let stat;
+  try {
+    stat = lstatSync(dir); // a symbolic link is not followed: it is refused below
+  } catch (error) {
+    if (error.code !== "ENOENT") return `it cannot be read (${error.code})`;
+    if (!make) return "missing";
+    try {
+      mkdirSync(dir, { recursive: true, mode: 0o700 });
+      stat = lstatSync(dir);
+    } catch (error2) {
+      return `it cannot be made (${error2.code})`;
+    }
+  }
+  if (stat.isSymbolicLink()) return "it is a symbolic link";
+  if (!stat.isDirectory()) return "it is not a folder";
+  const uid = process.getuid?.();
+  if (uid !== undefined && stat.uid !== uid) return `it belongs to user id ${stat.uid}, not to this user (${uid})`;
+  if ((stat.mode & 0o777) !== 0o700) {
+    try {
+      chmodSync(dir, 0o700);
+    } catch (error) {
+      return `it cannot be made owner-only (${error.code})`;
+    }
+  }
+  return null;
+};
+
+// A process's start time as ps prints it, or "" when it cannot be read (no such process,
+// or ps failed).
 const startOf = (pid) => {
   const r = spawnSync("ps", ["-o", "lstart=", "-p", String(pid)], { encoding: "utf8" });
   return r.status === 0 ? r.stdout.trim() : "";
@@ -111,16 +164,25 @@ const exists = (pid) => {
     return error.code === "EPERM";
   }
 };
-// Is PID alive and the same process that started at START?
-const sameProcess = (pid, start) => exists(pid) && start !== "" && startOf(pid) === start;
+// Is the process PID, recorded as started at START, gone: no such process, or its start
+// time read now and not START? A start time that cannot be read, now or when it was
+// recorded, counts as the same process.
+const gone = (pid, start) => {
+  if (!exists(pid)) return true;
+  if (typeof start !== "string" || start === "") return false;
+  const now = startOf(pid);
+  return now !== "" && now !== start;
+};
 
 let myStart = null;
 const ownStart = () => (myStart ??= startOf(process.pid));
 
 let serial = 0;
 const writeRecord = (record) => {
-  mkdirSync(LIVE(), { recursive: true });
-  const path = join(LIVE(), `${record.kind}.${record.owner}.${Date.now()}.${serial++}.${Math.random().toString(36).slice(2, 8)}.json`);
+  const dir = registryDir();
+  const why = unusable(dir, true);
+  if (why !== null) throw new Error(`the registry folder ${dir} is not used: ${why}`);
+  const path = join(dir, `${record.kind}.${record.owner}.${Date.now()}.${serial++}.${Math.random().toString(36).slice(2, 8)}.json`);
   writeFileSync(path, `${JSON.stringify(record)}\n`);
   return path;
 };
@@ -150,32 +212,52 @@ const signalGroup = (pgid, signal) => {
   }
 };
 
-// THE SWEEP. Returns what it cleaned up; prints one line on stderr when it cleaned anything.
-export const sweep = () => {
-  swept = true;
+// THE SWEEP of the registry folder DIR (the registry by default). Returns what it cleaned
+// up; prints one line on stderr when it cleaned anything, or when it refuses DIR.
+export const sweep = (dir = null) => {
+  const nothing = { groups: 0, folders: 0, worktrees: 0 };
+  if (dir === null) {
+    swept = true;
+    try {
+      dir = registryDir();
+    } catch (error) {
+      process.stderr.write(`harness-kit time-limit: nothing was swept: ${error.message}\n`);
+      return nothing;
+    }
+  }
+  const why = unusable(dir, false);
+  if (why === "missing") return nothing;
+  if (why !== null) {
+    process.stderr.write(`harness-kit time-limit: the registry folder ${dir} is not used: ${why}; nothing was swept\n`);
+    return nothing;
+  }
   let names;
   try {
-    names = readdirSync(LIVE()).filter((n) => n.endsWith(".json"));
+    names = readdirSync(dir).filter((n) => n.endsWith(".json"));
   } catch {
-    return { groups: 0, folders: 0, worktrees: 0 };
+    return nothing;
   }
   const left = [];
   for (const name of names) {
-    const path = join(LIVE(), name);
+    const path = join(dir, name);
     let record;
     try {
       record = JSON.parse(readFileSync(path, "utf8"));
     } catch {
       continue; // being written, or not ours to judge
     }
-    if (sameProcess(record.owner, record.ownerStart)) continue;
+    if (!Number.isInteger(record?.owner) || record.owner < 1) continue; // not ours to judge
+    if (!gone(record.owner, record.ownerStart)) continue;
     left.push({ path, record });
   }
-  const done = { groups: 0, folders: 0, worktrees: 0 };
+  const done = { ...nothing };
   // The groups: SIGTERM to all first, one grace period, then SIGKILL.
   const groups = left.filter(({ record }) => record.kind === "group" && Number.isInteger(record.pgid) && record.pgid > 1);
   const stopping = groups.filter(({ record }) => {
-    // A first process alive with another start time: its id was reused, so the group is gone.
+    // A first process whose start time was never read: nothing to be sure of.
+    if (typeof record.leaderStart !== "string" || record.leaderStart === "") return false;
+    // A first process alive with another start time, or one that cannot be read now: its
+    // id may have been reused, so the group may not be this one.
     if (exists(record.pgid) && startOf(record.pgid) !== record.leaderStart) return false;
     return signalGroup(record.pgid, "SIGTERM");
   });
@@ -196,6 +278,11 @@ export const sweep = () => {
         done.worktrees += 1;
       }
       spawnSync("git", ["-C", record.repo, "worktree", "prune"], { stdio: "ignore" });
+    } else if (record.kind === "registry" && typeof record.path === "string" && underTemp(record.path) && existsSync(record.path)) {
+      // A run's own registry (replay-faults.mjs): what its records left is cleaned up first.
+      if (unusable(record.path, false) === null) sweep(record.path);
+      rmSync(record.path, { recursive: true, force: true });
+      done.folders += 1;
     }
   }
   for (const { path } of left) dropRecord(path);
@@ -235,7 +322,9 @@ const live = new Set();
 // earlier limit); stop() (SIGTERM to the group, then SIGKILL when the grace period ends);
 // kill() (SIGKILL to the group now); result, a promise of { code, signal, status (the exit
 // status, 128 + the signal's number for a signal, 127 when it could not start), timedOut,
-// stopped, seconds, stdout, stderr, error }.
+// stopped, heldOpen (true when a process outside the group still held the output open
+// a grace period after the first process ended, and the wait for it was given up),
+// seconds, stdout, stderr, error }.
 export const startLimited = (command, args = [], options = {}) => {
   sweepOnce();
   const { cwd, env, stdio = ["ignore", "pipe", "pipe"], limit = null, capture = false, onTimeout = null } = options;
@@ -244,6 +333,8 @@ export const startLimited = (command, args = [], options = {}) => {
   const handle = { child, began: Date.now(), timedOut: false, stopped: false, limitSeconds: null };
   let timer = null;
   let graceTimer = null;
+  let holdTimer = null;
+  let exited = false;
   let record = null;
   let out = "";
   let err = "";
@@ -271,7 +362,8 @@ export const startLimited = (command, args = [], options = {}) => {
     handle.limitSeconds = seconds;
     const left = seconds * 1000 - (Date.now() - handle.began);
     timer = setTimeout(() => {
-      if (ended || handle.timedOut) return;
+      // A command whose first process has ended is not late, whatever still holds its output.
+      if (ended || exited || handle.timedOut) return;
       handle.timedOut = true;
       onTimeout?.(handle);
       handle.stop();
@@ -289,19 +381,30 @@ export const startLimited = (command, args = [], options = {}) => {
   handle.result = new Promise((resolveResult) => {
     let exit = null;
     const finish = (error = null) => {
+      if (ended) return;
       ended = true;
       clearTimeout(timer);
       clearTimeout(graceTimer);
+      clearTimeout(holdTimer);
       live.delete(handle);
       if (record) dropRecord(record);
       const [code, signal] = exit ?? [null, null];
       const status = error ? 127 : code ?? 128 + (constants.signals[signal] ?? 15);
-      resolveResult({ code, signal, status, timedOut: handle.timedOut, stopped: handle.stopped, seconds: (Date.now() - handle.began) / 1000, stdout: out, stderr: err, error });
+      resolveResult({ code, signal, status, timedOut: handle.timedOut, stopped: handle.stopped, heldOpen: handle.heldOpen === true, seconds: (Date.now() - handle.began) / 1000, stdout: out, stderr: err, error });
     };
     child.on("exit", (code, signal) => {
       exit = [code, signal];
+      exited = true;
+      clearTimeout(timer);
       // The first process has ended: anything left in its group goes too.
       group("SIGKILL");
+      // A process outside the group can still hold the output open, for as long as it
+      // lives: wait for it at most one grace period, then close this end and finish (D5).
+      if (!ended) holdTimer = setTimeout(() => {
+        handle.heldOpen = true;
+        for (const stream of [child.stdin, child.stdout, child.stderr]) stream?.destroy();
+        finish();
+      }, grace * 1000);
     });
     child.on("close", () => finish());
     child.on("error", (error) => {
@@ -376,9 +479,14 @@ const cli = async (argv) => {
     sweep();
     const [flag, owner, kind, ...paths] = rest;
     if (flag !== "--owner" || !/^[1-9][0-9]*$/.test(owner ?? "")) usage();
-    if (kind === "path" && paths.length === 1) process.stdout.write(`${register("path", paths[0], { owner: Number(owner) })}\n`);
-    else if (kind === "worktree" && paths.length === 2) process.stdout.write(`${register("worktree", paths[1], { repo: paths[0], owner: Number(owner) })}\n`);
-    else usage();
+    if (!((kind === "path" && paths.length === 1) || (kind === "worktree" && paths.length === 2))) usage();
+    try {
+      const record = kind === "path" ? register("path", paths[0], { owner: Number(owner) }) : register("worktree", paths[1], { repo: paths[0], owner: Number(owner) });
+      process.stdout.write(`${record}\n`);
+    } catch (error) {
+      process.stderr.write(`harness-kit time-limit: not recorded: ${error.message}\n`);
+      return 1;
+    }
     return 0;
   }
   if (sub !== "run") usage();
@@ -415,8 +523,13 @@ const cli = async (argv) => {
     process.stderr.write(`harness-kit ${label}: could not start ${command[0]}: ${result.error.message}\n`);
     return 127;
   }
+  const shown = command.join(" ").replace(/\s+/g, " ").slice(0, 200);
+  if (result.heldOpen) {
+    process.stderr.write(
+      `harness-kit ${label}: \`${shown}\` ended, but a process outside its process group still held its output open; stopped waiting for it after ${secs(graceSeconds())} seconds\n`,
+    );
+  }
   if (result.timedOut) {
-    const shown = command.join(" ").replace(/\s+/g, " ").slice(0, 200);
     process.stderr.write(`${timeoutLine(label, shown, seconds, LIMITS[limit] ? limit : null, graceSeconds())}\n`);
     return 124;
   }
