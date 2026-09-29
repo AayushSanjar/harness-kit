@@ -223,6 +223,8 @@ stop-gate skip: after a pass with nothing changed, the next stop does not run th
 stop-gate skip: after a pass with nothing changed, the next stop does not run the check	plugins/harness-kit/scripts/stop-gate.mjs
 stop-gate skip: an edit to a tracked file runs the check	tests/stop-gate.test.sh
 stop-gate skip: an edit to a tracked file runs the check	plugins/harness-kit/scripts/stop-gate.mjs
+stop-gate skip: a same-size edit in the second the index was written runs the check	tests/stop-gate.test.sh
+stop-gate skip: a same-size edit in the second the index was written runs the check	plugins/harness-kit/scripts/stop-gate.mjs
 stop-gate skip: a new untracked file runs the check; a new ignored file does not	tests/stop-gate.test.sh
 stop-gate skip: a new untracked file runs the check; a new ignored file does not	plugins/harness-kit/scripts/stop-gate.mjs
 stop-gate skip: another check command runs the check	tests/stop-gate.test.sh

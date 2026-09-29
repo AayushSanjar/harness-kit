@@ -120,6 +120,7 @@ planmode-allowed	plugins/harness-kit/scripts/plan-mode-guard.mjs	if (input?.tool
 planmode-unregistered	plugins/harness-kit/hooks/hooks.json	"matcher": "EnterPlanMode",	"matcher": "ExitPlanMode",	hooks.json runs plan-mode-guard.mjs on PreToolUse for EnterPlanMode
 session-start-no-bash	plugins/harness-kit/scripts/session-start.mjs	    lines.push(BASH_RULE);		session-start: Claude is told to run harness-kit's .sh scripts with bash
 stop-gate-skip-ignores-edit	plugins/harness-kit/scripts/stop-gate.mjs	return trimmed(git(["write-tree"], index));	return trimmed(git(["rev-parse", "HEAD^{tree}"]));	stop-gate skip: an edit to a tracked file runs the check
+stop-gate-index-copy-new-mtime	plugins/harness-kit/scripts/stop-gate.mjs	      utimesSync(index, second, second);		stop-gate skip: a same-size edit in the second the index was written runs the check
 stop-gate-skip-ignores-untracked	plugins/harness-kit/scripts/stop-gate.mjs	if (git(["add", "-A"], index) === null) return null;	if (git(["add", "-u"], index) === null) return null;	stop-gate skip: a new untracked file runs the check; a new ignored file does not
 stop-gate-skip-ignores-command	plugins/harness-kit/scripts/stop-gate.mjs	  command: command,	  command: "",	stop-gate skip: another check command runs the check
 stop-gate-records-failure	plugins/harness-kit/scripts/stop-gate.mjs	if (result.code !== 0) keep = false; // a failing check		stop-gate skip: a failing check leaves no pass record; the next stop runs it again

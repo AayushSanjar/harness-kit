@@ -44,8 +44,11 @@
 // these fields and the time it was written:
 //   tree     the working tree's tree id: every tracked file as it is on disk and every
 //            untracked file .gitignore does not ignore, from a copy of the index (git add -A,
-//            then git write-tree, with GIT_INDEX_FILE), so the real index is never touched
-//   head     HEAD's commit (a check can read history)
+//            then git write-tree, with GIT_INDEX_FILE), so the real index is never touched.
+//            The copy keeps the real index's file time, rounded down to the second: git
+//            re-reads a file whose time is not older than its index's, so a same-size edit
+//            made in the second the index was written is still seen (git's racy-index check)
+//   head    HEAD's commit (a check can read history)
 //   refs     the sha256 of `git for-each-ref` (a check can compare with the base)
 //   command  the check command
 //   version  the plugin's version, from its plugin.json
@@ -73,7 +76,7 @@
 // beside the block count. Later overruns in the session are recorded, not said again.
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, utimesSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -159,7 +162,14 @@ const workingTree = () => {
   try {
     folder = mkdtempSync(join(tmpdir(), "harness-kit-stop-gate-index."));
     const index = join(folder, "index");
-    if (existsSync(real)) copyFileSync(real, index);
+    if (existsSync(real)) {
+      // The copy takes the real index's time, read before the copy is made: a copy with a
+      // new time would have git trust a same-size edit made in the second the index was
+      // written. An error here is caught below, so the check runs.
+      const second = Math.floor(statSync(real).mtimeMs / 1000);
+      copyFileSync(real, index);
+      utimesSync(index, second, second);
+    }
     if (git(["add", "-A"], index) === null) return null;
     return trimmed(git(["write-tree"], index));
   } catch {

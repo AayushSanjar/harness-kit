@@ -336,6 +336,33 @@ else
 $(describe)"
 fi
 
+# 14b. git's racy-index case, made certain with fixed times: app.txt, its index entry and the
+# index itself all have one time, so the entry is "racy" and git must re-read the file. Then
+# a same-size edit in place, with app.txt's time set back: only a copy of the index that
+# keeps the real index's time sees it. ctime is not trusted, because setting a time changes
+# it. A third stop with nothing changed still skips.
+# fixed_time FILE: set FILE's time to 1700000000 (November 2023; a time of 0 means unknown to git).
+fixed_time() { node -e 'require("fs").utimesSync(process.argv[1], 1700000000, 1700000000)' "$1"; }
+dir="$(counted_project racy "$PASSING")"
+git -C "$dir" config core.trustctime false
+fixed_time "$dir/app.txt"
+git -C "$dir" update-index -q --refresh
+fixed_time "$dir/.git/index"
+run_gate "$dir" s-racy false
+first_runs="$(runs racy)"
+printf 'v2\n' >"$dir/app.txt"
+fixed_time "$dir/app.txt"
+run_gate "$dir" s-racy false
+edit_runs="$(runs racy)"
+second="$(describe)"
+run_gate "$dir" s-racy false
+if [ "$first_runs" = 1 ] && [ "$edit_runs" = 2 ] && [ "$(runs racy)" = 2 ]; then
+  result "stop-gate skip: a same-size edit in the second the index was written runs the check" yes ""
+else
+  result "stop-gate skip: a same-size edit in the second the index was written runs the check" no "runs after the first stop: $first_runs; after the edit: $edit_runs; after no change: $(runs racy)
+second stop: $second"
+fi
+
 # 15. A pass, then a new untracked file: the check runs. Then a new ignored file: skipped.
 dir="$(counted_project untracked "$PASSING")"
 run_gate "$dir" s-untracked false
