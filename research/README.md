@@ -1,44 +1,14 @@
-# Research: harness engineering for Claude-based software development (status on 26 September 2026)
+# Research
 
-**Sources.** This folder cites 232 distinct sources, all listed in `sources.csv`: 216 primary and 16 secondary.
-- Each file states its own count and selection method at the top.
-- Research sub-agents also read further pages that are not cited, and those are not counted.
-- The sources were selected with Anthropic's documentation and engineering posts first, then primary write-ups by practitioners and companies, then GitHub issues and repositories, and then secondary coverage only where no primary source could be read.
+Background research for harness-kit, one topic folder each. A folder's `00-decision.md` (or its `README.md`, for the first topic) holds its conclusion; the other files hold the evidence, and each folder's `sources.csv` lists what it cites.
 
-**How to read the labels.** Every claim carries one of these:
-- [VERIFIED]: a primary page says this; the URL and date follow the label.
-- [PARTIAL]: a secondary source, or partial support.
-- [ASSUMPTION]: the author's inference or proposal.
-- NOT FOUND: searched for and not found.
+| Folder | Date | Status | Conclusion |
+|---|---|---|---|
+| `initial-harness/` | 26 September 2026 | Current, except the plugin folder layout proposed in `04-replication.md` Part C, superseded by what was built (`repo-structure-and-docs/01-repo-structure.md`, finding 3) | A plugin cannot carry the boundary itself, so the kit is a generic plugin plus project-owned settings, agent copies and CI checks, and CI must load the plugin explicitly and check that it loaded. (`README.md`) |
+| `design/` | 27 September 2026 | Current | Judge a user interface in three layers (universal quality, platform conformance, taste and purpose), with scripts owning everything measurable and the AI judge never asked to see geometry. (`01-benchmark.md`; this folder has no `00-decision.md`) |
+| `ci-process-overview/` | 30 September 2026 | Current, as a working description of CI at v0.20.0; its full-replay time of about 25 minutes predates part B's speed-up | For a normal change, CI replays no faults on the branch before it merges; the faults are replayed only on `main`, after the merge. (`harness-kit-ci-process.md`; this folder has one file) |
+| `ci-and-github/` | 30 September 2026 | Current; its 25-minute replay figure is corrected in its own `07-independent-review.md` | Keep how releases work, but have `release.sh` run the full fault replay on the exact commit and wait for it before `main` moves. (`00-decision.md`) |
+| `repo-structure-and-docs/` | 30 September 2026 | Current, except its advice to leave the first topic's files where they were, superseded by this folder layout | Generate and check, or delete, every list, number and index a document shares with the code; give each script one test file; let AI gardening report, never merge. (`00-decision.md`) |
+| `harness-backlog/` | 30 September 2026 | Current | harness-kit scores 4.4 out of 10; six moves reach about 7.5 to 8: the plan and backlog in the repository and on GitHub Issues, fault replay before `main` moves, harness-kit under its own plugin, sandbox and permission rules, evals of the AI parts, and simplifying. (`00-decision.md`) |
 
-A claim marked "as read by a sub-agent" was read in the primary page by a research sub-agent but not re-read by me. URLs inside the files omit "https://".
-
-## Files
-
-| File | What it answers |
-|---|---|
-| `00-glossary.md` | Every term used, defined simply, each with a one-line example |
-| `01-principles.md` | CONTRADICTIONS with the principles the reader already held, then each principle with current evidence |
-| `02-claude-features.md` | Each Claude Code feature a harness uses: what it guarantees, what it does not, and known bugs |
-| `03-reference-harnesses.md` | 15 public harnesses or kits and 4 company write-ups: what they enforce, what is reusable, and evidence |
-| `04-replication.md` | Reuse across projects and self-improvement from defects, ending with a proposed plugin folder layout |
-| `05-using-the-plugin.md` | How a private project installs, pins, updates, validates and uses a plugin from a public repository, in CI too, ending with an installation method and a fallback |
-| `06-behaviour-checks.md` | Automated behaviour and visual checks for web interfaces, and testing Atlassian Forge apps |
-| `07-open-questions.md` | What remains uncertain, and the test or source that would settle each question |
-| `sources.csv` | Every cited source: title, URL, publisher, date, primary or secondary, and the files that use it |
-
-## The three findings most likely to change the design
-
-1. **A plugin cannot carry the boundary itself.**
-   - A plugin's settings apply only the `agent` and `subagentStatusLine` keys, so permission rules, sandbox settings and environment variables cannot ship inside the plugin. [VERIFIED | code.claude.com/docs/en/plugins-reference | accessed 2026-09-26]
-   - Subagents shipped in a plugin ignore their `hooks`, `mcpServers` and `permissionMode` fields. [VERIFIED | code.claude.com/docs/en/sub-agents | accessed 2026-09-26]
-   - Plugin hooks run outside the sandbox, and an organisation setting can switch them off. [VERIFIED | code.claude.com/docs/en/sandboxing; code.claude.com/docs/en/hooks | accessed 2026-09-26]
-   - Consequence: the kit must be split into a generic plugin plus project-owned settings, agent copies and CI checks. See 04 Part C. [ASSUMPTION]
-2. **CI must load the plugin explicitly, and check that it loaded.**
-   - A repository's marketplace settings apply only in a folder that was trusted. A fresh CI checkout is untrusted, so they are ignored there. [VERIFIED | code.claude.com/docs/en/plugins/org | accessed 2026-09-26]
-   - The GitHub Action cannot yet pin a marketplace to a git ref. [VERIFIED | github.com/anthropics/claude-code-action/issues/1229 | observed 2026-09-26]
-   - Consequence: in CI, check out the plugin at a pinned commit, load it with `--plugin-dir`, and fail the job unless the run's first event lists it. See 05 sections 4 and 8. [ASSUMPTION]
-3. **The first project's Forge module is deprecated, and UI Kit cannot be unit-tested locally.**
-   - `jira:dashboardGadget` will be removed on 17 May 2027, and `dashboards:widget` replaces it. [VERIFIED | developer.atlassian.com/platform/forge/changelog | 2026-09-22 and 2026-09-23]
-   - An Atlassian staff member stated that UI Kit components cannot be rendered locally for tests. [VERIFIED as read by a sub-agent | community.developer.atlassian.com/t/ui-kit2-unit-testing-jsx-components/75091 | 2023-11-29 to 2025-04-17]
-   - Consequence: choose the module first, and consider Custom UI where fast in-loop behaviour checks matter. See 06. [ASSUMPTION]
+**Former paths.** Until 30 September 2026 the first topic's files were at the top of this folder: `research/<file>` is now `research/initial-harness/<file>`, for `README.md`, `sources.csv` and `00-glossary.md` to `07-open-questions.md`. The append-only defect log (`.harness/defects.tsv`) still names `research/02-claude-features.md`; read it as `research/initial-harness/02-claude-features.md`.

@@ -254,7 +254,7 @@ Accessibility testing (Playwright),https://playwright.dev/docs/accessibility-tes
 "LocatorAssertions, including toHaveCSS (Playwright)",https://playwright.dev/docs/api/class-locatorassertions,Microsoft,undated; accessed 2026-09-27,primary,02-automated-checks.md
 "PageAssertions, including toHaveScreenshot (Playwright)",https://playwright.dev/docs/api/class-pageassertions#page-assertions-to-have-screenshot-1,Microsoft,undated; accessed 2026-09-27,primary,00-glossary.md; 02-automated-checks.md; 06-open-questions.md
 TestOptions (Playwright),https://playwright.dev/docs/api/class-testoptions,Microsoft,undated; accessed 2026-09-27,primary,00-glossary.md; 02-automated-checks.md; 05-template.md
-ARIA snapshots,https://playwright.dev/docs/aria-snapshots,Microsoft (Playwright),undated; accessed 2026-09-26 (cited from research/06-behaviour-checks.md),primary,00-glossary.md; 02-automated-checks.md
+ARIA snapshots,https://playwright.dev/docs/aria-snapshots,Microsoft (Playwright),undated; accessed 2026-09-26 (cited from research/initial-harness/06-behaviour-checks.md),primary,00-glossary.md; 02-automated-checks.md
 Clock (Playwright),https://playwright.dev/docs/clock,Microsoft,undated; accessed 2026-09-27,primary,02-automated-checks.md
 Visual comparisons (Playwright),https://playwright.dev/docs/test-snapshots,Microsoft,undated; accessed 2026-09-27,primary,00-glossary.md; 02-automated-checks.md
 Perceptibility and Acceptability Thresholds (dentistry),https://pmc.ncbi.nlm.nih.gov/articles/PMC11733899/,PMC,2024-12-01,secondary,02-automated-checks.md

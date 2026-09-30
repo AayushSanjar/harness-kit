@@ -1,0 +1,187 @@
+title,url,publisher,date,primary_or_secondary,used_in_file
+"3A – Arrange, Act, Assert",https://xp123.com/articles/3a-arrange-act-assert/,Bill Wake,2011-04-26,primary,02-test-files.md
+@tComment: Testing Javadoc Comments to Detect Comment-Code Inconsistencies (Tan et al.),https://www.cs.purdue.edu/homes/lintan/publications/@tComment-icst12.pdf,ICST 2012,2012,primary,03-docs-and-comments.md
+"A Large-Scale Empirical Study on Code-Comment Inconsistencies (Wen, Nagy, Bavota, Lanza)",https://www.inf.usi.ch/faculty/lanza/PUBS/P/Wen2019a.pdf,Università della Svizzera italiana; ICPC 2019,2019,primary,03-docs-and-comments.md
+A Survey of Flaky Tests (Parry et al.),https://api.crossref.org/works/10.1145/3476105,ACM TOSEM 31(1) via Crossref,2021-10-26,primary,04-test-health.md
+adr-tools,https://github.com/npryce/adr-tools,Nat Pryce,release 3.0.0 (year not shown); accessed 2026-09-30,primary,01-repo-structure.md; 06-reusable-components.md
+agentics sample workflows,https://github.com/githubnext/agentics,GitHub Next,no releases; observed 2026-09-30,primary,06-reusable-components.md
+agentics: documentation updater workflow,https://github.com/githubnext/agentics/blob/main/workflows/doc-updater.md,GitHub Next,undated; accessed 2026-09-30,primary,05-gardening-agents.md
+Allure Report: history and retries,https://allurereport.org/docs/history-and-retries/,Allure,undated; accessed 2026-09-30,primary,04-test-health.md
+"An Empirical Analysis of Flaky Tests (Luo, Hariri, Eloussi, Marinov)",https://mir.cs.illinois.edu/marinov/publications/LuoETAL14FlakyTestsAnalysis.pdf,FSE 2014,2014-11,primary,04-test-health.md
+Anthropic plugin directory (install counts),https://claude.com/plugins,Anthropic,observed 2026-09-30,primary,05-gardening-agents.md; 06-reusable-components.md
+anthropics/skills repository,https://github.com/anthropics/skills,Anthropic,observed 2026-09-30,primary,01-repo-structure.md
+Architectural Decision Record Framework,https://www.gov.uk/government/publications/architectural-decision-record-framework,"UK Department for Science, Innovation and Technology","2025-11-04, updated 2026-09-10",primary,01-repo-structure.md
+awesome-claude-code-subagents (documentation-engineer),https://github.com/VoltAgent/awesome-claude-code-subagents,VoltAgent,observed 2026-09-30,primary,05-gardening-agents.md; 06-reusable-components.md
+Balancing trade-offs in test-suite reduction (Shi et al.),https://mir.cs.illinois.edu/gyori/pubs/fse14reduction.pdf,FSE 2014,2014,primary,04-test-health.md
+bashcov on RubyGems,https://rubygems.org/gems/bashcov,infertux,"4.0.0, 2026-08-25",primary,04-test-health.md; 06-reusable-components.md
+bats-assert,https://github.com/bats-core/bats-assert,bats-core,v2.2.4 (before 2026-02-08),primary,06-reusable-components.md
+bats-core documentation: Gotchas,https://bats-core.readthedocs.io/en/stable/gotchas.html,bats-core,undated; accessed 2026-09-30,primary,02-test-files.md; 06-reusable-components.md
+bats-core documentation: Usage,https://bats-core.readthedocs.io/en/stable/usage.html,bats-core,undated; accessed 2026-09-30,primary,02-test-files.md; 04-test-health.md
+bats-core documentation: Writing tests,https://bats-core.readthedocs.io/en/stable/writing-tests.html,bats-core,undated; accessed 2026-09-30,primary,02-test-files.md; 04-test-health.md
+bats-core repository and changelog,https://github.com/bats-core/bats-core,bats-core,"v1.14.0, 2026-07-21",primary,02-test-files.md; 06-reusable-components.md
+bats-core tutorial (test_helper and common setup),https://bats-core.readthedocs.io/en/stable/tutorial.html,bats-core,undated; accessed 2026-09-30,primary,01-repo-structure.md; 02-test-files.md
+Best practices for Claude Code,https://code.claude.com/docs/en/best-practices,Anthropic,undated; accessed 2026-09-30,primary,05-gardening-agents.md; 07-target-and-migration.md
+Best practices for writing code comments,https://stackoverflow.blog/2021/12/23/best-practices-for-writing-code-comments/,Stack Overflow blog (Ellen Spertus),2021-12-23,primary,03-docs-and-comments.md
+c8,https://github.com/bcoe/c8,Ben Coe,v11.0.0 (2026),primary,04-test-health.md; 06-reusable-components.md
+Case study: agentic workflows drafting documentation pull requests,"github.blog (David Pine and Peli de Halleux, documentation kept in a separate repository)",GitHub blog,2026-07-08 or 2026-08-07 (sources disagree),primary,05-gardening-agents.md
+Checkstyle: FileLength,https://checkstyle.org/checks/sizes/filelength.html,Checkstyle,14.3.0 docs; accessed 2026-09-30,primary,02-test-files.md
+"ci-and-github research: 00-decision.md, and sections of 04, 05 and 07","harness-kit/research/ci-and-github (local, untracked)",Cowork research job for the same person,2026-09-30,secondary,01-repo-structure.md; 02-test-files.md; 04-test-health.md; 07-target-and-migration.md
+Claude Code GitHub Actions,https://code.claude.com/docs/en/github-actions,Anthropic,undated; accessed 2026-09-30,primary,05-gardening-agents.md; 06-reusable-components.md
+Claude Code: costs (scheduled tasks),https://code.claude.com/docs/en/costs,Anthropic,undated; accessed 2026-09-30,primary,05-gardening-agents.md
+Claude Code: plugin evals,https://code.claude.com/docs/en/plugin-evals,Anthropic,undated; accessed 2026-09-30,primary,01-repo-structure.md
+Claude Code: plugin security (claude plugin details),https://code.claude.com/docs/en/plugins/security,Anthropic,accessed 2026-09-26 by the earlier research,primary,06-reusable-components.md
+claude-code-action docs: FAQ,https://github.com/anthropics/claude-code-action/blob/main/docs/faq.md,Anthropic,undated; accessed 2026-09-30,primary,00-decision.md; 05-gardening-agents.md
+claude-code-action docs: security,https://github.com/anthropics/claude-code-action/blob/main/docs/security.md,Anthropic,undated; accessed 2026-09-30,primary,05-gardening-agents.md
+claude-code-action docs: solutions,https://github.com/anthropics/claude-code-action/blob/main/docs/solutions.md,Anthropic,undated; accessed 2026-09-30,primary,05-gardening-agents.md
+claude-code-action repository and releases,https://github.com/anthropics/claude-code-action,Anthropic,"v1.0.236 on 28 Sep (2026, inferred)",primary,05-gardening-agents.md; 06-reusable-components.md
+claude-code-templates (update-docs command),https://github.com/davila7/claude-code-templates,Daniel Avila,observed 2026-09-30,primary,05-gardening-agents.md; 06-reusable-components.md
+claude-md-management: claude-md-improver skill,https://github.com/anthropics/claude-plugins-official/blob/main/plugins/claude-md-management/skills/claude-md-improver/SKILL.md,Anthropic,undated; accessed 2026-09-30,primary,05-gardening-agents.md; 06-reusable-components.md
+claude-plugins-official repository,https://github.com/anthropics/claude-plugins-official,Anthropic,observed 2026-09-30,primary,01-repo-structure.md
+clitest,https://github.com/aureliojargas/clitest,Aurelio Jargas,0.5.0 (year not shown); accessed 2026-09-30,primary,03-docs-and-comments.md; 06-reusable-components.md
+Code Health: To Comment or Not to Comment?,https://testing.googleblog.com/2017/07/code-health-to-comment-or-not-to-comment.html,"Google Testing Blog (Dori Reuveni, Kevin Bourrillion)",2017-07-17,primary,03-docs-and-comments.md
+Cog documentation: Running Cog,https://cog.readthedocs.io/en/latest/running.html,Ned Batchelder,undated; accessed 2026-09-30,primary,03-docs-and-comments.md; 06-reusable-components.md
+cogapp (Cog) on PyPI,https://pypi.org/project/cogapp/,Ned Batchelder,"3.6.0, 2025-09-21",primary,06-reusable-components.md
+"control-chart-gadget CLAUDE.md, version 4.3",control-chart-gadget/CLAUDE.md (private repository),the person (private repository),2026-09-28,primary,00-decision.md; 01-repo-structure.md; 03-docs-and-comments.md; 04-test-health.md; 05-gardening-agents.md; 07-target-and-migration.md
+Cram on PyPI,https://pypi.org/project/cram/,Brodie Rao,"0.7, 2016-02-24",primary,02-test-files.md; 06-reusable-components.md
+Deep Just-In-Time Inconsistency Detection Between Comments and Source Code (Panthaplackel et al.),https://arxiv.org/abs/2010.01625,"arXiv (AAAI 2021, venue not printed on the page read)",2020-10,primary,05-gardening-agents.md
+DeepDocs,https://deepdocs.dev,DeepDocs,observed 2026-09-30,primary,05-gardening-agents.md; 06-reusable-components.md
+dependency-cruiser,https://github.com/sverweij/dependency-cruiser,Sander Verweij,"v18.4.0, 2026-09-20",primary,06-reusable-components.md
+Design Docs at Google,https://www.industrialempathy.com/posts/design-docs-at-google/,Malte Ubl,2020-07-06,primary,01-repo-structure.md
+"Detecting Outdated Code Element References in Software Repository Documentation (Tan, Wagner, Treude)",https://arxiv.org/abs/2212.01479,arXiv,2022-12-02,primary,03-docs-and-comments.md; 05-gardening-agents.md
+Diátaxis framework (home),https://diataxis.fr,Daniele Procida,undated; accessed 2026-09-30,primary,01-repo-structure.md
+Diátaxis: How to use Diátaxis,https://diataxis.fr/how-to-use-diataxis/,Daniele Procida,undated; accessed 2026-09-30,primary,01-repo-structure.md
+"Do code and comments co-evolve? (Fluri, Würsch, Gall)",https://www.merlin.uzh.ch/publication/show/2530,University of Zurich; WCRE 2007,2007-10,primary,03-docs-and-comments.md
+Doc Detective,https://github.com/doc-detective/doc-detective,Doc Detective project,"v4.38.1, 2026-08-13",primary,03-docs-and-comments.md; 06-reusable-components.md
+DocChecker: bootstrapping code LLMs for detecting code-comment inconsistencies,https://arxiv.org/abs/2306.06347,arXiv,2023,primary,05-gardening-agents.md
+Docs as Code,https://www.writethedocs.org/guide/docs-as-code/,Write the Docs,undated; accessed 2026-09-30,primary,03-docs-and-comments.md
+doctoc README,https://raw.githubusercontent.com/thlorenz/doctoc/master/README.md,Thorsten Lorenz,undated; accessed 2026-09-30,primary,03-docs-and-comments.md
+doctoc repository,https://github.com/thlorenz/doctoc,Thorsten Lorenz,"v2.5.0, 2026-06-12 (secondary)",primary,06-reusable-components.md
+Documentation Best Practices (Google documentation guide),https://google.github.io/styleguide/docguide/best_practices.html,Google,undated; accessed 2026-09-30,primary,01-repo-structure.md
+Documenting Architecture Decisions,https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions,Cognitect (Michael Nygard),2011-11-15,primary,01-repo-structure.md
+Does mutation testing improve testing practices? (Petrović et al.),https://www.arxiv.org/pdf/2103.07189,ICSE 2021 (arXiv preprint),2021,primary,04-test-health.md
+embedme,https://www.npmjs.com/package/embedme,Zak Henry,"v1.22.1, 2022-09-07 (GitHub)",primary,03-docs-and-comments.md; 06-reusable-components.md
+Eradicating Non-Determinism in Tests,https://martinfowler.com/articles/nonDeterminism.html,Martin Fowler,2011-04-14,primary,04-test-health.md
+ESLint Makefile.js (checkRuleFiles),https://github.com/eslint/eslint/blob/main/Makefile.js,ESLint project,undated; accessed 2026-09-30,primary,03-docs-and-comments.md
+ESLint rule: max-lines,https://eslint.org/docs/latest/rules/max-lines,ESLint project,undated; accessed 2026-09-30,primary,02-test-files.md
+ESLint: development environment (folder layout),https://eslint.org/docs/head/contribute/development-environment,ESLint project,undated; accessed 2026-09-30,primary,01-repo-structure.md
+Flaky Tests at Google and How We Mitigate Them,https://testing.googleblog.com/2016/05/flaky-tests-at-google-and-how-we.html,Google Testing Blog (John Micco),2016-05-27,primary,04-test-health.md
+Forge CLI: forge lint,https://developer.atlassian.com/platform/forge/cli-reference/lint/,Atlassian,undated; accessed 2026-09-30,primary,06-reusable-components.md
+gh-aw repository,https://github.com/github/gh-aw,GitHub,"v0.89.21, 23 Sep (2026, inferred)",primary,06-reusable-components.md
+gh-aw security advisories,https://github.com/github/gh-aw/security/advisories,GitHub,advisories published 2026-08-06 to 2026-08-29,primary,05-gardening-agents.md; 06-reusable-components.md
+git: t/README (the test suite's conventions),https://github.com/git/git/blob/master/t/README,Git project,undated; accessed 2026-09-30,primary,01-repo-structure.md; 02-test-files.md; 06-reusable-components.md
+GitHub Actions billing,https://docs.github.com/en/billing/concepts/product-billing/github-actions,GitHub,undated; accessed 2026-09-30,primary,05-gardening-agents.md
+GitHub Agentic Workflows: cost management,https://github.github.com/gh-aw/reference/cost-management/,GitHub,undated; accessed 2026-09-30,primary,05-gardening-agents.md
+GitHub Agentic Workflows: engines,https://github.github.com/gh-aw/reference/engines/,GitHub,undated; accessed 2026-09-30,primary,05-gardening-agents.md
+GitHub Agentic Workflows: Safe outputs,https://github.github.com/gh-aw/reference/safe-outputs/,GitHub,undated; accessed 2026-09-30,primary,05-gardening-agents.md
+GitHub Agentic Workflows: Safe outputs for pull requests,https://github.github.com/gh-aw/reference/safe-outputs-pull-requests/,GitHub,undated; accessed 2026-09-30,primary,05-gardening-agents.md
+GitHub changelog: GitHub Agentic Workflows public preview,https://github.blog/changelog/,GitHub,2026-06-11,primary,05-gardening-agents.md
+github-action-markdown-link-check (archived),https://github.com/gaurav-nelson/github-action-markdown-link-check,Gaurav Nelson,archived 2026-04-20,primary,03-docs-and-comments.md; 06-reusable-components.md
+GitLab: Documentation metadata,https://docs.gitlab.com/development/documentation/metadata/,GitLab,undated; accessed 2026-09-30,primary,03-docs-and-comments.md
+GitLab: Documentation testing,https://docs.gitlab.com/development/documentation/testing/,GitLab,undated; accessed 2026-09-30,primary,03-docs-and-comments.md
+GivenWhenThen,https://martinfowler.com/bliki/GivenWhenThen.html,Martin Fowler,2013-08-21,primary,02-test-files.md
+GNU Coding Standards 6.8.1: Change Log Concepts,https://www.gnu.org/prep/standards/html_node/Change-Log-Concepts.html,Free Software Foundation,undated; accessed 2026-09-30,primary,03-docs-and-comments.md
+golang-standards/project-layout (and issue 117),https://github.com/golang-standards/project-layout,golang-standards (community),observed 2026-09-30,primary,01-repo-structure.md
+Google documentation guide: READMEs,https://google.github.io/styleguide/docguide/READMEs.html,Google,undated; accessed 2026-09-30,primary,01-repo-structure.md
+Google JavaScript Style Guide,https://google.github.io/styleguide/jsguide.html,Google,undated; accessed 2026-09-30,primary,03-docs-and-comments.md
+Google Shell Style Guide,https://google.github.io/styleguide/shellguide.html,Google,undated; accessed 2026-09-30,primary,00-decision.md; 02-test-files.md; 03-docs-and-comments.md
+Harness engineering: leveraging Codex in an agent-first world,https://openai.com/index/harness-engineering,OpenAI (Ryan Lopopolo),2026-02-11,primary,00-decision.md; 01-repo-structure.md; 05-gardening-agents.md
+harness-kit repository at commit e275280 (v0.20.0): files read and measured by me,https://github.com/AayushSanjar/harness-kit,AayushSanjar (harness-kit),commit dated 2026-09-30,primary,00-decision.md; 01-repo-structure.md; 02-test-files.md; 03-docs-and-comments.md; 04-test-health.md; 06-reusable-components.md; 07-target-and-migration.md
+harness-kit research 01: harness engineering principles,https://github.com/AayushSanjar/harness-kit/blob/main/research/initial-harness/01-principles.md,AayushSanjar (harness-kit),2026-09-26,primary,07-target-and-migration.md
+harness-kit research 03: reference harnesses,https://github.com/AayushSanjar/harness-kit/blob/main/research/initial-harness/03-reference-harnesses.md,AayushSanjar (harness-kit),2026-09-26,primary,05-gardening-agents.md
+harness-kit research 04: replication and self-improvement (Part B and Part C read),https://github.com/AayushSanjar/harness-kit/blob/main/research/initial-harness/04-replication.md,AayushSanjar (harness-kit),2026-09-26,primary,01-repo-structure.md; 05-gardening-agents.md
+Hooks reference,https://code.claude.com/docs/en/hooks,Anthropic,undated; accessed 2026-09-30,primary,05-gardening-agents.md
+"How Claude remembers your project (CLAUDE.md, /doctor prompt-audit)",https://code.claude.com/docs/en/memory,Anthropic,undated; accessed 2026-09-30,primary,03-docs-and-comments.md; 05-gardening-agents.md; 06-reusable-components.md; 07-target-and-migration.md
+Inconsistent code-comment changes and bug-introducing commits (Radmanesh et al.),https://arxiv.org/html/2409.10781v1,arXiv,2024-09-16,primary,03-docs-and-comments.md
+Jest configuration (testMatch),https://jestjs.io/docs/configuration,Jest project,Jest 30.5 docs; accessed 2026-09-30,primary,01-repo-structure.md; 02-test-files.md
+Jest object: retryTimes,https://jestjs.io/docs/jest-object,Jest project,Jest 30.5 docs; accessed 2026-09-30,primary,04-test-health.md
+jscpd repository and FORMATS.md,https://github.com/kucherenko/jscpd,Andrey Kucherenko,"v5.3.3, 2026-09-28",primary,04-test-health.md; 06-reusable-components.md
+kcov bash engine source,https://github.com/SimonKagstrom/kcov/blob/master/src/engines/bash-engine.cc,Simon Kagstrom,master branch; accessed 2026-09-30,primary,04-test-health.md
+kcov manual page and releases,https://raw.githubusercontent.com/SimonKagstrom/kcov/master/doc/kcov.1,Simon Kagstrom,"v43, 2024-07-23",primary,04-test-health.md; 06-reusable-components.md
+knip,https://github.com/webpro-nl/knip,Lars Kappert (webpro-nl),"knip@6.38.0, 2026-09-23",primary,06-reusable-components.md
+Kubernetes Enhancement Proposals (KEP) folder and kep.yaml template,https://github.com/kubernetes/enhancements/tree/master/keps,Kubernetes project,observed 2026-09-30,primary,01-repo-structure.md
+Kubernetes hack/verify-generated-docs.sh,https://github.com/kubernetes/kubernetes/blob/master/hack/verify-generated-docs.sh,Kubernetes project,undated; accessed 2026-09-30,primary,03-docs-and-comments.md
+Learning to Update Natural Language Comments Based on Code Changes (Panthaplackel et al.),https://aclanthology.org/2020.acl-main.168,ACL 2020,2020,primary,05-gardening-agents.md
+linkinator,https://github.com/JustinBeckwith/linkinator,Justin Beckwith,"8.1.0, 2026-08-27",primary,03-docs-and-comments.md; 06-reusable-components.md
+Linux kernel coding style (section 8: commenting),https://docs.kernel.org/process/coding-style.html,kernel.org,accessed 2026-09-30,primary,03-docs-and-comments.md
+log4brains,https://github.com/thomvaill/log4brains,Thomas Vaillant,"v1.1.0, 2024-12-17",primary,01-repo-structure.md; 06-reusable-components.md
+lychee README (command-line options),https://raw.githubusercontent.com/lycheeverse/lychee/master/README.md,lycheeverse,undated; accessed 2026-09-30,primary,03-docs-and-comments.md; 06-reusable-components.md
+lychee repository and releases,https://github.com/lycheeverse/lychee,lycheeverse,"lychee-v0.24.2, 2026-05-01",primary,06-reusable-components.md
+lychee-action,https://github.com/lycheeverse/lychee-action,lycheeverse,"v2.9.0, 2026-07-09",primary,03-docs-and-comments.md; 06-reusable-components.md
+lychee: rate limits,https://lychee.cli.rs/troubleshooting/rate-limits/,lycheeverse,undated; accessed 2026-09-30,primary,03-docs-and-comments.md
+MADR repository,https://github.com/adr/madr,adr.github.io,"4.0.0, 2024-09-17",primary,06-reusable-components.md
+MADR: Markdown Architectural Decision Records,https://adr.github.io/madr,adr.github.io (MADR project),"MADR 4.0.0, 2024-09-17",primary,01-repo-structure.md; 06-reusable-components.md
+markdown-link-check,https://github.com/tcort/markdown-link-check,Thomas Cort,"v3.15.0, 2026-07-28",primary,03-docs-and-comments.md; 06-reusable-components.md
+markdown-magic,https://github.com/DavidWells/markdown-magic,David Wells,"4.11.0, 2026-06-29",primary,03-docs-and-comments.md; 06-reusable-components.md
+markdownlint-cli2,https://github.com/DavidAnson/markdownlint-cli2,David Anson,"0.23.3, 2026-09-20 (secondary sources)",primary,03-docs-and-comments.md; 06-reusable-components.md
+markdownlint-cli2-action,https://github.com/DavidAnson/markdownlint-cli2-action,David Anson,"v24.2.0, 2026-08-02 (year inferred)",primary,06-reusable-components.md
+Maven Surefire: test goal (default includes),https://maven.apache.org/surefire/maven-surefire-plugin/test-mojo.html,Apache Maven,"3.6.0, published 2026-08-31",primary,02-test-files.md
+Meet the workflows: documentation,https://github.github.com/gh-aw/blog/2026-01-13-meet-the-workflows-documentation,"GitHub Next (Don Syme, Peli de Halleux, Mara Kiefer)",2026-01-13,primary,05-gardening-agents.md
+Microsoft Learn: metadata (ms.date),https://learn.microsoft.com/en-us/contribute/content/metadata,Microsoft,2025-05-01,primary,03-docs-and-comments.md
+Mintlify automations (plan requirement),https://www.mintlify.com/docs,Mintlify,observed 2026-09-30,primary,05-gardening-agents.md; 06-reusable-components.md
+Mutant states and metrics,https://stryker-mutator.io/docs/mutation-testing-elements/mutant-states-and-metrics/,Stryker Mutator,undated; accessed 2026-09-30,primary,04-test-health.md
+Node.js test/README.md,https://github.com/nodejs/node/blob/main/test/README.md,Node.js project,undated; accessed 2026-09-30,primary,01-repo-structure.md
+Node.js v24 documentation: Test runner,https://raw.githubusercontent.com/nodejs/node/v24.x/doc/api/test.md,Node.js project,v24.x branch; accessed 2026-09-30,primary,01-repo-structure.md; 02-test-files.md; 04-test-health.md; 06-reusable-components.md
+Node.js v24.7.0 release notes,https://nodejs.org/en/blog/release/v24.7.0,Node.js project,2025-08-27,primary,04-test-health.md
+Node.js: How to write a test for the Node.js project,https://github.com/nodejs/node/blob/main/doc/contributing/writing-tests.md,Node.js project,undated; accessed 2026-09-30,primary,01-repo-structure.md; 02-test-files.md
+"npm CLI repository (layout, files field, tests)",https://github.com/npm/cli,npm,observed 2026-09-30,primary,01-repo-structure.md
+npm CLI test: test/lib/docs.js,https://github.com/npm/cli/blob/latest/test/lib/docs.js,npm,undated; accessed 2026-09-30,primary,03-docs-and-comments.md
+"nvm repository (test/fast, test/slow)",https://github.com/nvm-sh/nvm,nvm,observed 2026-09-30,primary,01-repo-structure.md
+ObjectMother,https://martinfowler.com/bliki/ObjectMother.html,Martin Fowler,2006-10-24,primary,02-test-files.md
+On the Distribution of Test Smells in Open Source Android Applications (Peruma et al.),https://testsmells.org/assets/publications/CASCON2019_TechnicalPaper.pdf,CASCON 2019,2019-11,primary,02-test-files.md
+On the relationship between comment update practices and software bugs (Ibrahim et al.),https://sail.cs.queensu.ca/data/pdfs/JSS_OnTheRelationshipBetweenCommentUpdatePracticesAndSoftwareBugs.pdf,Journal of Systems and Software,2011,primary,03-docs-and-comments.md
+OpenStack hacking rules (H105: no author tags),https://docs.openstack.org/hacking/latest/user/hacking.html,OpenStack,undated; accessed 2026-09-30,primary,03-docs-and-comments.md
+Organizing a Go module,https://go.dev/doc/modules/layout,Go project,undated; accessed 2026-09-30,primary,01-repo-structure.md
+PEP 1: PEP Purpose and Guidelines,https://peps.python.org/pep-0001/,Python Software Foundation,modified 2026-09-27; accessed 2026-09-30,primary,01-repo-structure.md
+PIT: incremental analysis,https://pitest.org/quickstart/incremental_analysis/,PIT (pitest),undated; accessed 2026-09-30,primary,04-test-health.md
+Plugin loading reference,https://code.claude.com/docs/en/plugins/loading,Anthropic,undated; accessed 2026-09-30,primary,01-repo-structure.md
+Plugin manifest reference (standard layout),https://code.claude.com/docs/en/plugins-reference,Anthropic,undated; accessed 2026-09-30,primary,01-repo-structure.md
+pr-review-toolkit: comment-analyzer agent,https://github.com/anthropics/claude-plugins-official/blob/main/plugins/pr-review-toolkit/agents/comment-analyzer.md,Anthropic,undated; accessed 2026-09-30,primary,05-gardening-agents.md; 06-reusable-components.md
+pr-review-toolkit: pr-test-analyzer agent,https://github.com/anthropics/claude-plugins-official/blob/main/plugins/pr-review-toolkit/agents/pr-test-analyzer.md,Anthropic,undated; accessed 2026-09-30,primary,05-gardening-agents.md; 06-reusable-components.md
+Practical Mutation Testing at Scale: A view from Google (Petrović et al.),https://homes.cs.washington.edu/~rjust/publ/practical_mutation_testing_tse_2021.pdf,IEEE TSE,2021,primary,04-test-health.md
+Predictive Test Selection (Machalica et al.),https://arxiv.org/abs/1810.05286,arXiv (Facebook),revised 2019-05-29,primary,04-test-health.md
+Python doctest,https://docs.python.org/3/library/doctest.html,Python Software Foundation,undated; accessed 2026-09-30,primary,03-docs-and-comments.md
+"rbenv repository (libexec/, test/, test_helper.bash)",https://github.com/rbenv/rbenv,rbenv,observed 2026-09-30,primary,01-repo-structure.md
+React (legacy docs): File Structure,https://legacy.reactjs.org/docs/faq-structure.html,Meta / React,undated; accessed 2026-09-30,primary,01-repo-structure.md
+"Regression testing minimization, selection and prioritization: a survey (Yoo, Harman)",https://api.crossref.org/works/10.1002/stvr.430,STVR 22(2) via Crossref,2012-03,primary,04-test-health.md
+remark (remark-cli),https://github.com/remarkjs/remark,remarkjs,"remark-cli 12.0.1, 2024-04-30",primary,06-reusable-components.md
+remark-validate-links readme,https://raw.githubusercontent.com/remarkjs/remark-validate-links/main/readme.md,remarkjs,undated; accessed 2026-09-30,primary,03-docs-and-comments.md; 06-reusable-components.md
+remark-validate-links repository,https://github.com/remarkjs/remark-validate-links,remarkjs,"13.1.0, 2025-02-21",primary,06-reusable-components.md
+Rust RFCs repository,https://github.com/rust-lang/rfcs,Rust project,observed 2026-09-30,primary,01-repo-structure.md
+rustdoc: Documentation tests,https://doc.rust-lang.org/rustdoc/write-documentation/documentation-tests.html,Rust project,undated; accessed 2026-09-30,primary,03-docs-and-comments.md
+scrut,https://github.com/facebookincubator/scrut,Meta (facebookincubator),"v0.4.3, 2026-01-28",primary,02-test-files.md; 03-docs-and-comments.md; 06-reusable-components.md
+ShellCheck,https://github.com/koalaman/shellcheck,Vidar Holen (koalaman),"v0.11.0, 2025-08-04",primary,06-reusable-components.md
+"ShellSpec repository, README and changelog",https://github.com/shellspec/shellspec,ShellSpec,"latest release 0.28.1, 2021-01-11",primary,01-repo-structure.md; 02-test-files.md; 06-reusable-components.md
+shfmt (mvdan/sh),https://github.com/mvdan/sh,Daniel Martí,v3.13.1 (2026),primary,06-reusable-components.md
+shUnit2 repository and release notes,https://github.com/kward/shunit2,Kate Ward,"2.1.8 (2020, inferred)",primary,02-test-files.md; 06-reusable-components.md
+Software Documentation Issues Unveiled (Aghajani et al.),https://2019.icse-conferences.org/details/icse-2019-Technical-Papers/49/Software-Documentation-Issues-Unveiled,ICSE 2019,2019,primary,03-docs-and-comments.md
+"Software Engineering at Google, chapter 10: Documentation",https://abseil.io/resources/swe-book/html/ch10.html,Google / O'Reilly (Tom Manshreck),2020,primary,03-docs-and-comments.md
+"Software Engineering at Google, chapter 11: Testing Overview",https://abseil.io/resources/swe-book/html/ch11.html,Google / O'Reilly,2020,primary,04-test-health.md
+"Software Engineering at Google, chapter 12: Unit Testing",https://abseil.io/resources/swe-book/html/ch12.html,Google / O'Reilly (Erik Kuefler),2020,primary,02-test-files.md; 04-test-health.md
+sonar-java: TooManyLinesOfCodeInFileCheck (rule S104),https://github.com/SonarSource/sonar-java,SonarSource,master branch; accessed 2026-09-30,primary,02-test-files.md
+"State of Mutation Testing at Google (Petrović, Ivanković)",https://web.eecs.umich.edu/~weimerw/2022-481W/readings/mutation-google.pdf,ICSE-SEIP 2018,2018,primary,04-test-health.md
+StrykerJS configuration,https://stryker-mutator.io/docs/stryker-js/configuration/,Stryker Mutator,undated; accessed 2026-09-30,primary,04-test-health.md; 06-reusable-components.md
+StrykerJS incremental mode,https://stryker-mutator.io/docs/stryker-js/incremental/,Stryker Mutator,undated; accessed 2026-09-30,primary,04-test-health.md
+StrykerJS plugins (official test runners),https://stryker-mutator.io/docs/stryker-js/plugins/,Stryker Mutator,undated; accessed 2026-09-30,primary,04-test-health.md
+StrykerJS repository and v10.0.0 release,https://github.com/stryker-mutator/stryker-js,Stryker Mutator,"v10.0.0, 2026-08-14 (year from changelog)",primary,06-reusable-components.md
+StrykerJS TAP runner,https://stryker-mutator.io/docs/stryker-js/tap-runner/,Stryker Mutator,undated; accessed 2026-09-30,primary,04-test-health.md
+Swimm pricing and home page,https://swimm.io/pricing,Swimm,observed 2026-09-30,primary,05-gardening-agents.md; 06-reusable-components.md
+Taming Google-Scale Continuous Testing (Memon et al.),https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/45861.pdf,Google; ICSE-SEIP 2017,2017,primary,04-test-health.md
+tcort/github-action-markdown-link-check (maintained fork),https://github.com/tcort/github-action-markdown-link-check,Thomas Cort,v1.1.3 (date not found); accessed 2026-09-30,primary,06-reusable-components.md
+terraform-docs reference (--output-check),https://terraform-docs.io/reference/terraform-docs/,terraform-docs project,undated; accessed 2026-09-30,primary,03-docs-and-comments.md
+Test Desiderata,https://medium.com/@kentbeck_7670/test-desiderata-94150638a4b3,Kent Beck,2019-10-18,primary,02-test-files.md
+"Test Obsessed by Method (Hora, Zaidman)",https://arxiv.org/html/2602.00761v1,arXiv,2026,primary,02-test-files.md
+Testing on the Toilet: Don't Put Logic in Tests,https://testing.googleblog.com/2014/07/testing-on-toilet-dont-put-logic-in.html,Google Testing Blog (Erik Kuefler),2014-07-31,primary,02-test-files.md
+Testing on the Toilet: Keep Tests Focused,https://testing.googleblog.com/2018/06/testing-on-toilet-keep-tests-focused.html,Google Testing Blog (Ben Yu),2018-06-11,primary,02-test-files.md
+"Testing on the Toilet: Test Behaviors, Not Methods",https://testing.googleblog.com/2014/04/testing-on-toilet-test-behaviors-not.html,Google Testing Blog (Erik Kuefler),2014-04-14,primary,02-test-files.md
+Testing on the Toilet: Tests Too DRY? Make Them DAMP!,https://testing.googleblog.com/2019/12/testing-on-toilet-tests-too-dry-make.html,"Google Testing Blog (Derek Snyder, Erik Kuefler)",2019-12-03,primary,02-test-files.md
+Third-party marketplace issue: tests shipped inside plugin folders,https://github.com/ScottHysom/claude-plugins/issues/23,ScottHysom (third party),2026-09-15,secondary,01-repo-structure.md
+trycmd,https://docs.rs/trycmd/latest/trycmd/,trycmd project,1.2.1; accessed 2026-09-30,primary,03-docs-and-comments.md
+tsDetect: an open source test smells detection tool (Peruma et al.),https://testsmells.org/assets/publications/FSE2020_TechnicalPaper.pdf,ESEC/FSE 2020,2020,primary,02-test-files.md
+txm,https://github.com/anko/txm,anko,"v8.2.0, 2023-07-03",primary,03-docs-and-comments.md; 06-reusable-components.md
+"Understanding myths and realities of test-suite evolution (Pinto, Sinha, Orso)",https://research.ibm.com/publications/understanding-myths-and-realities-of-test-suite-evolution,FSE 2012 (IBM Research page),2012-11-11,primary,04-test-health.md
+Vale,https://github.com/vale-cli/vale,vale-cli,"v3.23.0, 25 Sep (year not shown); accessed 2026-09-30",primary,06-reusable-components.md
+Vale: vocabularies,https://docs.vale.sh/keys/vocabularies,vale-cli,undated; accessed 2026-09-30,primary,03-docs-and-comments.md
+Vitest: include,https://vitest.dev/config/include,Vitest project,v5 docs; accessed 2026-09-30,primary,02-test-files.md
+What to look for in a code review,https://google.github.io/eng-practices/review/reviewer/looking-for.html,Google engineering practices,undated; accessed 2026-09-30,primary,03-docs-and-comments.md
+wshobson/agents (docs-architect),https://github.com/wshobson/agents,Seth Hobson,observed 2026-09-30,primary,05-gardening-agents.md; 06-reusable-components.md
+xUnit Test Patterns: test smells and fixture patterns (archived copy),https://xunitpatterns.com,Gerard Meszaros,2003-2008,primary,02-test-files.md
